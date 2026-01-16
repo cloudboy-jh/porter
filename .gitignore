@@ -21,3 +21,10 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Build artifacts
+web/.svelte-kit
+web/build
+web/.svelte-kit/**
+desktop/frontend/dist
+desktop/frontend/wailsjs
