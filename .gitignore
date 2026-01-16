@@ -28,3 +28,4 @@ web/build
 web/.svelte-kit/**
 desktop/frontend/dist
 desktop/frontend/wailsjs
+desktop/build
