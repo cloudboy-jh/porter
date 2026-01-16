@@ -1,0 +1,100 @@
+:root {
+	--agent-aider: #fb923c;
+	--agent-cursor: #8b5cf6;
+	--agent-windsurf: #3b82f6;
+	--agent-cline: #ec4899;
+	--background: #f7f7f7;
+	--foreground: #111827;
+	--card: #ffffff;
+	--card-foreground: #111827;
+	--popover: #ffffff;
+	--popover-foreground: #111827;
+	--muted: #f1f1f1;
+	--muted-foreground: #6b7280;
+	--border: #e2e2e2;
+	--input: #e2e2e2;
+	--ring: #fb923c;
+	--primary: #fb923c;
+	--primary-foreground: #000000;
+	--secondary: #f1f1f1;
+	--secondary-foreground: #111827;
+	--accent: #f1f1f1;
+	--accent-foreground: #111827;
+	--destructive: #ef4444;
+	--destructive-foreground: #ffffff;
+	--sidebar: #ffffff;
+	--sidebar-foreground: #111827;
+	--sidebar-primary: #fb923c;
+	--sidebar-primary-foreground: #000000;
+	--sidebar-accent: #f1f1f1;
+	--sidebar-accent-foreground: #111827;
+	--sidebar-border: #e2e2e2;
+	--sidebar-ring: #fb923c;
+	--grid-color: rgba(17, 24, 39, 0.08);
+}
+
+.dark {
+	--background: #000000;
+	--foreground: #fafafa;
+	--card: #0a0a0a;
+	--card-foreground: #fafafa;
+	--popover: #141414;
+	--popover-foreground: #fafafa;
+	--muted: #141414;
+	--muted-foreground: #a3a3a3;
+	--border: #262626;
+	--input: #262626;
+	--ring: #fb923c;
+	--primary: #fb923c;
+	--primary-foreground: #000000;
+	--secondary: #141414;
+	--secondary-foreground: #fafafa;
+	--accent: #1a1a1a;
+	--accent-foreground: #fafafa;
+	--destructive: #ef4444;
+	--destructive-foreground: #ffffff;
+	--sidebar: #0a0a0a;
+	--sidebar-foreground: #fafafa;
+	--sidebar-primary: #fb923c;
+	--sidebar-primary-foreground: #000000;
+	--sidebar-accent: #141414;
+	--sidebar-accent-foreground: #fafafa;
+	--sidebar-border: #262626;
+	--sidebar-ring: #fb923c;
+	--grid-color: rgba(255, 255, 255, 0.06);
+}
+
+html,
+body {
+	height: 100%;
+}
+
+body {
+	font-family: 'Inter', system-ui, -apple-system, sans-serif;
+	background-color: var(--background);
+	color: var(--foreground);
+}
+
+.font-mono {
+	font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.page-grid {
+	position: relative;
+}
+
+.page-grid::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background-image: linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
+		linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
+	background-size: 32px 32px;
+	pointer-events: none;
+	z-index: 0;
+}
+
+.page-grid > * {
+	position: relative;
+	z-index: 1;
+}
