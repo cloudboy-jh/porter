@@ -6,7 +6,7 @@
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Progress } from '$lib/components/ui/progress/index.js';
 
-	let showSettings = false;
+	let showSettings = $state(false);
 
 	const filters = ['All', 'Running', 'Queued', 'Completed', 'Failed'];
 	const filterMap: Record<string, string> = {
@@ -40,9 +40,9 @@
 	const getAgentIcon = (agent: string) =>
 		`https://www.google.com/s2/favicons?domain=${agentDomains[agent] ?? 'github.com'}&sz=64`;
 
-	let activeFilter = 'All';
+	let activeFilter = $state('All');
 
-	let tasks = [
+	let tasks = $state([
 		{
 			id: 'task-42',
 			status: 'running',
@@ -103,7 +103,7 @@
 			expanded: false,
 			logs: []
 		}
-	];
+	]);
 
 	const toggleExpanded = (id: string) => {
 		tasks = tasks.map((task) =>
@@ -123,22 +123,23 @@
 		toggleExpanded(id);
 	};
 
-	$: statusCounts = tasks.reduce<Record<string, number>>((acc, task) => {
+	const statusCounts = $derived(tasks.reduce<Record<string, number>>((acc, task) => {
 		acc[task.status] = (acc[task.status] ?? 0) + 1;
 		return acc;
-	}, {});
+	}, {}));
 
-	$: statusPills = [
+	const statusPills = $derived([
 		{ key: 'running', label: 'Running', count: statusCounts.running ?? 0 },
 		{ key: 'queued', label: 'Queued', count: statusCounts.queued ?? 0 },
 		{ key: 'success', label: 'Completed', count: statusCounts.success ?? 0 },
 		{ key: 'failed', label: 'Failed', count: statusCounts.failed ?? 0 }
-	];
+	]);
 
-	$: filteredTasks =
+	const filteredTasks = $derived(
 		activeFilter === 'All'
 			? tasks
-			: tasks.filter((task) => task.status === filterMap[activeFilter]);
+			: tasks.filter((task) => task.status === filterMap[activeFilter])
+	);
 </script>
 
 <div class="flex min-h-full items-center justify-center py-8">
@@ -288,4 +289,4 @@
 	</div>
 </div>
 
-<SettingsModal open={showSettings} on:close={() => (showSettings = false)} />
+<SettingsModal bind:open={showSettings} />

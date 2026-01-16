@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
 	import { X } from '@lucide/svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -8,15 +7,24 @@
 	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
 	import AgentSettings from '$lib/components/AgentSettings.svelte';
 
-	const dispatch = createEventDispatcher<{ close: void; save: { agents: AgentConfig[] } }>();
-	let { open = $bindable(false), agents = [] as AgentConfig[] } = $props();
-
 	type AgentConfig = {
 		name: string;
 		enabled: boolean;
 		path: string;
 		status: string;
 	};
+
+	let { 
+		open = $bindable(false), 
+		agents = [] as AgentConfig[],
+		onclose,
+		onsave
+	}: {
+		open?: boolean;
+		agents?: AgentConfig[];
+		onclose?: () => void;
+		onsave?: (agents: AgentConfig[]) => void;
+	} = $props();
 
 	const executionModes = [
 		{
@@ -33,14 +41,18 @@
 
 	let selectedMode = $state('local');
 
-	let wasOpen = open;
+	let wasOpen = $state(open);
 
 	$effect(() => {
 		if (wasOpen && !open) {
-			dispatch('close');
+			onclose?.();
 		}
 		wasOpen = open;
 	});
+
+	const handleAgentSave = (event: CustomEvent<{ config: AgentConfig[] }>) => {
+		onsave?.(event.detail.config);
+	};
 </script>
 
 <Dialog.Root bind:open>
@@ -106,7 +118,7 @@
 		<AgentSettings
 			agents={agents}
 			on:refresh
-			on:save={(event) => dispatch('save', { agents: event.detail.config })}
+			on:save={handleAgentSave}
 		/>
 	</div>
 
