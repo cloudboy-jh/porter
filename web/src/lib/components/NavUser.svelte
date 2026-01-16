@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { ChevronsUpDown, LogOut, Settings, User } from '@lucide/svelte';
+	import { goto } from '$app/navigation';
+	import { ChevronsUpDown, GitBranch, LogOut, Settings, User } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Avatar, AvatarFallback, AvatarImage } from '$lib/components/ui/avatar/index.js';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
@@ -8,6 +9,12 @@
 		name: 'Jack Horton',
 		handle: '@cloudboy-jh',
 		avatar: 'https://github.com/johnhorton.png'
+	};
+
+	const github = {
+		connected: true,
+		handle: '@jackgolding',
+		updated: '3m ago'
 	};
 </script>
 
@@ -33,14 +40,38 @@
 			</Sidebar.MenuButton>
 		{/snippet}
 	</DropdownMenu.Trigger>
-	<DropdownMenu.Content side="top" align="start" class="w-56">
+	<DropdownMenu.Content side="top" align="start" class="w-64">
 		<DropdownMenu.Label>Account</DropdownMenu.Label>
+		<div class="px-2 pb-2">
+			<div class="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-2">
+				<Avatar class="size-8">
+					<AvatarImage src={user.avatar} alt={user.name} />
+					<AvatarFallback>JH</AvatarFallback>
+				</Avatar>
+				<div class="text-xs">
+					<div class="font-medium text-foreground">{user.name}</div>
+					<div class="text-muted-foreground">{user.handle}</div>
+				</div>
+			</div>
+		</div>
 		<DropdownMenu.Separator />
+		<DropdownMenu.Label>GitHub</DropdownMenu.Label>
+		<div class="px-2 pb-2 text-xs text-muted-foreground">
+			<div class="flex items-center justify-between">
+				<span>{github.connected ? `Connected as ${github.handle}` : 'Not connected'}</span>
+				<span>{github.updated}</span>
+			</div>
+		</div>
 		<DropdownMenu.Item>
-			<User class="size-4" />
-			Profile
+			<GitBranch class="size-4" />
+			{github.connected ? 'Disconnect GitHub' : 'Connect GitHub'}
 		</DropdownMenu.Item>
-		<DropdownMenu.Item>
+		<DropdownMenu.Separator />
+		<DropdownMenu.Item onclick={() => goto('/settings')}>
+			<User class="size-4" />
+			Account
+		</DropdownMenu.Item>
+		<DropdownMenu.Item onclick={() => goto('/settings')}>
 			<Settings class="size-4" />
 			Settings
 		</DropdownMenu.Item>

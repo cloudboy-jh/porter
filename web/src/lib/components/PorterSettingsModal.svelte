@@ -6,17 +6,9 @@
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
-	import AgentSettings from '$lib/components/AgentSettings.svelte';
 
-	const dispatch = createEventDispatcher<{ close: void; save: { agents: AgentConfig[] } }>();
-	let { open = $bindable(false), agents = [] as AgentConfig[] } = $props();
-
-	type AgentConfig = {
-		name: string;
-		enabled: boolean;
-		path: string;
-		status: string;
-	};
+	const dispatch = createEventDispatcher<{ close: void }>();
+	let { open = $bindable(false) } = $props();
 
 	const executionModes = [
 		{
@@ -31,7 +23,7 @@
 		}
 	];
 
-	let selectedMode = $state('local');
+	let selectedMode = 'local';
 
 	let wasOpen = open;
 
@@ -46,10 +38,8 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="sm:max-w-2xl">
 		<Dialog.Header class="gap-2">
-			<Dialog.Title>Settings</Dialog.Title>
-			<Dialog.Description>
-				Manage execution, connections, and agent detection.
-			</Dialog.Description>
+			<Dialog.Title>Porter settings</Dialog.Title>
+			<Dialog.Description>Manage execution mode and GitHub connection.</Dialog.Description>
 			<Button
 				variant="ghost"
 				size="icon"
@@ -66,9 +56,7 @@
 				<Card.Root>
 					<Card.Header class="pb-2">
 						<Card.Title class="text-sm">Execution Mode</Card.Title>
-						<Card.Description>
-							Choose where Porter runs your agents.
-						</Card.Description>
+						<Card.Description>Choose where Porter runs your agents.</Card.Description>
 					</Card.Header>
 					<Card.Content class="space-y-2">
 						<RadioGroup.Root bind:value={selectedMode} class="space-y-2">
@@ -87,29 +75,22 @@
 					</Card.Content>
 				</Card.Root>
 
-			<Card.Root>
-				<Card.Header class="pb-2">
-					<Card.Title class="text-sm">GitHub Connection</Card.Title>
-					<Card.Description>Authentication and connection status.</Card.Description>
-				</Card.Header>
-				<Card.Content class="flex flex-col items-start gap-3">
-					<Badge variant="secondary" class="gap-2">
-						<span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-						Connected as @jackgolding
-					</Badge>
-					<span class="text-xs text-muted-foreground">Last synced 3m ago</span>
-					<Button variant="secondary" type="button">Disconnect</Button>
-				</Card.Content>
-			</Card.Root>
+				<Card.Root>
+					<Card.Header class="pb-2">
+						<Card.Title class="text-sm">GitHub Connection</Card.Title>
+						<Card.Description>Authentication and connection status.</Card.Description>
+					</Card.Header>
+					<Card.Content class="flex flex-col items-start gap-3">
+						<Badge variant="secondary" class="gap-2">
+							<span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+							Connected as @jackgolding
+						</Badge>
+						<span class="text-xs text-muted-foreground">Last synced 3m ago</span>
+						<Button variant="secondary" type="button">Disconnect</Button>
+					</Card.Content>
+				</Card.Root>
+			</div>
 		</div>
-
-		<AgentSettings
-			agents={agents}
-			on:refresh
-			on:save={(event) => dispatch('save', { agents: event.detail.config })}
-		/>
-	</div>
-
 
 		<Dialog.Footer class="flex flex-wrap gap-2">
 			<Button variant="secondary" type="button" onclick={() => (open = false)}>

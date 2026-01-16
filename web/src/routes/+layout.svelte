@@ -44,14 +44,9 @@
 		<header class="flex h-16 items-center justify-between gap-4 border-b border-border px-6">
 			<div class="flex items-center gap-3">
 				<SidebarTrigger />
-				<div class="space-y-0.5">
-					<p class="text-xs text-muted-foreground">
-						{headerMap[$page.url.pathname]?.breadcrumb ?? 'Porter'}
-					</p>
-					<h1 class="text-lg font-semibold text-foreground">
-						{headerMap[$page.url.pathname]?.title ?? 'Dashboard'}
-					</h1>
-				</div>
+				<p class="text-sm font-semibold text-foreground">
+					{headerMap[$page.url.pathname]?.breadcrumb ?? 'Porter'}
+				</p>
 			</div>
 			<p class="hidden text-sm text-muted-foreground md:block">
 				{headerMap[$page.url.pathname]?.subtitle ?? ''}

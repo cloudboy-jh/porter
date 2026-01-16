@@ -8,6 +8,11 @@
 		{ value: 'light', label: 'Light mode', icon: Sun }
 	];
 
+	const themeIcons = {
+		dark: Moon,
+		light: Sun
+	};
+
 	let theme = $state('dark');
 
 	const applyTheme = (value: string) => {
@@ -46,7 +51,7 @@
 				aria-label={option.label}
 				title={option.label}
 			>
-				<svelte:component this={option.icon} size={16} />
+				<svelte:component this={themeIcons[option.value as keyof typeof themeIcons]} size={16} />
 			</ToggleGroup.Item>
 		{/each}
 	</ToggleGroup.Root>

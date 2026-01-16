@@ -118,8 +118,9 @@
 		}
 	};
 
-	const handleViewClick = (event: MouseEvent) => {
+	const handleViewClick = (event: MouseEvent, id: string) => {
 		event.stopPropagation();
+		toggleExpanded(id);
 	};
 
 	$: statusCounts = tasks.reduce<Record<string, number>>((acc, task) => {
@@ -140,7 +141,8 @@
 			: tasks.filter((task) => task.status === filterMap[activeFilter]);
 </script>
 
-<div class="mx-auto w-full max-w-5xl space-y-6">
+<div class="flex min-h-full items-center justify-center py-8">
+	<div class="w-full max-w-6xl space-y-6">
 	<div class="flex flex-wrap items-center justify-end gap-2">
 		<Button variant="secondary" type="button" onclick={() => (showSettings = true)}>
 			Settings
@@ -166,7 +168,7 @@
 	{/each}
 </section>
 
-<section class="rounded-2xl border border-border/60 bg-card/70 p-4 backdrop-blur">
+<section class="rounded-2xl border border-border/60 bg-card/70 p-4 shadow-lg backdrop-blur">
 	<div class="grid grid-cols-[120px_2fr_1fr_1fr_1.2fr_auto] items-center gap-4 border-b border-border/60 pb-3 text-xs font-semibold uppercase text-muted-foreground">
 		<span>Status</span>
 		<span>Task</span>
@@ -175,7 +177,7 @@
 		<span>Progress</span>
 		<span class="text-right">Actions</span>
 	</div>
-	<div class="mt-4 space-y-3">
+	<div class="mt-4 max-h-[80vh] space-y-3 overflow-y-auto pr-1">
 		{#each filteredTasks as task}
 			<Card.Root
 				class="border border-border/60 bg-background/80"
@@ -220,7 +222,7 @@
 								</span>
 							</div>
 						{:else}
-							<Button variant="ghost" size="sm" onclick={handleViewClick}>View</Button>
+							<Button variant="ghost" size="sm" onclick={(e: MouseEvent) => handleViewClick(e, task.id)}>View</Button>
 						{/if}
 					</div>
 				</Card.Content>
@@ -283,6 +285,7 @@
 		{/each}
 	</div>
 </section>
+	</div>
 </div>
 
 <SettingsModal open={showSettings} on:close={() => (showSettings = false)} />
