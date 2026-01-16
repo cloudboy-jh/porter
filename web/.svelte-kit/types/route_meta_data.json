@@ -1,5 +1,26 @@
 {
 	"/": [],
+	"/api/agents": [
+		"src/routes/api/agents/+server.ts"
+	],
+	"/api/agents/[name]/status": [
+		"src/routes/api/agents/[name]/status/+server.ts"
+	],
+	"/api/config": [
+		"src/routes/api/config/+server.ts"
+	],
+	"/api/tasks": [
+		"src/routes/api/tasks/+server.ts"
+	],
+	"/api/tasks/[id]/retry": [
+		"src/routes/api/tasks/[id]/retry/+server.ts"
+	],
+	"/api/tasks/[id]/stop": [
+		"src/routes/api/tasks/[id]/stop/+server.ts"
+	],
+	"/api/webhooks/github": [
+		"src/routes/api/webhooks/github/+server.ts"
+	],
 	"/history": [],
 	"/settings": []
 }

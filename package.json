@@ -1,0 +1,10 @@
+{
+	"name": "porter",
+	"private": true,
+	"scripts": {
+		"desktop:dev": "concurrently -k --kill-others \"cd desktop/frontend && bun run dev\" \"cd desktop && wails dev\""
+	},
+	"devDependencies": {
+		"concurrently": "^8.2.2"
+	}
+}
