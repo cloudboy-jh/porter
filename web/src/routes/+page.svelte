@@ -1,12 +1,16 @@
 <script lang="ts">
-	import SettingsModal from '$lib/components/SettingsModal.svelte';
+	import AgentSettingsModal from '$lib/components/AgentSettingsModal.svelte';
+	import CommandBar from '$lib/components/CommandBar.svelte';
 	import { ArrowUpRight, GitCommit, Plus, RotateCcw, Square } from '@lucide/svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Progress } from '$lib/components/ui/progress/index.js';
 
-	let showSettings = $state(false);
+	let showAgentSettings = $state(false);
+	let showDispatch = $state(false);
+	let agents = $state<string[]>(['aider', 'cursor', 'windsurf', 'cline']);
+	let agentConfig = $state<Array<{ name: string; enabled: boolean; path: string; status: string }>>([]);
 
 	const filters = ['All', 'Running', 'Queued', 'Completed', 'Failed'];
 	const filterMap: Record<string, string> = {
@@ -144,29 +148,41 @@
 
 <div class="flex min-h-full items-center justify-center py-8">
 	<div class="w-full max-w-6xl space-y-6">
-	<div class="flex flex-wrap items-center justify-end gap-2">
-		<Button variant="secondary" type="button" onclick={() => (showSettings = true)}>
-			Settings
+
+<section class="flex flex-wrap items-center justify-between gap-2">
+	<div class="flex flex-wrap gap-2">
+		<Button
+			variant={activeFilter === 'All' ? 'secondary' : 'outline'}
+			size="sm"
+			onclick={() => (activeFilter = 'All')}
+			class="gap-2"
+		>
+			<span>{tasks.length}</span>
+			<span>All</span>
 		</Button>
-		<Button type="button">
+		{#each statusPills as pill}
+			<Button
+				variant={activeFilter === (pill.label === 'Completed' ? 'Completed' : pill.label) ? 'secondary' : 'outline'}
+				size="sm"
+				onclick={() => (activeFilter = pill.label === 'Completed' ? 'Completed' : pill.label)}
+				class={`gap-2 ${statusStyles[pill.key]}`}
+			>
+				<span class="h-2 w-2 rounded-full bg-current"></span>
+				<span>{pill.count}</span>
+				<span>{pill.label}</span>
+			</Button>
+		{/each}
+	</div>
+	<div class="flex flex-wrap gap-2">
+		<Button variant="secondary" type="button" onclick={() => (showAgentSettings = true)}>
+			Agents
+		</Button>
+		<Button type="button" onclick={() => (showDispatch = true)}>
 			<Plus size={16} />
-			New Task
+			Dispatch
+			<span class="text-xs opacity-70">⌘K</span>
 		</Button>
 	</div>
-
-<section class="flex flex-wrap gap-2">
-	{#each statusPills as pill}
-		<Button
-			variant={activeFilter === (pill.label === 'Completed' ? 'Completed' : pill.label) ? 'default' : 'outline'}
-			size="sm"
-			onclick={() => (activeFilter = pill.label === 'Completed' ? 'Completed' : pill.label)}
-			class={`gap-2 ${statusStyles[pill.key]}`}
-		>
-			<span class="h-2 w-2 rounded-full bg-current"></span>
-			<span>{pill.count}</span>
-			<span>{pill.label}</span>
-		</Button>
-	{/each}
 </section>
 
 <section class="rounded-2xl border border-border/60 bg-card/70 p-4 shadow-lg backdrop-blur">
@@ -289,4 +305,5 @@
 	</div>
 </div>
 
-<SettingsModal bind:open={showSettings} />
+<CommandBar bind:open={showDispatch} {agents} />
+<AgentSettingsModal bind:open={showAgentSettings} agents={agentConfig} />

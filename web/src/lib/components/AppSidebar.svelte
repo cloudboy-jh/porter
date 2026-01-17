@@ -3,14 +3,19 @@
 	import { page } from '$app/stores';
 	import { History, LayoutDashboard, Settings2 } from '@lucide/svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
+	import * as Dialog from '$lib/components/ui/dialog/index.js';
+	import { Badge } from '$lib/components/ui/badge/index.js';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import NavUser from '$lib/components/NavUser.svelte';
+	import QuickSettingsModal from '$lib/components/QuickSettingsModal.svelte';
 	import logoMain from '../../logos/porter-logo-main.png';
 
+	let showQuickSettings = $state(false);
+
 	const navItems = [
-		{ label: 'Dashboard', href: '/', icon: LayoutDashboard },
-		{ label: 'History', href: '/history', icon: History },
-		{ label: 'Settings', href: '/settings', icon: Settings2 }
+		{ label: 'Dashboard', href: '/', icon: LayoutDashboard, action: null },
+		{ label: 'History', href: '/history', icon: History, action: null },
+		{ label: 'Settings', href: null, icon: Settings2, action: () => showQuickSettings = true }
 	];
 
 	const agents = [
@@ -29,6 +34,16 @@
 		{ label: 'Avg', value: '8m' },
 		{ label: 'Uptime', value: '4h' }
 	];
+
+	let selectedAgent = $state<{ name: string; count: number; domain: string } | null>(null);
+
+	// Mock task data - replace with actual task data later
+	const getAgentTasks = (agentName: string) => {
+		return [
+			{ id: 1, title: 'Add user auth system', status: 'running', repo: 'porter', issue: '#42' },
+			{ id: 2, title: 'Refactor core API layer', status: 'failed', repo: 'core', issue: '#301' }
+		].filter(() => Math.random() > 0.5); // Mock filter
+	};
 </script>
 
 <Sidebar.Root variant="inset" collapsible="icon">
@@ -56,8 +71,8 @@
 						<Sidebar.MenuItem>
 							<Sidebar.MenuButton
 								tooltipContent={item.label}
-								isActive={$page.url.pathname === item.href}
-								onclick={() => goto(item.href)}
+								isActive={item.href ? $page.url.pathname === item.href : false}
+								onclick={() => item.action ? item.action() : item.href && goto(item.href)}
 							>
 								<svelte:component this={item.icon} />
 								<span>{item.label}</span>
@@ -73,9 +88,15 @@
 			<Sidebar.GroupContent>
 				<div class="grid gap-2">
 					{#each agents as agent}
-						<div class="flex items-center gap-2 text-sm">
+						<button
+							class="flex items-center gap-2 text-sm rounded-md px-2 py-1.5 transition hover:bg-sidebar-accent"
+							onclick={() => agent.count > 0 ? (selectedAgent = agent) : null}
+							disabled={agent.count === 0}
+							class:opacity-50={agent.count === 0}
+							class:cursor-not-allowed={agent.count === 0}
+						>
 							<img class="h-7 w-7 rounded-full" src={getAgentIcon(agent.domain)} alt="" />
-							<span class="flex-1 capitalize text-sidebar-foreground/80 font-mono">
+							<span class="flex-1 capitalize text-sidebar-foreground/80 font-mono text-left">
 								{agent.name}
 							</span>
 							{#if agent.count}
@@ -85,7 +106,7 @@
 									{agent.count}
 								</span>
 							{/if}
-						</div>
+						</button>
 					{/each}
 				</div>
 			</Sidebar.GroupContent>
@@ -106,15 +127,48 @@
 		</Sidebar.Group>
 	</Sidebar.Content>
 	<Sidebar.Footer class="gap-4 border-t border-sidebar-border px-4 py-4">
-		<Sidebar.Group class="group-data-[collapsible=icon]:hidden">
-			<Sidebar.GroupLabel>Mode</Sidebar.GroupLabel>
-			<Sidebar.GroupContent>
-				<div class="group-data-[collapsible=icon]:hidden">
-					<ThemeToggle />
-				</div>
-			</Sidebar.GroupContent>
-		</Sidebar.Group>
+		<div class="flex items-center justify-between group-data-[collapsible=icon]:hidden">
+			<ThemeToggle />
+		</div>
 		<NavUser />
 	</Sidebar.Footer>
 	<Sidebar.Rail />
 </Sidebar.Root>
+
+<Dialog.Root open={selectedAgent !== null} onOpenChange={(open) => !open && (selectedAgent = null)}>
+	<Dialog.Content class="sm:max-w-2xl">
+		<Dialog.Header>
+			<Dialog.Title class="flex items-center gap-2">
+				{#if selectedAgent}
+					<img class="h-6 w-6 rounded-full" src={getAgentIcon(selectedAgent.domain)} alt="" />
+					<span class="capitalize">{selectedAgent.name}</span>
+					<Badge variant="secondary">{selectedAgent.count} task{selectedAgent.count !== 1 ? 's' : ''}</Badge>
+				{/if}
+			</Dialog.Title>
+			<Dialog.Description>
+				Active tasks running on this agent
+			</Dialog.Description>
+		</Dialog.Header>
+		<div class="space-y-2">
+			{#if selectedAgent}
+				{#each getAgentTasks(selectedAgent.name) as task}
+					<div class="rounded-lg border border-border bg-muted/40 p-3">
+						<div class="flex items-start justify-between gap-2">
+							<div>
+								<p class="font-medium">{task.title}</p>
+								<p class="text-xs text-muted-foreground">
+									{task.repo} • Issue {task.issue}
+								</p>
+							</div>
+							<Badge variant={task.status === 'running' ? 'default' : 'destructive'}>
+								{task.status}
+							</Badge>
+						</div>
+					</div>
+				{/each}
+			{/if}
+		</div>
+	</Dialog.Content>
+</Dialog.Root>
+
+<QuickSettingsModal bind:open={showQuickSettings} />

@@ -20,25 +20,23 @@
 
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger>
-		{#snippet child({ props })}
-			<Sidebar.MenuButton
-				size="lg"
-				class="w-full justify-between font-mono"
-				tooltipContent={user.name}
-			>
-				<div class="flex items-center gap-2">
-					<Avatar class="size-8">
-						<AvatarImage src={user.avatar} alt={user.name} />
-						<AvatarFallback>JH</AvatarFallback>
-					</Avatar>
-					<div class="flex flex-col text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-						<span class="font-medium text-sidebar-foreground">{user.name}</span>
-						<span class="text-xs text-sidebar-foreground/60">{user.handle}</span>
-					</div>
+		<Sidebar.MenuButton
+			size="lg"
+			class="w-full justify-between font-mono"
+			tooltipContent={user.name}
+		>
+			<div class="flex items-center gap-2">
+				<Avatar class="size-8">
+					<AvatarImage src={user.avatar} alt={user.name} />
+					<AvatarFallback>JH</AvatarFallback>
+				</Avatar>
+				<div class="flex flex-col text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+					<span class="font-medium text-sidebar-foreground">{user.name}</span>
+					<span class="text-xs text-sidebar-foreground/60">{user.handle}</span>
 				</div>
-				<ChevronsUpDown class="size-4 text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden" />
-			</Sidebar.MenuButton>
-		{/snippet}
+			</div>
+			<ChevronsUpDown class="size-4 text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden" />
+		</Sidebar.MenuButton>
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Content side="top" align="start" class="w-64">
 		<DropdownMenu.Label>Account</DropdownMenu.Label>

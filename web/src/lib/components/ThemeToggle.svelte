@@ -1,17 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Moon, Sun } from '@lucide/svelte';
-	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
-
-	const themes = [
-		{ value: 'dark', label: 'Dark mode', icon: Moon },
-		{ value: 'light', label: 'Light mode', icon: Sun }
-	];
-
-	const themeIcons = {
-		dark: Moon,
-		light: Sun
-	};
+	import { Button } from '$lib/components/ui/button/index.js';
 
 	let theme = $state('dark');
 
@@ -19,6 +9,10 @@
 		if (typeof document !== 'undefined') {
 			document.documentElement.classList.toggle('dark', value === 'dark');
 		}
+	};
+
+	const toggleTheme = () => {
+		theme = theme === 'dark' ? 'light' : 'dark';
 	};
 
 	onMount(() => {
@@ -43,16 +37,10 @@
 	});
 </script>
 
-<div class="theme-toggle">
-	<ToggleGroup.Root type="single" variant="outline" size="sm" bind:value={theme}>
-		{#each themes as option}
-			<ToggleGroup.Item
-				value={option.value}
-				aria-label={option.label}
-				title={option.label}
-			>
-				<svelte:component this={themeIcons[option.value as keyof typeof themeIcons]} size={16} />
-			</ToggleGroup.Item>
-		{/each}
-	</ToggleGroup.Root>
-</div>
+<Button variant="ghost" size="icon" onclick={toggleTheme} aria-label="Toggle theme">
+	{#if theme === 'dark'}
+		<Moon size={16} />
+	{:else}
+		<Sun size={16} />
+	{/if}
+</Button>

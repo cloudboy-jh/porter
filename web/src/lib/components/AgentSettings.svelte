@@ -1,13 +1,8 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
-
-	const dispatch = createEventDispatcher<{ refresh: void; save: { config: AgentConfig[] } }>();
-
-	let { agents = [] as AgentConfig[] } = $props();
 
 	type AgentConfig = {
 		name: string;
@@ -15,6 +10,16 @@
 		path: string;
 		status: string;
 	};
+
+	let { 
+		agents = $bindable([] as AgentConfig[]),
+		onrefresh,
+		onsave
+	}: {
+		agents?: AgentConfig[];
+		onrefresh?: () => void;
+		onsave?: (config: AgentConfig[]) => void;
+	} = $props();
 
 	const toggleAgent = (name: string) => {
 		agents = agents.map((agent) =>
@@ -27,7 +32,11 @@
 	};
 
 	const handleSave = () => {
-		dispatch('save', { config: agents });
+		onsave?.(agents);
+	};
+
+	const handleRefresh = () => {
+		onrefresh?.();
 	};
 </script>
 
@@ -39,7 +48,7 @@
 	<Card.Content class="space-y-3">
 		<div class="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
 			<span>Detected agents from your machine.</span>
-			<Button variant="secondary" size="sm" type="button" onclick={() => dispatch('refresh')}>
+			<Button variant="secondary" size="sm" type="button" onclick={handleRefresh}>
 				Refresh Agents
 			</Button>
 		</div>
