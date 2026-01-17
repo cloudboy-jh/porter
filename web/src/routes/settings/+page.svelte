@@ -1,18 +1,30 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import AgentSettings from '$lib/components/AgentSettings.svelte';
+	import type { AgentConfig } from '$lib/types/agent';
 
 	let selectedMode = $state('local');
-	let agentConfig = $state<Array<{ name: string; enabled: boolean; path: string; status: string }>>([
-		{ name: 'aider', enabled: true, path: '/usr/local/bin/aider', status: 'idle' },
-		{ name: 'cursor', enabled: true, path: '', status: 'idle' },
-		{ name: 'windsurf', enabled: false, path: '', status: 'idle' },
-		{ name: 'cline', enabled: false, path: '', status: 'idle' }
-	]);
+	let agentConfig = $state<AgentConfig[]>([]);
+	let isLoadingAgents = $state(false);
+
+	const loadAgents = async () => {
+		isLoadingAgents = true;
+		try {
+			const response = await fetch('/api/agents');
+			if (!response.ok) return;
+			const data = await response.json();
+			agentConfig = data as AgentConfig[];
+		} catch {
+			// ignore
+		} finally {
+			isLoadingAgents = false;
+		}
+	};
 
 	const executionModes = [
 		{
@@ -33,16 +45,19 @@
 		lastSync: '3m ago'
 	});
 
-	const handleAgentSave = (config: Array<{ name: string; enabled: boolean; path: string; status: string }>) => {
+	const handleAgentSave = (config: AgentConfig[]) => {
 		agentConfig = config;
 		// TODO: Save to backend
 		console.log('Saving agent config:', config);
 	};
 
 	const handleAgentRefresh = () => {
-		// TODO: Refresh from backend
-		console.log('Refreshing agents');
+		loadAgents();
 	};
+
+	onMount(() => {
+		loadAgents();
+	});
 </script>
 
 <div class="space-y-8">

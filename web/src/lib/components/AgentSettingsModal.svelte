@@ -10,13 +10,7 @@
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import AgentSettings from '$lib/components/AgentSettings.svelte';
-
-	type AgentConfig = {
-		name: string;
-		enabled: boolean;
-		path: string;
-		status: string;
-	};
+	import type { AgentConfig } from '$lib/types/agent';
 
 	let { 
 		open = $bindable(false), 
@@ -39,15 +33,15 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="sm:max-w-3xl">
-		<Dialog.Header>
+	<Dialog.Content class="sm:max-w-4xl max-h-[85vh] flex flex-col">
+		<Dialog.Header class="flex-shrink-0">
 			<Dialog.Title>Agent Configuration</Dialog.Title>
 			<Dialog.Description>
 				Enable agents and configure binary paths.
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="py-4">
+		<div class="flex-1 overflow-y-auto py-4 -mx-6 px-6">
 			<AgentSettings 
 				bind:agents
 				onsave={handleAgentSave}
@@ -55,7 +49,7 @@
 			/>
 		</div>
 
-		<Dialog.Footer>
+		<Dialog.Footer class="flex-shrink-0">
 			<Button variant="outline" onclick={() => (open = false)}>Close</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

@@ -62,6 +62,16 @@
 	});
 
 	// Agent quick toggles
+	const agentDomains: Record<string, string> = {
+		aider: 'aider.chat',
+		cursor: 'cursor.com',
+		windsurf: 'windsurf.com',
+		cline: 'github.com/cline'
+	};
+
+	const getAgentIcon = (name: string) =>
+		`https://www.google.com/s2/favicons?domain=${agentDomains[name] ?? 'github.com'}&sz=64`;
+
 	let agents = $state([
 		{ name: 'aider', enabled: true },
 		{ name: 'cursor', enabled: true },
@@ -146,12 +156,36 @@
 				<Label>Agents</Label>
 				<div class="grid gap-2">
 					{#each agents as agent}
-						<div class="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-2.5">
-							<span class="text-sm font-mono capitalize">{agent.name}</span>
+						<div 
+							class="flex items-center justify-between rounded-lg border p-2.5 transition-colors {agent.enabled 
+								? 'border-emerald-500/40 bg-emerald-500/10' 
+								: 'border-border bg-muted/30'}"
+						>
+							<div class="flex items-center gap-2.5">
+								<img 
+									src={getAgentIcon(agent.name)} 
+									alt={agent.name}
+									class="h-5 w-5 rounded {agent.enabled ? 'opacity-100' : 'opacity-40'}"
+								/>
+								<span 
+									class="h-2 w-2 rounded-full {agent.enabled 
+										? 'bg-emerald-500' 
+										: 'bg-muted-foreground/40'}"
+								></span>
+								<span class="text-sm font-mono capitalize {agent.enabled 
+									? 'text-foreground' 
+									: 'text-muted-foreground'}"
+								>
+									{agent.name}
+								</span>
+							</div>
 							<Button
 								variant={agent.enabled ? 'secondary' : 'outline'}
 								size="sm"
 								onclick={() => toggleAgent(agent.name)}
+								class={agent.enabled 
+									? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-700 dark:text-emerald-400 border-emerald-500/40' 
+									: ''}
 							>
 								{agent.enabled ? 'Enabled' : 'Disabled'}
 							</Button>

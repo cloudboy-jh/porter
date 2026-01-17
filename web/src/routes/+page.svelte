@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import AgentSettingsModal from '$lib/components/AgentSettingsModal.svelte';
 	import CommandBar from '$lib/components/CommandBar.svelte';
 	import { ArrowUpRight, GitCommit, Plus, RotateCcw, Square } from '@lucide/svelte';
@@ -6,11 +7,35 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Progress } from '$lib/components/ui/progress/index.js';
+	import type { AgentConfig, ParsedCommand } from '$lib/types/agent';
 
 	let showAgentSettings = $state(false);
 	let showDispatch = $state(false);
-	let agents = $state<string[]>(['aider', 'cursor', 'windsurf', 'cline']);
-	let agentConfig = $state<Array<{ name: string; enabled: boolean; path: string; status: string }>>([]);
+	let agentConfig = $state<AgentConfig[]>([]);
+	let isLoadingAgents = $state(false);
+
+	const loadAgents = async () => {
+		isLoadingAgents = true;
+		try {
+			const response = await fetch('/api/agents');
+			if (!response.ok) return;
+			const data = await response.json();
+			agentConfig = data as AgentConfig[];
+		} catch {
+			// ignore
+		} finally {
+			isLoadingAgents = false;
+		}
+	};
+
+	const handleCommandSubmit = (payload: ParsedCommand) => {
+		console.log('Dispatching task:', payload);
+		// TODO: Call API to create task
+	};
+
+	onMount(() => {
+		loadAgents();
+	});
 
 	const filters = ['All', 'Running', 'Queued', 'Completed', 'Failed'];
 	const filterMap: Record<string, string> = {
@@ -305,5 +330,5 @@
 	</div>
 </div>
 
-<CommandBar bind:open={showDispatch} {agents} />
+<CommandBar bind:open={showDispatch} agents={agentConfig} onsubmit={handleCommandSubmit} />
 <AgentSettingsModal bind:open={showAgentSettings} agents={agentConfig} />
