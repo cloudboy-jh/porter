@@ -1,3 +1,13 @@
+<!--
+	AgentSettings - Agent Configuration Form Component
+	
+	This is a reusable form component for managing agent configuration.
+	It displays agent status, enable/disable toggles, and path configuration.
+	
+	Used in:
+	- AgentSettingsModal (Dashboard "Agents" button)
+	- /settings page (full settings page)
+-->
 <script lang="ts">
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';

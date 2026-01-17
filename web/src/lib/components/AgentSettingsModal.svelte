@@ -1,3 +1,11 @@
+<!--
+	AgentSettingsModal - Dialog Wrapper for Agent Configuration
+	
+	This modal wraps the AgentSettings component in a dialog.
+	Opens from the Dashboard "Agents" button for quick agent management.
+	
+	Purpose: Quick access to agent config without navigating to /settings
+-->
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';

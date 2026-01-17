@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { History, LayoutDashboard, Settings2 } from '@lucide/svelte';
+	import { History, LayoutDashboard, Settings, Zap } from '@lucide/svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -13,9 +13,10 @@
 	let showQuickSettings = $state(false);
 
 	const navItems = [
-		{ label: 'Dashboard', href: '/', icon: LayoutDashboard, action: null },
-		{ label: 'History', href: '/history', icon: History, action: null },
-		{ label: 'Settings', href: null, icon: Settings2, action: () => showQuickSettings = true }
+		{ label: 'Dashboard', href: '/', icon: LayoutDashboard, action: null as (() => void) | null, shortcut: null as string | null },
+		{ label: 'History', href: '/history', icon: History, action: null as (() => void) | null, shortcut: null as string | null },
+		{ label: 'Quick Settings', href: null as string | null, icon: Zap, action: () => showQuickSettings = true, shortcut: '⌘,' },
+		{ label: 'Settings', href: '/settings', icon: Settings, action: null as (() => void) | null, shortcut: null as string | null }
 	];
 
 	const agents = [
@@ -76,6 +77,9 @@
 							>
 								<svelte:component this={item.icon} />
 								<span>{item.label}</span>
+								{#if item.shortcut}
+									<span class="ml-auto text-xs text-sidebar-foreground/60">{item.shortcut}</span>
+								{/if}
 							</Sidebar.MenuButton>
 						</Sidebar.MenuItem>
 					{/each}

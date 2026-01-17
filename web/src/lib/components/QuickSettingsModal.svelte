@@ -1,3 +1,14 @@
+<!--
+	QuickSettingsModal - Quick Settings Dialog
+	
+	Lightweight modal for common settings changes.
+	Accessible via:
+	- Sidebar "Quick Settings" item
+	- Keyboard shortcut: ⌘,
+	
+	Contains: Theme toggle, GitHub status, Agent enable/disable
+	For full settings, navigate to /settings page
+-->
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Moon, Sun, Github } from '@lucide/svelte';
