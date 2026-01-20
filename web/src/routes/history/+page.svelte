@@ -17,11 +17,12 @@
 	import type { Task } from '$lib/server/types';
 
 	const agentDomains: Record<string, string> = {
-		aider: 'aider.chat',
+		opencode: 'opencode.ai',
+		claude: 'claude.ai',
 		cursor: 'cursor.com',
 		windsurf: 'windsurf.com',
 		cline: 'github.com/cline',
-		opencode: 'opencode.ai'
+		aider: 'aider.chat'
 	};
 
 	const getAgentIcon = (agent: string) =>

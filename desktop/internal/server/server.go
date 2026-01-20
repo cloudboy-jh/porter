@@ -16,6 +16,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/porter-dev/porter/desktop/internal/agent"
+	"github.com/porter-dev/porter/desktop/internal/github"
 	"github.com/porter-dev/porter/desktop/internal/task"
 )
 
@@ -286,6 +287,8 @@ func (server *Server) runTask(id string, repoPath string) {
 		server.updateTaskStatus(id, task.StatusFailed, err.Error())
 		return
 	}
+
+	server.detectPRAndUpdateIssue(id)
 	server.updateTaskStatus(id, task.StatusSuccess, "")
 }
 
@@ -377,4 +380,44 @@ func buildPrompt(payload CreateTaskRequest) string {
 
 func newTaskID() string {
 	return fmt.Sprintf("task-%d", time.Now().UnixNano())
+}
+
+func (server *Server) detectPRAndUpdateIssue(id string) {
+	taskItem, ok := server.store.Get(id)
+	if !ok {
+		return
+	}
+	if taskItem.RepoOwner == "" || taskItem.RepoName == "" {
+		return
+	}
+	client := github.NewClient(taskItem.RepoOwner, taskItem.RepoName)
+	pr, err := client.FindPRForIssue(taskItem.IssueNumber)
+	if err != nil {
+		server.store.Update(id, func(item *task.Task) {
+			item.Logs = append(item.Logs, task.LogEntry{Level: "error", Message: fmt.Sprintf("Failed to find PR: %s", err), Timestamp: time.Now()})
+		})
+		return
+	}
+	if pr == nil {
+		server.store.Update(id, func(item *task.Task) {
+			item.Logs = append(item.Logs, task.LogEntry{Level: "warning", Message: "No PR found for this issue", Timestamp: time.Now()})
+		})
+		return
+	}
+	updated, ok := server.store.Update(id, func(item *task.Task) {
+		item.PRNumber = &pr.Number
+	})
+	if ok {
+		server.hub.Broadcast(Event{Type: "task_update", Data: TaskUpdate{ID: updated.ID, Status: updated.Status, Progress: updated.Progress}})
+	}
+	commentBody := fmt.Sprintf("✅ Task completed by @porter\n\nPR created: #%d\n\n%s", pr.Number, pr.URL)
+	if err := client.CommentIssue(taskItem.IssueNumber, commentBody); err != nil {
+		server.store.Update(id, func(item *task.Task) {
+			item.Logs = append(item.Logs, task.LogEntry{Level: "error", Message: fmt.Sprintf("Failed to comment on issue: %s", err), Timestamp: time.Now()})
+		})
+		return
+	}
+	server.store.Update(id, func(item *task.Task) {
+		item.Logs = append(item.Logs, task.LogEntry{Level: "success", Message: fmt.Sprintf("Updated issue #%d with PR #%d", taskItem.IssueNumber, pr.Number), Timestamp: time.Now()})
+	})
 }

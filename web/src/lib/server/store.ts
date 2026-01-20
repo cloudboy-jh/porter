@@ -18,7 +18,7 @@ let tasks: Task[] = [
 		issueNumber: 42,
 		issueTitle: 'Add user auth system',
 		issueBody: 'Add auth endpoints, UI, and guards.',
-		agent: 'aider',
+	agent: 'opencode',
 		priority: 3,
 		progress: 65,
 		createdAt: hoursAgo(2),
@@ -55,7 +55,7 @@ let tasks: Task[] = [
 		issueNumber: 201,
 		issueTitle: 'Improve queue retry logic',
 		issueBody: 'Add exponential backoff and better error handling for task retries.',
-		agent: 'aider',
+	agent: 'claude',
 		priority: 3,
 		progress: 100,
 		createdAt: minutesAgo(45),
@@ -104,7 +104,7 @@ let tasks: Task[] = [
 		issueNumber: 156,
 		issueTitle: 'Optimize database queries for dashboard',
 		issueBody: 'Dashboard loading slowly due to N+1 queries.',
-		agent: 'aider',
+	agent: 'opencode',
 		priority: 3,
 		progress: 100,
 		createdAt: hoursAgo(6),
@@ -175,7 +175,7 @@ let tasks: Task[] = [
 		issueNumber: 98,
 		issueTitle: 'Add API rate limiting',
 		issueBody: 'Implement rate limiting middleware for API endpoints.',
-		agent: 'aider',
+	agent: 'opencode',
 		priority: 3,
 		progress: 100,
 		createdAt: hoursAgo(24),
@@ -247,7 +247,7 @@ let tasks: Task[] = [
 		issueNumber: 149,
 		issueTitle: 'Add real-time collaboration features',
 		issueBody: 'Implement WebSocket-based real-time editing.',
-		agent: 'aider',
+	agent: 'claude',
 		priority: 3,
 		progress: 30,
 		createdAt: hoursAgo(18),
@@ -320,6 +320,10 @@ let config: PorterConfig = {
 		opencode: {
 			enabled: true,
 			path: '~/.local/bin/opencode'
+		},
+		claude: {
+			enabled: true,
+			path: '~/.claude/claude'
 		}
 	},
 	settings: {
@@ -332,24 +336,36 @@ let config: PorterConfig = {
 let configLoaded = false;
 
 const agentDomains: Record<string, string> = {
-	aider: 'aider.chat',
+	opencode: 'opencode.ai',
+	claude: 'claude.ai',
 	cursor: 'cursor.com',
 	windsurf: 'windsurf.com',
 	cline: 'github.com/cline',
-	opencode: 'github.com'
+	aider: 'aider.chat'
 };
 
 const agentStatus: AgentConfig[] = [
 	{
-		name: 'aider',
+		name: 'opencode',
 		enabled: true,
-		path: '/usr/local/bin/aider',
+		path: '~/.local/bin/opencode',
 		status: 'idle',
-		domain: agentDomains.aider,
-		version: '0.35.0',
+		domain: agentDomains.opencode,
+		version: '0.4.2',
+		lastUsed: '12m ago',
+		taskCount: 32,
+		successRate: 91
+	},
+	{
+		name: 'claude',
+		enabled: true,
+		path: '~/.claude/claude',
+		status: 'idle',
+		domain: agentDomains.claude,
+		version: '1.1.0',
 		lastUsed: '2h ago',
-		taskCount: 24,
-		successRate: 87
+		taskCount: 18,
+		successRate: 89
 	},
 	{
 		name: 'cursor',
@@ -383,6 +399,17 @@ const agentStatus: AgentConfig[] = [
 		lastUsed: undefined,
 		taskCount: 0,
 		successRate: 0
+	},
+	{
+		name: 'aider',
+		enabled: false,
+		path: '/usr/local/bin/aider',
+		status: 'disabled',
+		domain: agentDomains.aider,
+		version: '0.35.0',
+		lastUsed: '2d ago',
+		taskCount: 3,
+		successRate: 72
 	}
 ];
 

@@ -27,5 +27,7 @@ web/.svelte-kit
 web/build
 web/.svelte-kit/**
 desktop/frontend/dist
+!desktop/frontend/dist/.gitkeep
 desktop/frontend/wailsjs
 desktop/build
+

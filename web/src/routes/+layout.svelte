@@ -1,10 +1,14 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import favicon from '../logos/porter-logo-main.png';
 	import '../shadcn.css';
 	import '../app.css';
 	import { page } from '$app/stores';
 	import AppSidebar from '$lib/components/AppSidebar.svelte';
 	import { SidebarInset, SidebarProvider, SidebarTrigger } from '$lib/components/ui/sidebar/index.js';
+	import { wsService, type ConnectionStatus } from '$lib/services/ws';
+	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { Circle } from '@lucide/svelte';
 
 	const headerMap: Record<string, { title: string; breadcrumb: string; subtitle: string }> = {
 		'/': {
@@ -25,7 +29,28 @@
 	};
 
 	let sidebarOpen = $state(false);
+	let connectionStatus = $state<ConnectionStatus>('disconnected');
 	let { children } = $props();
+
+	const statusStyles: Record<ConnectionStatus, string> = {
+		connected: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/20',
+		disconnected: 'bg-muted text-muted-foreground border-border',
+		connecting: 'bg-amber-500/15 text-amber-600 border-amber-500/20',
+		error: 'bg-destructive/15 text-destructive border-destructive/20'
+	};
+
+	onMount(() => {
+		wsService.connect();
+
+		const unbind = $effect.root(() => {
+			connectionStatus = wsService.status;
+		});
+
+		return () => {
+			unbind();
+			wsService.disconnect();
+		};
+	});
 </script>
 
 <svelte:head>
@@ -48,9 +73,15 @@
 					{headerMap[$page.url.pathname]?.breadcrumb ?? 'Porter'}
 				</p>
 			</div>
-			<p class="hidden text-sm text-muted-foreground md:block">
-				{headerMap[$page.url.pathname]?.subtitle ?? ''}
-			</p>
+			<div class="flex items-center gap-3">
+				<Badge variant="outline" class={statusStyles[connectionStatus]}>
+					<Circle size={8} class={connectionStatus === 'connected' ? 'fill-current' : ''} />
+					{connectionStatus}
+				</Badge>
+				<p class="hidden text-sm text-muted-foreground md:block">
+					{headerMap[$page.url.pathname]?.subtitle ?? ''}
+				</p>
+			</div>
 		</header>
 		<div class="flex flex-1 flex-col gap-6 p-6 md:gap-8 md:p-8">
 			{@render children()}

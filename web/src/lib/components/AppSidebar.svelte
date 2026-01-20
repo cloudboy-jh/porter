@@ -20,10 +20,12 @@
 	];
 
 	const agents = [
-		{ name: 'aider', count: 2, domain: 'aider.chat' },
+		{ name: 'opencode', count: 2, domain: 'opencode.ai' },
+		{ name: 'claude', count: 1, domain: 'claude.ai' },
 		{ name: 'cursor', count: 1, domain: 'cursor.com' },
 		{ name: 'windsurf', count: 0, domain: 'windsurf.com' },
-		{ name: 'cline', count: 0, domain: 'github.com/cline' }
+		{ name: 'cline', count: 0, domain: 'github.com/cline' },
+		{ name: 'aider', count: 0, domain: 'aider.chat' }
 	];
 
 	const getAgentIcon = (domain: string) =>

@@ -8,16 +8,35 @@
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Progress } from '$lib/components/ui/progress/index.js';
 	import type { AgentConfig, ParsedCommand } from '$lib/types/agent';
+	import { wsService, type ConnectionStatus } from '$lib/services/ws';
 
 	let showAgentSettings = $state(false);
 	let showDispatch = $state(false);
 	let agentConfig = $state<AgentConfig[]>([]);
 	let isLoadingAgents = $state(false);
+	let connectionStatus = $state<ConnectionStatus>('disconnected');
+
+	interface Task {
+		id: string;
+		status: 'queued' | 'running' | 'success' | 'failed';
+		statusLabel: string;
+		title: string;
+		repo: string;
+		issue: string;
+		agent: string;
+		progress: number;
+		started: string;
+		expanded: boolean;
+		logs: Array<{ time: string; level: string; message: string }>;
+		git?: { add: number; remove: number };
+	}
+
+	let tasks = $state<Task[]>([]);
 
 	const loadAgents = async () => {
 		isLoadingAgents = true;
 		try {
-			const response = await fetch('/api/agents');
+			const response = await fetch('http://localhost:3000/api/agents');
 			if (!response.ok) return;
 			const data = await response.json();
 			agentConfig = data as AgentConfig[];
@@ -28,13 +47,142 @@
 		}
 	};
 
-	const handleCommandSubmit = (payload: ParsedCommand) => {
-		console.log('Dispatching task:', payload);
-		// TODO: Call API to create task
+	const loadTasks = async () => {
+		try {
+			const response = await fetch('http://localhost:3000/api/tasks');
+			if (!response.ok) return;
+			const data = await response.json() as Array<{
+				id: string;
+				status: string;
+				repoOwner: string;
+				repoName: string;
+				issueNumber: number;
+				issueTitle: string;
+				agent: string;
+				progress: number;
+				createdAt: string;
+				startedAt?: string;
+				completedAt?: string;
+				logs: Array<{ level: string; message: string; timestamp: string }>;
+			}>;
+			tasks = data.map((task) => ({
+				id: task.id,
+				status: task.status as Task['status'],
+				statusLabel: getStatusLabel(task.status),
+				title: task.issueTitle,
+				repo: task.repoName,
+				issue: `#${task.issueNumber}`,
+				agent: task.agent,
+				progress: task.progress,
+				started: getRelativeTime(task.startedAt || task.createdAt),
+				expanded: false,
+				logs: task.logs.map((log) => ({
+					time: new Date(log.timestamp).toLocaleTimeString('en-US', {
+						hour12: false,
+						hour: '2-digit',
+						minute: '2-digit'
+					}),
+					level: log.level,
+					message: log.message
+				}))
+			}));
+		} catch (error) {
+			console.error('Failed to load tasks:', error);
+		}
+	};
+
+	const getStatusLabel = (status: string): string => {
+		const labels: Record<string, string> = {
+			queued: 'QUE',
+			running: 'RUN',
+			success: 'DONE',
+			failed: 'FAIL'
+		};
+		return labels[status] ?? status.toUpperCase().substring(0, 3);
+	};
+
+	const getRelativeTime = (timestamp: string): string => {
+		const now = Date.now();
+		const then = new Date(timestamp).getTime();
+		const diff = Math.floor((now - then) / 1000);
+		if (diff < 60) return `${diff}s ago`;
+		if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+		if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+		return `${Math.floor(diff / 86400)}d ago`;
+	};
+
+	const handleCommandSubmit = async (payload: ParsedCommand) => {
+		try {
+			const response = await fetch('http://localhost:3000/api/tasks', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					repoOwner: 'jackgolding',
+					repoName: payload.repo,
+					issueNumber: 1,
+					issueTitle: payload.prompt,
+					issueBody: '',
+					agent: payload.agent,
+					priority: 3,
+					createdBy: 'you'
+				})
+			});
+			if (!response.ok) throw new Error('Failed to create task');
+			await loadTasks();
+		} catch (error) {
+			console.error('Failed to dispatch task:', error);
+		}
+	};
+
+	const handleTaskUpdate = (event: CustomEvent) => {
+		const data = event.detail as { id?: string; status?: string; progress?: number };
+		if (!data.id) return;
+		tasks = tasks.map((task) => {
+			if (task.id !== data.id) return task;
+			return {
+				...task,
+				status: data.status as Task['status'] || task.status,
+				statusLabel: data.status ? getStatusLabel(data.status) : task.statusLabel,
+				progress: data.progress ?? task.progress
+			};
+		});
+	};
+
+	const handleTaskLog = (event: CustomEvent) => {
+		const data = event.detail as { taskId?: string; level?: string; message?: string; timestamp?: string };
+		if (!data.taskId) return;
+		tasks = tasks.map((task) => {
+			if (task.id !== data.taskId) return task;
+			if (!data.timestamp) return task;
+			return {
+				...task,
+				logs: [
+					...task.logs,
+					{
+						time: new Date(data.timestamp).toLocaleTimeString('en-US', {
+							hour12: false,
+							hour: '2-digit',
+							minute: '2-digit'
+						}),
+						level: data.level || 'info',
+						message: data.message || ''
+					}
+				]
+			};
+		});
 	};
 
 	onMount(() => {
 		loadAgents();
+		loadTasks();
+
+		window.addEventListener('task-update', handleTaskUpdate as EventListener);
+		window.addEventListener('task-log', handleTaskLog as EventListener);
+
+		return () => {
+			window.removeEventListener('task-update', handleTaskUpdate as EventListener);
+			window.removeEventListener('task-log', handleTaskLog as EventListener);
+		};
 	});
 
 	const filters = ['All', 'Running', 'Queued', 'Completed', 'Failed'];
@@ -59,12 +207,14 @@
 		failed: '[&_[data-slot=progress-indicator]]:bg-destructive'
 	};
 
-	const agentDomains: Record<string, string> = {
-		aider: 'aider.chat',
-		cursor: 'cursor.com',
-		windsurf: 'windsurf.com',
-		cline: 'github.com/cline'
-	};
+const agentDomains: Record<string, string> = {
+	opencode: 'opencode.ai',
+	claude: 'claude.ai',
+	cursor: 'cursor.com',
+	windsurf: 'windsurf.com',
+	cline: 'github.com/cline',
+	aider: 'aider.chat'
+};
 
 	const getAgentIcon = (agent: string) =>
 		`https://www.google.com/s2/favicons?domain=${agentDomains[agent] ?? 'github.com'}&sz=64`;
@@ -79,7 +229,7 @@
 			title: 'Add user auth system',
 			repo: 'porter',
 			issue: '#42',
-			agent: 'aider',
+		agent: 'opencode',
 			progress: 65,
 			started: '2m ago',
 			expanded: true,
@@ -99,7 +249,7 @@
 			title: 'Fix memory leak',
 			repo: 'churn',
 			issue: '#128',
-			agent: 'cursor',
+		agent: 'claude',
 			progress: 0,
 			started: '—',
 			expanded: false,
@@ -112,7 +262,7 @@
 			title: 'Tighten onboarding copy',
 			repo: 'onboard',
 			issue: '#88',
-			agent: 'windsurf',
+		agent: 'cursor',
 			progress: 100,
 			started: '1h ago',
 			expanded: false,
@@ -126,7 +276,7 @@
 			title: 'Refactor core API layer',
 			repo: 'core',
 			issue: '#301',
-			agent: 'aider',
+		agent: 'windsurf',
 			progress: 45,
 			started: '18m ago',
 			expanded: false,
@@ -150,6 +300,30 @@
 	const handleViewClick = (event: MouseEvent, id: string) => {
 		event.stopPropagation();
 		toggleExpanded(id);
+	};
+
+	const handleStop = async (id: string) => {
+		try {
+			const response = await fetch(`http://localhost:3000/api/tasks/${id}/stop`, {
+				method: 'PUT'
+			});
+			if (!response.ok) throw new Error('Failed to stop task');
+			await loadTasks();
+		} catch (error) {
+			console.error('Failed to stop task:', error);
+		}
+	};
+
+	const handleRestart = async (id: string) => {
+		try {
+			const response = await fetch(`http://localhost:3000/api/tasks/${id}/retry`, {
+				method: 'PUT'
+			});
+			if (!response.ok) throw new Error('Failed to restart task');
+			await loadTasks();
+		} catch (error) {
+			console.error('Failed to restart task:', error);
+		}
 	};
 
 	const statusCounts = $derived(tasks.reduce<Record<string, number>>((acc, task) => {
@@ -308,15 +482,21 @@
 						</Card.Root>
 
 						<div class="flex flex-wrap gap-2">
-							<Button variant="destructive" size="sm">
+							<Button variant="destructive" size="sm" onclick={() => handleStop(task.id)}>
 								<Square size={14} />
 								Stop
 							</Button>
-							<Button variant="secondary" size="sm">
+							<Button variant="secondary" size="sm" onclick={() => handleRestart(task.id)}>
 								<RotateCcw size={14} />
 								Restart
 							</Button>
-							<Button variant="secondary" size="sm">
+							<Button
+								variant="secondary"
+								size="sm"
+								onclick={() => {
+									window.open(`https://github.com/jackgolding/${task.repo}/issues/${task.issue.slice(1)}`, '_blank');
+								}}
+							>
 								<ArrowUpRight size={14} />
 								View in GitHub
 							</Button>

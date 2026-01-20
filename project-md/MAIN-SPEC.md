@@ -10,13 +10,14 @@ Universal agent orchestrator for GitHub Issues. Assign any issue to any AI codin
 
 ## The Problem
 
-GitHub's Copilot coding agent only works with `@copilot`. Everyone using Claude Code, Opencode, Aider, or other agents is locked out of the `@assign` workflow. The "issues are prompts, PRs are prompt review" paradigm only works if you're on GitHub's agent.
+GitHub's Copilot coding agent only works with `@copilot`. Everyone using Opencode, Claude Code, Aider, or other agents is locked out of the `@assign` workflow. The "issues are prompts, PRs are prompt review" paradigm only works if you're on GitHub's agent.
 
 ## What Porter Does
 
 Porter orchestrates AI coding agents to close GitHub issues by opening PRs. You `@porter <agent-name>` in any issue, Porter enriches the prompt, invokes the agent (locally or in the cloud), and tracks the PR back to completion.
 
 **Porter is agent-agnostic.** It doesn't run models or execute code—it orchestrates agent tools (Opencode, Claude Code, Aider, etc.) that do the actual work.
+**Opencode ships as the default adapter.** Claude Code is supported as a first-class secondary adapter, and the adapter interface is stable so teams can bring any agent later.
 
 ---
 
@@ -27,7 +28,7 @@ Porter orchestrates AI coding agents to close GitHub issues by opening PRs. You 
 ```
 ┌─────────────────┐
 │  GitHub Issue   │
-│  @porter aider  │
+│ @porter opencode │
 └────────┬────────┘
          │ webhook
          ▼
@@ -44,7 +45,7 @@ Porter orchestrates AI coding agents to close GitHub issues by opening PRs. You 
          │ spawns agent
          ▼
 ┌─────────────────┐
-│  Agent Process  │      Aider, Opencode, etc.
+│  Agent Process  │      Opencode, Claude Code, Aider, etc.
 │  (Local CLI)    │      Works on cloned repo
 └────────┬────────┘
          │ commits + PR
@@ -81,7 +82,7 @@ Porter supports two execution modes. User chooses based on their needs.
 
 ### Local Execution (Free)
 - Desktop daemon runs on your machine
-- Spawns agent tools as local processes (Opencode, Aider, etc.)
+- Spawns agent tools as local processes (Opencode, Claude Code, Aider, etc.)
 - Laptop must be on while agents work
 - Full control, runs on your hardware
 - No cloud costs
@@ -238,18 +239,20 @@ Porter uses a GitHub App for:
 │ ⚙ Settings             │ │ [✓ 1 Completed] [⚠ 1 Failed]     ││
 │                        │ └──────────────────────────────────┘│
 │ AGENTS                 │                                      │
-│ [AI] aider        (2)  │ ┌──────────────────────────────────┐│
-│ [CR] cursor       (1)  │ │ Filter: [All] [Running] [Queued] ││
-│ [WS] windsurf          │ │         [Completed] [Failed]     ││
-│ [CL] cline             │ ├──────────────────────────────────┤│
+│ [OC] opencode     (2)  │ ┌──────────────────────────────────┐│
+│ [CC] claude       (1)  │ │ Filter: [All] [Running] [Queued] ││
+│ [CR] cursor       (1)  │ │         [Completed] [Failed]     ││
+│ [WS] windsurf          │ ├──────────────────────────────────┤│
+│ [CL] cline             │ │                                  ││
+│ [AI] aider             │ └──────────────────────────────────┘│
 │                        │ │ Task Table                       ││
 │ STATS                  │ │                                  ││
 │ ┌──────────────────┐   │ │ STATUS │ TASK │ REPO │ AGENT │ % ││
 │ │ 12    │ 87%     │   │ │ ───────┼──────┼──────┼───────┼───││
-│ │ Today │ Success │   │ │ ● RUN  │ ...  │ ...  │ aider │65%││
-│ ├───────┼─────────┤   │ │ ○ QUE  │ ...  │ ...  │cursor │ 0%││
+│ │ Today │ Success │   │ │ ● RUN  │ ...  │ ...  │opencode│65%││
+│ ├───────┼─────────┤   │ │ ○ QUE  │ ...  │ ...  │ claude │ 0%││
 │ │ 8m    │ 4h      │   │ │ ✓ DONE │ ...  │ ...  │windsurf│100││
-│ │ Avg   │ Uptime  │   │ │ ✗ FAIL │ ...  │ ...  │ aider │45%││
+│ │ Avg   │ Uptime  │   │ │ ✗ FAIL │ ...  │ ...  │ cursor │45%││
 │ └──────────────────┘   │ │                                  ││
 │                        │ └──────────────────────────────────┘│
 └──────────────────────────────────────────────────────────────┘
@@ -345,13 +348,13 @@ Clicking a row expands details below it:
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│ ● RUN │ Add user auth system │ porter #42 │ aider │ ██░ 65%│
+│ ● RUN │ Add user auth system │ porter #42 │opencode│ ██░ 65%│
 ├────────────────────────────────────────────────────────────┤
 │ ┌────────────────────────────────────────────────────────┐ │
 │ │ EXPANSION PANEL (3px amber left border)               │ │
 │ │                                                       │ │
 │ │ Issue        Repository           Agent      Started  │ │
-│ │ #42          jackgolding/porter   aider      2m ago   │ │
+│ │ #42          jackgolding/porter   opencode   2m ago   │ │
 │ │                                                       │ │
 │ │ TASK LOGS                                             │ │
 │ │ ┌───────────────────────────────────────────────────┐ │ │
@@ -399,9 +402,10 @@ Modal dialog triggered from header or sidebar:
 │ [Refresh Agents]                                        │
 │                                                         │
 │ ┌─────────────────────────────────────────────────────┐ │
-│ │ ✓ aider    /usr/local/bin/aider                    │ │
 │ │ ✓ opencode ~/.local/bin/opencode                   │ │
+│ │ ✓ claude   ~/.claude/claude                        │ │
 │ │ ✗ cursor   Not found                               │ │
+│ │ ✗ aider    Not found                               │ │
 │ └─────────────────────────────────────────────────────┘ │
 │                                                         │
 │                              [Cancel]  [Save Changes]   │
@@ -431,7 +435,7 @@ The desktop app is a Wails application (Go backend + Svelte frontend) that:
 │                            │                               │
 │ CURRENT TASK               │ METRICS                       │
 │ Add user auth system       │ ┌───────────┬───────────┐    │
-│ porter #42 • aider         │ │ 12 tasks  │ 87%       │    │
+│ porter #42 • opencode      │ │ 12 tasks  │ 87%       │    │
 │                            │ │ today     │ success   │    │
 │ ████████████░░░░░░ 65%     │ └───────────┴───────────┘    │
 │                            │                               │
@@ -440,7 +444,7 @@ The desktop app is a Wails application (Go backend + Svelte frontend) that:
 │ LOGS                       │                               │
 │ ┌────────────────────────┐ │                               │
 │ │ 14:32:01 INFO Starting │ │ AGENTS                        │
-│ │ 14:32:03 INFO Analyzing│ │ ● aider    Active             │
+│ │ 14:32:03 INFO Analyzing│ │ ● opencode Active             │
 │ │ 14:32:08 INFO Found 23 │ │ 14:32:18 ✓ Created ...        │
 │ │ 14:32:22 ✓ Created ... │ │                               │
 │ └────────────────────────┘ │                               │
@@ -511,7 +515,7 @@ PUT    /api/config               # Update config (to Gist)
 {
   type: 'agent_status',
   data: {
-    agent: 'aider',
+    agent: 'opencode',
     status: 'active',
     currentTask: 'task_123'
   }
@@ -597,9 +601,9 @@ Porter auto-detects installed agents by checking common paths:
 
 ```go
 var agentPaths = map[string][]string{
-    "aider":    {"/usr/local/bin/aider", "~/.local/bin/aider"},
     "opencode": {"~/.local/bin/opencode", "/usr/local/bin/opencode"},
     "claude":   {"~/.claude/claude", "/usr/local/bin/claude"},
+    "aider":    {"/usr/local/bin/aider", "~/.local/bin/aider"},
 }
 ```
 
@@ -675,14 +679,15 @@ wails build
 - [ ] GitHub App setup + webhook handler
 - [ ] Web dashboard (SvelteKit)
 - [ ] Desktop daemon (Wails)
-- [ ] Aider agent adapter
+- [ ] Opencode agent adapter
+- [ ] Stable adapter interface
 - [ ] Local execution flow
 - [ ] Config storage in Gists
 - [ ] WebSocket log streaming
 
 ### Phase 2: Multi-Agent (Weeks 5-6)
-- [ ] Opencode adapter
 - [ ] Claude Code adapter
+- [ ] Additional agent adapters
 - [ ] Agent auto-detection
 - [ ] Priority queue
 
@@ -712,7 +717,7 @@ wails build
 ## Success Metrics
 
 ### MVP Success
-- [ ] Successfully dispatch task to aider
+- [ ] Successfully dispatch task to opencode (default adapter)
 - [ ] View real-time logs in dashboard
 - [ ] PR created and linked to issue
 - [ ] Desktop daemon stable for 24h

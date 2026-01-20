@@ -63,20 +63,24 @@
 
 	// Agent quick toggles
 	const agentDomains: Record<string, string> = {
-		aider: 'aider.chat',
+		opencode: 'opencode.ai',
+		claude: 'claude.ai',
 		cursor: 'cursor.com',
 		windsurf: 'windsurf.com',
-		cline: 'github.com/cline'
+		cline: 'github.com/cline',
+		aider: 'aider.chat'
 	};
 
 	const getAgentIcon = (name: string) =>
 		`https://www.google.com/s2/favicons?domain=${agentDomains[name] ?? 'github.com'}&sz=64`;
 
 	let agents = $state([
-		{ name: 'aider', enabled: true },
+		{ name: 'opencode', enabled: true },
+		{ name: 'claude', enabled: true },
 		{ name: 'cursor', enabled: true },
 		{ name: 'windsurf', enabled: false },
-		{ name: 'cline', enabled: false }
+		{ name: 'cline', enabled: false },
+		{ name: 'aider', enabled: false }
 	]);
 
 	const toggleAgent = (name: string) => {

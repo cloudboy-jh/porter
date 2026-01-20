@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/porter-dev/porter/desktop/internal/agent"
+	"github.com/porter-dev/porter/desktop/internal/agent/aider"
 	"github.com/porter-dev/porter/desktop/internal/agent/opencode"
 	"github.com/porter-dev/porter/desktop/internal/server"
 	"github.com/porter-dev/porter/desktop/internal/task"
@@ -15,7 +16,7 @@ import (
 
 func main() {
 	store := task.NewStore()
-	registry := agent.NewRegistry(opencode.New())
+	registry := agent.NewRegistry(opencode.New(), aider.New())
 	address := ":3000"
 	if env := os.Getenv("PORTER_ADDR"); env != "" {
 		address = env

@@ -3,6 +3,7 @@
 ![Porter](web/src/logos/porter-logo-readme.png)
 
 Universal agent orchestrator for GitHub Issues. Assign any issue to any AI coding agent with `@porter` and let Porter coordinate local or cloud execution.
+Opencode ships as the default adapter, with Claude Code supported as the primary secondary adapter.
 
 [![Docs](https://img.shields.io/badge/Docs-porter-fb542b?style=flat-square)](project-md/MAIN-SPEC.md)
 [![GitHub last commit](https://img.shields.io/github/last-commit/cloudboy-jh/porter?style=flat-square&color=fb542b)](https://github.com/cloudboy-jh/porter/commits/main)
@@ -27,7 +28,7 @@ Universal agent orchestrator for GitHub Issues. Assign any issue to any AI codin
 | Desktop Daemon | ● Active | Wails scaffolding complete |
 | Settings Architecture | ● Active | Consolidated platform section |
 | GitHub Integration | ○ Pending | Webhook handler + OAuth |
-| Agent Adapters | ○ Pending | Aider, Opencode, Claude Code |
+| Agent Adapters | ○ Pending | Opencode (default), Claude Code, Aider (low priority) |
 | Config Storage | ○ Pending | Gist-based storage |
 | WebSocket Streaming | ○ Pending | Real-time log streaming |
 
@@ -67,7 +68,7 @@ a349556  Updated readme
 │  │ GitHub App + Webhook│ ○    │ Web Dashboard       │ ● Done               │
 │  └─────────────────────┘      └─────────────────────┘                       │
 │  ┌─────────────────────┐      ┌─────────────────────┐                       │
-│  │ Desktop Daemon      │ ●    │ Aider Adapter       │ ○ Pending            │
+│  │ Desktop Daemon      │ ●    │ Opencode Adapter    │ ○ Pending            │
 │  └─────────────────────┘      └─────────────────────┘                       │
 │  ┌─────────────────────┐      ┌─────────────────────┐                       │
 │  │ Local Execution     │ ○    │ Gist Config Storage │ ○ Pending            │
@@ -81,7 +82,7 @@ a349556  Updated readme
 │  PHASE 2: MULTI-AGENT          ████████░░░░░░░░░░ 40%                       │
 │  ────────────────────────────                                               │
 │  ┌─────────────────────┐      ┌─────────────────────┐                       │
-│  │ Opencode Adapter    │ ○    │ Claude Code Adapter │ ○ Pending            │
+│  │ Claude Code Adapter │ ○    │ More Adapters       │ ○ Pending            │
 │  └─────────────────────┘      └─────────────────────┘                       │
 │  ┌─────────────────────┐      ┌─────────────────────┐                       │
 │  │ Agent Auto-Detect   │ ○    │ Priority Queue      │ ○ Pending            │
@@ -127,7 +128,7 @@ Jan 2026          Feb 2026          Mar 2026          Apr 2026
 │  MVP Release                                                ~60%│
 │  • GitHub webhook handler                                    │   │
 │  • Desktop daemon (Wails)                                    │   │
-│  • Aider integration                                         │   │
+│  • Opencode default adapter                                  │   │
 └────────────────────────────────────────────────────────────────┘
                       │
                       ▼
