@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Bot, Github, Server } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -8,9 +9,12 @@
 	import AgentSettings from '$lib/components/AgentSettings.svelte';
 	import type { AgentConfig } from '$lib/types/agent';
 
-	let selectedMode = $state('local');
+	let selectedMode = $state('cloud');
 	let agentConfig = $state<AgentConfig[]>([]);
 	let isLoadingAgents = $state(false);
+
+	const enabledAgents = $derived(agentConfig.filter((agent) => agent.enabled).length);
+	const totalAgents = $derived(agentConfig.length);
 
 	const loadAgents = async () => {
 		isLoadingAgents = true;
@@ -28,14 +32,14 @@
 
 	const executionModes = [
 		{
-			value: 'local',
-			label: 'Local (Desktop daemon)',
-			note: 'Runs on this machine with local agent binaries.'
+			value: 'cloud',
+			label: 'Cloud (Modal containers)',
+			note: 'Runs in serverless Modal containers for every task.'
 		},
 		{
-			value: 'cloud',
-			label: 'Cloud (Coming soon)',
-			note: 'Background execution with managed containers.'
+			value: 'priority',
+			label: 'Priority cloud (Coming soon)',
+			note: 'Reserved capacity for faster task pickup.'
 		}
 	];
 
@@ -64,94 +68,131 @@
 	<header class="space-y-1">
 		<h1 class="text-2xl font-semibold text-foreground">Settings</h1>
 		<p class="text-sm text-muted-foreground">
-			Manage execution mode, GitHub connection, and agent configuration.
+			Manage cloud execution, GitHub connection, and agent configuration.
 		</p>
 	</header>
 
-	<Separator />
-
-	<!-- Execution Mode Section -->
-	<section class="space-y-4">
-		<div>
-			<h2 class="text-lg font-medium">Execution Mode</h2>
-			<p class="text-sm text-muted-foreground">Choose where Porter runs your agents.</p>
-		</div>
-		<Card.Root>
-			<Card.Content class="space-y-4 pt-6">
-				<RadioGroup.Root bind:value={selectedMode} class="space-y-3">
-					{#each executionModes as mode}
-						<label
-							class="flex items-start gap-3 rounded-lg border border-border p-4 text-sm transition hover:bg-muted/40 cursor-pointer"
-						>
-							<RadioGroup.Item value={mode.value} />
-							<div class="space-y-1">
-								<p class="font-medium text-foreground">{mode.label}</p>
-								<p class="text-xs text-muted-foreground">{mode.note}</p>
-							</div>
-						</label>
-					{/each}
-				</RadioGroup.Root>
-			</Card.Content>
-			<Card.Footer>
-				<Button>Save Changes</Button>
-			</Card.Footer>
-		</Card.Root>
-	</section>
-
-	<Separator />
-
-	<!-- GitHub Connection Section -->
-	<section class="space-y-4">
-		<div>
-			<h2 class="text-lg font-medium">GitHub Connection</h2>
-			<p class="text-sm text-muted-foreground">
-				Manage your GitHub authentication and repository access.
-			</p>
-		</div>
-		<Card.Root>
-			<Card.Content class="space-y-4 pt-6">
-				<div class="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-4">
-					<div>
-						<p class="text-sm font-medium">Connection Status</p>
-						{#if github.connected}
-							<p class="text-xs text-muted-foreground">
-								Connected as {github.handle} • Last synced {github.lastSync}
-							</p>
-						{:else}
-							<p class="text-xs text-muted-foreground">Not connected</p>
-						{/if}
+	<div class="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+		<aside class="space-y-4">
+			<Card.Root class="border border-border/60 bg-card/70 shadow-lg backdrop-blur">
+				<Card.Header class="pb-2">
+					<Card.Title class="text-sm">Workspace</Card.Title>
+					<Card.Description class="text-xs text-muted-foreground">
+						Live status for your local environment.
+					</Card.Description>
+				</Card.Header>
+				<Card.Content class="space-y-3">
+					<div class="flex items-center justify-between rounded-lg border border-border/60 bg-background/80 p-3">
+						<div class="flex items-center gap-2 text-sm">
+						<Server size={14} class="text-muted-foreground" />
+						Cloud Execution
 					</div>
-					<Badge variant={github.connected ? 'secondary' : 'outline'} class="gap-2">
-						<span class={`h-2 w-2 rounded-full ${github.connected ? 'bg-emerald-500' : 'bg-muted-foreground'}`}></span>
-						{github.connected ? 'Connected' : 'Disconnected'}
-					</Badge>
+					<Badge variant="secondary" class="text-xs">Cloud (Modal)</Badge>
+					</div>
+					<div class="flex items-center justify-between rounded-lg border border-border/60 bg-background/80 p-3">
+						<div class="flex items-center gap-2 text-sm">
+							<Github size={14} class="text-muted-foreground" />
+							GitHub
+						</div>
+						<Badge variant={github.connected ? 'secondary' : 'outline'} class="text-xs">
+							{github.connected ? 'Connected' : 'Disconnected'}
+						</Badge>
+					</div>
+					<div class="flex items-center justify-between rounded-lg border border-border/60 bg-background/80 p-3">
+						<div class="flex items-center gap-2 text-sm">
+							<Bot size={14} class="text-muted-foreground" />
+							Agents
+						</div>
+						<Badge variant="outline" class="text-xs">
+							{enabledAgents}/{totalAgents} enabled
+						</Badge>
+					</div>
+				</Card.Content>
+			</Card.Root>
+		</aside>
+
+		<div class="space-y-6">
+			<section class="space-y-4">
+				<div>
+					<h2 class="text-lg font-medium">Execution Environment</h2>
+					<p class="text-sm text-muted-foreground">Configure how tasks run in the cloud.</p>
 				</div>
-			</Card.Content>
-			<Card.Footer class="flex gap-2">
-				{#if github.connected}
-					<Button variant="destructive">Disconnect GitHub</Button>
-					<Button variant="secondary">Refresh Sync</Button>
-				{:else}
-					<Button>Connect GitHub</Button>
-				{/if}
-			</Card.Footer>
-		</Card.Root>
-	</section>
+				<Card.Root>
+					<Card.Content class="space-y-4 pt-6">
+						<RadioGroup.Root bind:value={selectedMode} class="space-y-3">
+							{#each executionModes as mode}
+								<label
+									class="flex items-start gap-3 rounded-lg border border-border p-4 text-sm transition hover:bg-muted/40 cursor-pointer"
+								>
+									<RadioGroup.Item value={mode.value} />
+									<div class="space-y-1">
+										<p class="font-medium text-foreground">{mode.label}</p>
+										<p class="text-xs text-muted-foreground">{mode.note}</p>
+									</div>
+								</label>
+							{/each}
+						</RadioGroup.Root>
+					</Card.Content>
+					<Card.Footer>
+						<Button>Save Changes</Button>
+					</Card.Footer>
+				</Card.Root>
+			</section>
 
-	<Separator />
+			<Separator />
 
-	<!-- Agent Configuration Section -->
-	<section class="space-y-4">
-		<div>
-			<h2 class="text-lg font-medium">Agent Configuration</h2>
-			<p class="text-sm text-muted-foreground">
-				Enable agents and configure binary paths.
-			</p>
+			<section class="space-y-4">
+				<div>
+					<h2 class="text-lg font-medium">GitHub Connection</h2>
+					<p class="text-sm text-muted-foreground">
+						Manage your GitHub authentication and repository access.
+					</p>
+				</div>
+				<Card.Root>
+					<Card.Content class="space-y-4 pt-6">
+						<div class="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-4">
+							<div>
+								<p class="text-sm font-medium">Connection Status</p>
+								{#if github.connected}
+									<p class="text-xs text-muted-foreground">
+										Connected as {github.handle} • Last synced {github.lastSync}
+									</p>
+								{:else}
+									<p class="text-xs text-muted-foreground">Not connected</p>
+								{/if}
+							</div>
+							<Badge variant={github.connected ? 'secondary' : 'outline'} class="gap-2">
+								<span class={`h-2 w-2 rounded-full ${github.connected ? 'bg-emerald-500' : 'bg-muted-foreground'}`}></span>
+								{github.connected ? 'Connected' : 'Disconnected'}
+							</Badge>
+						</div>
+					</Card.Content>
+					<Card.Footer class="flex gap-2">
+						{#if github.connected}
+							<Button variant="destructive">Disconnect GitHub</Button>
+							<Button variant="secondary">Refresh Sync</Button>
+						{:else}
+							<Button>Connect GitHub</Button>
+						{/if}
+					</Card.Footer>
+				</Card.Root>
+			</section>
+
+			<Separator />
+
+			<section class="space-y-4">
+				<div>
+					<h2 class="text-lg font-medium">Agent Configuration</h2>
+					<p class="text-sm text-muted-foreground">
+						Enable agents and configure binary paths.
+					</p>
+				</div>
+				<AgentSettings
+					bind:agents={agentConfig}
+					onsave={handleAgentSave}
+					onrefresh={handleAgentRefresh}
+				/>
+			</section>
 		</div>
-		<AgentSettings 
-			bind:agents={agentConfig} 
-			onsave={handleAgentSave}
-			onrefresh={handleAgentRefresh}
-		/>
-	</section>
+	</div>
 </div>

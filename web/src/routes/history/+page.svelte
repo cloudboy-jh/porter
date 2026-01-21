@@ -1,9 +1,13 @@
 <script lang="ts">
 	import {
 		ArrowUpRight,
+		CheckCircle2,
+		Clock3,
 		Download,
 		FilterX,
+		GitPullRequest,
 		Plus,
+		Percent,
 		RotateCcw,
 		Search,
 		ChevronDown,
@@ -193,8 +197,8 @@
 		}, {})
 	);
 
-	const stats: Array<{ label: string; value: string }> = $derived(
-		((): Array<{ label: string; value: string }> => {
+	const statCards: Array<{ label: string; value: string; icon: typeof CheckCircle2; tone: string }> = $derived(
+		(() => {
 			const total = totalTasks || historyTasks.length;
 			const success = statusCounts.success ?? 0;
 			const successRate = total > 0 ? Math.round((success / total) * 100) : 0;
@@ -211,10 +215,30 @@
 			const prs = historyTasks.filter((task) => task.prNumber).length;
 
 			return [
-				{ label: 'Completed', value: total.toString() },
-				{ label: 'Success Rate', value: `${successRate}%` },
-				{ label: 'Avg Time', value: averageDuration ? `${averageDuration}m` : '—' },
-				{ label: 'PRs Created', value: prs.toString() }
+				{
+					label: 'Completed',
+					value: total.toString(),
+					icon: CheckCircle2,
+					tone: 'text-emerald-600 bg-emerald-500/10'
+				},
+				{
+					label: 'Success Rate',
+					value: `${successRate}%`,
+					icon: Percent,
+					tone: 'text-sky-600 bg-sky-500/10'
+				},
+				{
+					label: 'Avg Time',
+					value: averageDuration ? `${averageDuration}m` : '—',
+					icon: Clock3,
+					tone: 'text-amber-600 bg-amber-500/10'
+				},
+				{
+					label: 'PRs Created',
+					value: prs.toString(),
+					icon: GitPullRequest,
+					tone: 'text-indigo-600 bg-indigo-500/10'
+				}
 			];
 		})()
 	);
@@ -233,113 +257,139 @@
 	const hasMore = $derived(showingCount < totalTasks);
 </script>
 
-<header class="flex flex-wrap items-center justify-between gap-4">
-	<div class="space-y-1">
-		<p class="text-xs text-muted-foreground">Porter › Task History</p>
-		<h1 class="text-2xl font-semibold text-foreground">Task History</h1>
-		<p class="text-sm text-muted-foreground">Review finished tasks and outcomes.</p>
-	</div>
-	<div class="flex flex-wrap items-center gap-2">
-		<Button variant="secondary" type="button" onclick={handleExport}>
-			<Download size={16} />
-			Export
-		</Button>
-		<Button type="button">
-			<Plus size={16} />
-			New Task
-		</Button>
-	</div>
-</header>
-
-<section class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-	{#each stats as stat}
-		<Card.Root>
-			<Card.Content class="space-y-1 p-4">
-				<div class="text-lg font-semibold">{stat.value}</div>
-				<div class="text-xs text-muted-foreground">{stat.label}</div>
-			</Card.Content>
-		</Card.Root>
-	{/each}
-</section>
-
-<section class="space-y-4 rounded-2xl border border-border/60 bg-card/70 p-4 shadow-lg backdrop-blur">
-	<div class="flex flex-wrap gap-2">
-		<Button
-			variant={activeStatus === 'all' ? 'secondary' : 'outline'}
-			size="sm"
-			onclick={() => (activeStatus = 'all')}
-			class="gap-2"
-		>
-			<span>{totalTasks || historyTasks.length}</span>
-			<span>All</span>
-		</Button>
-		<Button
-			variant={activeStatus === 'success' ? 'secondary' : 'outline'}
-			size="sm"
-			onclick={() => (activeStatus = 'success')}
-			class={`gap-2 ${statusStyles.success}`}
-		>
-			<span class="h-2 w-2 rounded-full bg-current"></span>
-			<span>{statusCounts.success ?? 0}</span>
-			<span>Success</span>
-		</Button>
-		<Button
-			variant={activeStatus === 'failed' ? 'secondary' : 'outline'}
-			size="sm"
-			onclick={() => (activeStatus = 'failed')}
-			class={`gap-2 ${statusStyles.failed}`}
-		>
-			<span class="h-2 w-2 rounded-full bg-current"></span>
-			<span>{statusCounts.failed ?? 0}</span>
-			<span>Failed</span>
-		</Button>
-	</div>
-
-	<div class="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr_auto]">
-		<div class="relative">
-			<Search size={16} class="absolute left-3 top-3 text-muted-foreground" />
-			<Input
-				value={searchInput}
-				placeholder="Search by issue or title"
-				class="pl-9"
-				oninput={(event) => handleSearchChange((event.currentTarget as HTMLInputElement).value)}
-			/>
+<div class="space-y-8">
+	<header class="flex flex-wrap items-center justify-between gap-4">
+		<div class="space-y-1">
+			<p class="text-xs text-muted-foreground">Porter › Task History</p>
+			<h1 class="text-2xl font-semibold text-foreground">Task History</h1>
+			<p class="text-sm text-muted-foreground">Review finished tasks and outcomes.</p>
 		</div>
-		<select
-			class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-			bind:value={selectedAgent}
-		>
-			{#each availableAgents as agent}
-				<option value={agent}>{agent === 'all' ? 'All Agents' : agent}</option>
-			{/each}
-		</select>
-		<select
-			class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-			bind:value={selectedRepo}
-		>
-			{#each availableRepos as repo}
-				<option value={repo}>{repo === 'all' ? 'All Repositories' : repo}</option>
-			{/each}
-		</select>
-		<div class="grid grid-cols-2 gap-2">
-			<input
-				type="date"
-				class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-				bind:value={dateFrom}
-			/>
-			<input
-				type="date"
-				class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-				bind:value={dateTo}
-			/>
+		<div class="flex flex-wrap items-center gap-2">
+			<Button variant="secondary" type="button" onclick={handleExport}>
+				<Download size={16} />
+				Export
+			</Button>
+			<Button type="button">
+				<Plus size={16} />
+				New Task
+			</Button>
 		</div>
-		<Button variant="ghost" size="icon" onclick={resetFilters}>
-			<FilterX size={16} />
-		</Button>
-	</div>
-</section>
+	</header>
 
-<section class="rounded-2xl border border-border/60 bg-card/70 p-4 shadow-lg backdrop-blur">
+	<section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+		{#each statCards as stat}
+			<Card.Root class="border border-border/60 bg-background/80">
+				<Card.Content class="flex items-center justify-between gap-4 p-4">
+					<div class="space-y-1">
+						<div class="text-lg font-semibold">{stat.value}</div>
+						<div class="text-xs text-muted-foreground">{stat.label}</div>
+					</div>
+					<div class={`flex h-9 w-9 items-center justify-center rounded-lg ${stat.tone}`}>
+						<svelte:component this={stat.icon} size={18} />
+					</div>
+				</Card.Content>
+			</Card.Root>
+		{/each}
+	</section>
+
+	<section class="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+		<aside class="space-y-4">
+			<Card.Root class="border border-border/60 bg-card/70 shadow-lg backdrop-blur">
+				<Card.Header class="flex flex-row items-center justify-between pb-2">
+					<Card.Title class="text-sm">Filters</Card.Title>
+					<Button variant="ghost" size="icon" onclick={resetFilters}>
+						<FilterX size={16} />
+					</Button>
+				</Card.Header>
+				<Card.Content class="space-y-4">
+					<div class="space-y-2">
+						<p class="text-xs uppercase text-muted-foreground">Status</p>
+						<div class="flex flex-wrap gap-2">
+							<Button
+								variant={activeStatus === 'all' ? 'secondary' : 'outline'}
+								size="sm"
+								onclick={() => (activeStatus = 'all')}
+								class="gap-2"
+							>
+								<span>{totalTasks || historyTasks.length}</span>
+								<span>All</span>
+							</Button>
+							<Button
+								variant={activeStatus === 'success' ? 'secondary' : 'outline'}
+								size="sm"
+								onclick={() => (activeStatus = 'success')}
+								class={`gap-2 ${statusStyles.success}`}
+							>
+								<span class="h-2 w-2 rounded-full bg-current"></span>
+								<span>{statusCounts.success ?? 0}</span>
+								<span>Success</span>
+							</Button>
+							<Button
+								variant={activeStatus === 'failed' ? 'secondary' : 'outline'}
+								size="sm"
+								onclick={() => (activeStatus = 'failed')}
+								class={`gap-2 ${statusStyles.failed}`}
+							>
+								<span class="h-2 w-2 rounded-full bg-current"></span>
+								<span>{statusCounts.failed ?? 0}</span>
+								<span>Failed</span>
+							</Button>
+						</div>
+					</div>
+					<div class="space-y-2">
+						<p class="text-xs uppercase text-muted-foreground">Search</p>
+						<div class="relative">
+							<Search size={16} class="absolute left-3 top-3 text-muted-foreground" />
+							<Input
+								value={searchInput}
+								placeholder="Search by issue or title"
+								class="pl-9"
+								oninput={(event) => handleSearchChange((event.currentTarget as HTMLInputElement).value)}
+							/>
+						</div>
+					</div>
+					<div class="space-y-2">
+						<p class="text-xs uppercase text-muted-foreground">Agent</p>
+						<select
+							class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+							bind:value={selectedAgent}
+						>
+							{#each availableAgents as agent}
+								<option value={agent}>{agent === 'all' ? 'All Agents' : agent}</option>
+							{/each}
+						</select>
+					</div>
+					<div class="space-y-2">
+						<p class="text-xs uppercase text-muted-foreground">Repository</p>
+						<select
+							class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+							bind:value={selectedRepo}
+						>
+							{#each availableRepos as repo}
+								<option value={repo}>{repo === 'all' ? 'All Repositories' : repo}</option>
+							{/each}
+						</select>
+					</div>
+					<div class="space-y-2">
+						<p class="text-xs uppercase text-muted-foreground">Date Range</p>
+						<div class="grid grid-cols-2 gap-2">
+							<input
+								type="date"
+								class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+								bind:value={dateFrom}
+							/>
+							<input
+								type="date"
+								class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+								bind:value={dateTo}
+							/>
+						</div>
+					</div>
+				</Card.Content>
+			</Card.Root>
+		</aside>
+
+		<section class="rounded-2xl border border-border/60 bg-card/70 p-4 shadow-lg backdrop-blur">
 	<div class="grid grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 border-b border-border/60 pb-3 text-xs font-semibold uppercase text-muted-foreground">
 		<span>Status</span>
 		<span>Task</span>
@@ -489,3 +539,5 @@
 		</div>
 	{/if}
 </section>
+	</section>
+</div>
