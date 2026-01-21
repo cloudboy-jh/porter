@@ -1,27 +1,34 @@
 import { createDesktopWSClient, type WSHandlers, type WSMessage } from '$lib/websocket';
+import { writable } from 'svelte/store';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
 
 class WebSocketService {
 	private ws: ReturnType<typeof createDesktopWSClient> | null = null;
-	public status = $state<ConnectionStatus>('disconnected');
+	private statusValue: ConnectionStatus = 'disconnected';
+	public status = writable<ConnectionStatus>(this.statusValue);
+
+	private setStatus(status: ConnectionStatus) {
+		this.statusValue = status;
+		this.status.set(status);
+	}
 
 	connect() {
-		if (this.status === 'connecting' || this.status === 'connected') {
+		if (this.statusValue === 'connecting' || this.statusValue === 'connected') {
 			return;
 		}
 
-		this.status = 'connecting';
+		this.setStatus('connecting');
 
 		const handlers: WSHandlers = {
 			onConnect: () => {
-				this.status = 'connected';
+				this.setStatus('connected');
 			},
 			onDisconnect: () => {
-				this.status = 'disconnected';
+				this.setStatus('disconnected');
 			},
 			onError: () => {
-				this.status = 'error';
+				this.setStatus('error');
 			},
 			onTaskUpdate: (data: WSMessage['data']) => {
 				if (data.id) {
@@ -52,7 +59,7 @@ class WebSocketService {
 			this.ws.disconnect();
 			this.ws = null;
 		}
-		this.status = 'disconnected';
+		this.setStatus('disconnected');
 	}
 }
 

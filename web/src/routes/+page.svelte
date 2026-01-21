@@ -2,25 +2,22 @@
 	import { onMount } from 'svelte';
 	import AgentSettingsModal from '$lib/components/AgentSettingsModal.svelte';
 	import CommandBar from '$lib/components/CommandBar.svelte';
-	import { ArrowUpRight, GitCommit, Plus, RotateCcw, Square } from '@lucide/svelte';
-	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { ArrowUpRight, Plus, RotateCcw, Square } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import { Progress } from '$lib/components/ui/progress/index.js';
 	import type { AgentConfig, ParsedCommand } from '$lib/types/agent';
-	import { wsService, type ConnectionStatus } from '$lib/services/ws';
 
 	let showAgentSettings = $state(false);
 	let showDispatch = $state(false);
 	let agentConfig = $state<AgentConfig[]>([]);
 	let isLoadingAgents = $state(false);
-	let connectionStatus = $state<ConnectionStatus>('disconnected');
 
 	interface Task {
 		id: string;
 		status: 'queued' | 'running' | 'success' | 'failed';
 		statusLabel: string;
 		title: string;
+		technicalSummary?: string;
 		repo: string;
 		issue: string;
 		agent: string;
@@ -28,10 +25,175 @@
 		started: string;
 		expanded: boolean;
 		logs: Array<{ time: string; level: string; message: string }>;
+		prUrl?: string;
+		prNumber?: number;
+		commitHash?: string;
 		git?: { add: number; remove: number };
 	}
 
 	let tasks = $state<Task[]>([]);
+	const mockTasks: Task[] = [
+		{
+			id: 'task-1001',
+			status: 'running',
+			statusLabel: 'RUN',
+			title: 'Upgrade auth middleware',
+			technicalSummary: 'Changed auth middleware: JWT signing -> OAuth2 flow',
+			repo: 'porter',
+			issue: '#412',
+			agent: 'opencode',
+			progress: 72,
+			started: '3m ago',
+			expanded: true,
+			logs: [
+				{ time: '14:32:01', level: 'info', message: 'Starting task execution' },
+				{ time: '14:32:10', level: 'info', message: 'Scanning repository structure' },
+				{ time: '14:32:24', level: 'warning', message: 'Auth tests failed in staging' }
+			],
+			git: { add: 18, remove: 6 }
+		},
+		{
+			id: 'task-1002',
+			status: 'queued',
+			statusLabel: 'QUE',
+			title: 'Reduce bundle size',
+			technicalSummary: 'Changed build pipeline: full bundle -> split chunks',
+			repo: 'atlas',
+			issue: '#77',
+			agent: 'claude',
+			progress: 0,
+			started: '-',
+			expanded: false,
+			logs: [],
+			git: { add: 0, remove: 0 }
+		},
+		{
+			id: 'task-1003',
+			status: 'success',
+			statusLabel: 'DONE',
+			title: 'Refresh billing copy',
+			technicalSummary: 'Updated billing copy: verbose -> concise',
+			repo: 'harvest',
+			issue: '#201',
+			agent: 'cursor',
+			progress: 100,
+			started: '48m ago',
+			expanded: false,
+			prUrl: 'https://github.com/jackgolding/harvest/pull/124',
+			prNumber: 124,
+			commitHash: 'a3f2c91',
+			git: { add: 8, remove: 3 },
+			logs: []
+		},
+		{
+			id: 'task-1004',
+			status: 'failed',
+			statusLabel: 'FAIL',
+			title: 'Normalize telemetry payloads',
+			technicalSummary: 'Normalized telemetry payloads: mixed keys -> schema',
+			repo: 'signal',
+			issue: '#89',
+			agent: 'windsurf',
+			progress: 38,
+			started: '12m ago',
+			expanded: false,
+			logs: [],
+			git: { add: 26, remove: 12 }
+		},
+		{
+			id: 'task-1005',
+			status: 'running',
+			statusLabel: 'RUN',
+			title: 'Add audit trail filters',
+			technicalSummary: 'Added filters: date only -> status + date',
+			repo: 'ledger',
+			issue: '#55',
+			agent: 'opencode',
+			progress: 44,
+			started: '9m ago',
+			expanded: false,
+			logs: [],
+			git: { add: 11, remove: 4 }
+		},
+		{
+			id: 'task-1006',
+			status: 'queued',
+			statusLabel: 'QUE',
+			title: 'Instrument API latency',
+			technicalSummary: 'Added latency metrics: none -> p95 tracking',
+			repo: 'pulse',
+			issue: '#133',
+			agent: 'cline',
+			progress: 0,
+			started: '-',
+			expanded: false,
+			logs: [],
+			git: { add: 0, remove: 0 }
+		},
+		{
+			id: 'task-1007',
+			status: 'success',
+			statusLabel: 'DONE',
+			title: 'Update onboarding emails',
+			technicalSummary: 'Updated onboarding emails: 5-step -> 3-step',
+			repo: 'onboard',
+			issue: '#19',
+			agent: 'claude',
+			progress: 100,
+			started: '2h ago',
+			expanded: false,
+			prUrl: 'https://github.com/jackgolding/onboard/pull/88',
+			prNumber: 88,
+			commitHash: 'c91df08',
+			git: { add: 14, remove: 6 },
+			logs: []
+		},
+		{
+			id: 'task-1008',
+			status: 'failed',
+			statusLabel: 'FAIL',
+			title: 'Refactor plan limits logic',
+			technicalSummary: 'Refactored limits logic: hardcoded -> config-driven',
+			repo: 'meter',
+			issue: '#247',
+			agent: 'windsurf',
+			progress: 61,
+			started: '28m ago',
+			expanded: false,
+			logs: [],
+			git: { add: 34, remove: 21 }
+		},
+		{
+			id: 'task-1009',
+			status: 'running',
+			statusLabel: 'RUN',
+			title: 'Improve retry backoff',
+			technicalSummary: 'Adjusted retry backoff: linear -> exponential',
+			repo: 'relay',
+			issue: '#308',
+			agent: 'cursor',
+			progress: 18,
+			started: '4m ago',
+			expanded: false,
+			logs: [],
+			git: { add: 6, remove: 2 }
+		},
+		{
+			id: 'task-1010',
+			status: 'queued',
+			statusLabel: 'QUE',
+			title: 'Tighten error boundaries',
+			technicalSummary: 'Updated error boundaries: per-page -> per-section',
+			repo: 'core',
+			issue: '#312',
+			agent: 'aider',
+			progress: 0,
+			started: '-',
+			expanded: false,
+			logs: [],
+			git: { add: 0, remove: 0 }
+		}
+	];
 
 	const loadAgents = async () => {
 		isLoadingAgents = true;
@@ -50,7 +212,10 @@
 	const loadTasks = async () => {
 		try {
 			const response = await fetch('http://localhost:3000/api/tasks');
-			if (!response.ok) return;
+			if (!response.ok) {
+				tasks = mockTasks;
+				return;
+			}
 			const data = await response.json() as Array<{
 				id: string;
 				status: string;
@@ -65,6 +230,10 @@
 				completedAt?: string;
 				logs: Array<{ level: string; message: string; timestamp: string }>;
 			}>;
+			if (!data.length) {
+				tasks = mockTasks;
+				return;
+			}
 			tasks = data.map((task) => ({
 				id: task.id,
 				status: task.status as Task['status'],
@@ -88,6 +257,7 @@
 			}));
 		} catch (error) {
 			console.error('Failed to load tasks:', error);
+			tasks = mockTasks;
 		}
 	};
 
@@ -200,16 +370,9 @@
 		failed: 'bg-destructive/15 text-destructive border-transparent'
 	};
 
-	const progressStyles: Record<string, string> = {
-		running: '[&_[data-slot=progress-indicator]]:bg-amber-500',
-		queued: '[&_[data-slot=progress-indicator]]:bg-muted-foreground',
-		success: '[&_[data-slot=progress-indicator]]:bg-emerald-500',
-		failed: '[&_[data-slot=progress-indicator]]:bg-destructive'
-	};
-
-const agentDomains: Record<string, string> = {
-	opencode: 'opencode.ai',
-	claude: 'claude.ai',
+	const agentDomains: Record<string, string> = {
+		opencode: 'opencode.ai',
+		claude: 'claude.ai',
 	cursor: 'cursor.com',
 	windsurf: 'windsurf.com',
 	cline: 'github.com/cline',
@@ -219,70 +382,9 @@ const agentDomains: Record<string, string> = {
 	const getAgentIcon = (agent: string) =>
 		`https://www.google.com/s2/favicons?domain=${agentDomains[agent] ?? 'github.com'}&sz=64`;
 
-	let activeFilter = $state('All');
+	const getIssueNumber = (issue: string) => (issue.startsWith('#') ? issue.slice(1) : issue);
 
-	let tasks = $state([
-		{
-			id: 'task-42',
-			status: 'running',
-			statusLabel: 'RUN',
-			title: 'Add user auth system',
-			repo: 'porter',
-			issue: '#42',
-		agent: 'opencode',
-			progress: 65,
-			started: '2m ago',
-			expanded: true,
-			logs: [
-				{ time: '14:32:01', level: 'info', message: 'Starting task execution' },
-				{ time: '14:32:03', level: 'info', message: 'Analyzing codebase structure' },
-				{ time: '14:32:08', level: 'info', message: 'Found 23 relevant files' },
-				{ time: '14:32:18', level: 'success', message: 'Created src/auth/provider.ts' },
-				{ time: '14:32:22', level: 'success', message: 'Created src/auth/middleware.ts' },
-				{ time: '14:32:35', level: 'warning', message: 'Test coverage at 78%' }
-			]
-		},
-		{
-			id: 'task-128',
-			status: 'queued',
-			statusLabel: 'QUE',
-			title: 'Fix memory leak',
-			repo: 'churn',
-			issue: '#128',
-		agent: 'claude',
-			progress: 0,
-			started: '—',
-			expanded: false,
-			logs: []
-		},
-		{
-			id: 'task-88',
-			status: 'success',
-			statusLabel: 'DONE',
-			title: 'Tighten onboarding copy',
-			repo: 'onboard',
-			issue: '#88',
-		agent: 'cursor',
-			progress: 100,
-			started: '1h ago',
-			expanded: false,
-			git: { add: 12, remove: 4 },
-			logs: []
-		},
-		{
-			id: 'task-301',
-			status: 'failed',
-			statusLabel: 'FAIL',
-			title: 'Refactor core API layer',
-			repo: 'core',
-			issue: '#301',
-		agent: 'windsurf',
-			progress: 45,
-			started: '18m ago',
-			expanded: false,
-			logs: []
-		}
-	]);
+	let activeFilter = $state('All');
 
 	const toggleExpanded = (id: string) => {
 		tasks = tasks.map((task) =>
@@ -384,62 +486,100 @@ const agentDomains: Record<string, string> = {
 	</div>
 </section>
 
-<section class="rounded-2xl border border-border/60 bg-card/70 p-4 shadow-lg backdrop-blur">
-	<div class="grid grid-cols-[120px_2fr_1fr_1fr_1.2fr_auto] items-center gap-4 border-b border-border/60 pb-3 text-xs font-semibold uppercase text-muted-foreground">
-		<span>Status</span>
-		<span>Task</span>
-		<span>Repository</span>
-		<span>Agent</span>
-		<span>Progress</span>
-		<span class="text-right">Actions</span>
-	</div>
-	<div class="mt-4 max-h-[80vh] space-y-3 overflow-y-auto pr-1">
+<section class="rounded-2xl border border-border/60 bg-card/70 p-6 shadow-lg backdrop-blur">
+	<div class="mt-2 max-h-[80vh] space-y-12 overflow-y-auto pr-1 hide-scrollbar">
 		{#each filteredTasks as task}
 			<Card.Root
-				class="border border-border/60 bg-background/80"
+				class={`group task-card task-card--${task.status} rounded-2xl border border-border/60 bg-background/80`}
+				style={`--task-progress: ${task.progress}%`}
 				role="button"
 				tabindex={0}
 				onclick={() => toggleExpanded(task.id)}
 				onkeydown={(event: KeyboardEvent) => handleRowKey(event, task.id)}
 			>
-				<Card.Content class="grid min-h-[72px] grid-cols-[120px_2fr_1fr_1fr_1.2fr_auto] items-center gap-4 py-3">
-					<Badge class={statusStyles[task.status]}>{task.statusLabel}</Badge>
-					<div>
-						<div class="font-medium">{task.title}</div>
-						<div class="text-xs text-muted-foreground">Issue {task.issue}</div>
+				<Card.Content class="space-y-3 p-5">
+					<div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+						<span class="font-medium text-foreground/80">{task.repo}</span>
+						<span class="text-muted-foreground/60">&bull;</span>
+						<span class="flex items-center gap-2 capitalize">
+							<img class="h-4 w-4 rounded-sm" src={getAgentIcon(task.agent)} alt="" />
+							{task.agent}
+						</span>
 					</div>
-					<div class="text-sm text-muted-foreground font-mono">{task.repo}</div>
-					<Badge variant="outline" class="text-xs capitalize font-mono gap-2">
-						<img class="h-3.5 w-3.5" src={getAgentIcon(task.agent)} alt="" />
-						{task.agent}
-					</Badge>
-					<div class="flex items-center gap-3">
-						<Progress value={task.progress} class={`h-2 ${progressStyles[task.status]}`} />
-						<span class="text-xs text-muted-foreground font-mono">{task.progress}%</span>
+					<div class="text-base font-semibold text-foreground">{task.title}</div>
+					<div class="text-sm text-muted-foreground">
+						{task.technicalSummary ?? 'Summary pending.'}
 					</div>
-					<div class="flex items-center justify-end gap-2">
-						{#if task.status === 'success' && task.git}
-							<div class="flex items-center gap-2">
-								<span
-									class="flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-600 font-mono"
+					<div class="flex flex-wrap items-center gap-3">
+						<div class="flex flex-wrap items-center gap-2 text-xs font-mono text-muted-foreground">
+							<span class="inline-flex items-center gap-1">
+								<span class="h-2 w-2 rounded-sm bg-emerald-500/80"></span>
+								+{task.git?.add ?? 0}
+							</span>
+							<span class="inline-flex items-center gap-1">
+								<span class="h-2 w-2 rounded-sm bg-rose-500/80"></span>
+								-{task.git?.remove ?? 0}
+							</span>
+							<span class="text-muted-foreground/60">&bull;</span>
+							{#if task.prUrl}
+								<a
+									class="text-primary hover:text-primary/80"
+									href={task.prUrl}
+									target="_blank"
+									rel="noreferrer"
 								>
-									+{task.git.add}
-								</span>
-								<span
-									class="flex items-center gap-1 rounded-md border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-xs font-semibold text-rose-600 font-mono"
+									PR #{task.prNumber ?? '-'}
+								</a>
+							{:else}
+								<span>PR -</span>
+							{/if}
+							<span class="text-muted-foreground/60">&bull;</span>
+							<span>{task.commitHash ?? 'commit -'}</span>
+							<span class="text-muted-foreground/60">&bull;</span>
+							<a
+								class="text-primary hover:text-primary/80"
+								href={`https://github.com/jackgolding/${task.repo}/issues/${getIssueNumber(task.issue)}`}
+								target="_blank"
+								rel="noreferrer"
+							>
+								{task.issue}
+							</a>
+							<span class="text-muted-foreground/60">&bull;</span>
+							<span>{task.started}</span>
+						</div>
+						<div class="task-actions flex items-center gap-2 md:ml-auto">
+							<Button
+								variant="ghost"
+								size="sm"
+								onclick={(event: MouseEvent) => handleViewClick(event, task.id)}
+							>
+								View
+							</Button>
+							{#if task.status === 'failed'}
+								<Button
+									variant="ghost"
+									size="sm"
+									onclick={(event: MouseEvent) => {
+										event.stopPropagation();
+										handleRestart(task.id);
+									}}
 								>
-									-{task.git.remove}
-								</span>
-								<span
-									class="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground font-mono"
+									Retry
+								</Button>
+							{/if}
+							{#if task.status === 'running' || task.status === 'queued'}
+								<Button
+									variant="ghost"
+									size="sm"
+									onclick={(event: MouseEvent) => {
+										event.stopPropagation();
+										handleStop(task.id);
+									}}
 								>
-									<GitCommit size={12} />
-									commit
-								</span>
-							</div>
-						{:else}
-							<Button variant="ghost" size="sm" onclick={(e: MouseEvent) => handleViewClick(e, task.id)}>View</Button>
-						{/if}
+									Cancel
+								</Button>
+							{/if}
+						</div>
 					</div>
 				</Card.Content>
 			</Card.Root>

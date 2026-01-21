@@ -41,13 +41,12 @@
 
 	onMount(() => {
 		wsService.connect();
-
-		const unbind = $effect.root(() => {
-			connectionStatus = wsService.status;
+		const unsubscribe = wsService.status.subscribe((status) => {
+			connectionStatus = status;
 		});
 
 		return () => {
-			unbind();
+			unsubscribe();
 			wsService.disconnect();
 		};
 	});

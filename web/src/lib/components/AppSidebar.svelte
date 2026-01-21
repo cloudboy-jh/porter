@@ -77,7 +77,7 @@
 								isActive={item.href ? $page.url.pathname === item.href : false}
 								onclick={() => item.action ? item.action() : item.href && goto(item.href)}
 							>
-								<svelte:component this={item.icon} />
+								<item.icon />
 								<span>{item.label}</span>
 								{#if item.shortcut}
 									<span class="ml-auto text-xs text-sidebar-foreground/60">{item.shortcut}</span>
