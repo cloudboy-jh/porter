@@ -1,8 +1,8 @@
 # Porter - Main Specification
 
-**Version:** 2.0.0  
-**Status:** Active Development  
-**Architecture:** Cloud-Native (SvelteKit + Modal)  
+**Version:** 2.0.0
+**Status:** Active Development
+**Architecture:** Cloud-Native (SvelteKit + Modal)
 **Last Updated:** January 20, 2026
 
 ---
@@ -376,19 +376,19 @@ def execute_agent_task(
 ):
     """
     Execute an AI coding agent task in isolated container.
-    
+
     Steps:
     1. Clone repository
     2. Run specified agent with enriched prompt
     3. Agent makes changes and commits
     4. Agent creates PR via GitHub API
     5. Report results back to Porter via callback
-    
+
     Returns: Task execution result
     """
     # Set environment
     os.environ["GITHUB_TOKEN"] = github_token
-    
+
     # Clone repository
     clone_dir = f"/tmp/{repo_name}"
     subprocess.run(
@@ -396,7 +396,7 @@ def execute_agent_task(
         check=True
     )
     os.chdir(clone_dir)
-    
+
     # Execute agent based on type
     if agent_name == "opencode":
         result = subprocess.run(
@@ -418,10 +418,10 @@ def execute_agent_task(
         )
     else:
         raise ValueError(f"Unknown agent: {agent_name}")
-    
+
     # Parse output for PR URL
     pr_url = extract_pr_url(result.stdout)
-    
+
     # Callback to Porter with results
     requests.post(callback_url, json={
         "task_id": task_id,
@@ -430,7 +430,7 @@ def execute_agent_task(
         "logs": result.stdout,
         "error": result.stderr if result.returncode != 0 else None
     })
-    
+
     return {
         "pr_url": pr_url,
         "success": result.returncode == 0
@@ -753,7 +753,7 @@ Porter uses a layered testing approach aligned with UI-first iteration:
 
 ---
 
-### Phase 2: Onboarding + Auth (Week 3)
+### Phase 2: Onboarding + Auth (Day 3)
 **Goal:** First-run experience and authentication ready
 
 - [ ] Sign in / sign up UI
@@ -765,7 +765,7 @@ Porter uses a layered testing approach aligned with UI-first iteration:
 
 ---
 
-### Phase 3: Core API + Task Model (Week 4)
+### Phase 3: Core API + Task Model (Day 3)
 **Goal:** Backend foundation for tasks and config
 
 - [ ] Task CRUD API routes
@@ -778,7 +778,7 @@ Porter uses a layered testing approach aligned with UI-first iteration:
 
 ---
 
-### Phase 4: Modal Execution (Week 5)
+### Phase 4: Modal Execution (Day 3 or 4)
 **Goal:** Cloud execution for a single agent
 
 - [ ] Modal integration (container + execution function)
@@ -790,7 +790,7 @@ Porter uses a layered testing approach aligned with UI-first iteration:
 
 ---
 
-### Phase 5: GitHub App + Multi-Agent (Week 6)
+### Phase 5: GitHub App + Multi-Agent (Day 4)
 **Goal:** Production-ready workflow and multiple agents
 
 - [ ] GitHub App setup + webhook handlers
@@ -804,7 +804,7 @@ Porter uses a layered testing approach aligned with UI-first iteration:
 
 ---
 
-### Phase 6: Polish + Launch Prep (Weeks 7-8)
+### Phase 6: Polish + Launch Prep (Weeks 2-3)
 **Goal:** Production-ready quality and launch materials
 
 - [ ] Task history view
