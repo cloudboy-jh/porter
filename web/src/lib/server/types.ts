@@ -36,7 +36,7 @@ export interface AgentStatus {
 
 export interface PorterConfig {
 	version: string;
-	executionMode: 'local' | 'cloud';
+	executionMode: 'cloud' | 'priority';
 	agents: Record<
 		string,
 		{

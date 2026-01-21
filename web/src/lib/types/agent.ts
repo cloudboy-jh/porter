@@ -3,7 +3,8 @@ export type AgentStatus = 'idle' | 'active' | 'error' | 'disabled';
 export type AgentConfig = {
 	name: string;
 	enabled: boolean;
-	path: string;
+	priority: 'low' | 'normal' | 'high';
+	customPrompt?: string;
 	status: AgentStatus;
 	icon?: string;
 	domain?: string;

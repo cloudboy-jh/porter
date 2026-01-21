@@ -2,7 +2,7 @@
 	AgentSettings - Agent Configuration Form Component
 	
 	This is a reusable form component for managing agent configuration.
-	It displays agent status, enable/disable toggles, and path configuration.
+	It displays agent status, enable/disable toggles, and cloud defaults.
 	
 	Used in:
 	- AgentSettingsModal (Dashboard "Agents" button)
@@ -12,19 +12,21 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
+	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import type { AgentConfig } from '$lib/types/agent';
-	import { CheckCircle2, AlertCircle, Clock, Target, TrendingUp } from '@lucide/svelte';
+	import { Clock, Target, TrendingUp } from '@lucide/svelte';
 
-	let { 
+	let {
 		agents = $bindable([] as AgentConfig[]),
 		onrefresh,
-		onsave
+		onsave,
+		framed = true
 	}: {
 		agents?: AgentConfig[];
 		onrefresh?: () => void;
 		onsave?: (config: AgentConfig[]) => void;
+		framed?: boolean;
 	} = $props();
 
 	const getAgentIcon = (domain?: string) =>
@@ -36,8 +38,12 @@
 		);
 	};
 
-	const updatePath = (name: string, path: string) => {
-		agents = agents.map((agent) => (agent.name === name ? { ...agent, path } : agent));
+	const updatePriority = (name: string, priority: AgentConfig['priority']) => {
+		agents = agents.map((agent) => (agent.name === name ? { ...agent, priority } : agent));
+	};
+
+	const updatePrompt = (name: string, customPrompt: string) => {
+		agents = agents.map((agent) => (agent.name === name ? { ...agent, customPrompt } : agent));
 	};
 
 	const handleSave = () => {
@@ -52,7 +58,7 @@
 		switch (status) {
 			case 'idle':
 				return 'text-emerald-600 bg-emerald-500/15';
-			case 'running':
+			case 'active':
 				return 'text-amber-600 bg-amber-500/15';
 			case 'error':
 				return 'text-destructive bg-destructive/15';
@@ -62,21 +68,176 @@
 				return 'text-muted-foreground bg-muted';
 		}
 	};
+
+	const contentClass = framed ? 'space-y-3' : 'space-y-4';
 </script>
 
-<Card.Root>
-	<Card.Header class="pb-3">
-		<div class="flex items-center justify-between">
-			<div>
-				<Card.Title class="text-sm">Agent Configuration</Card.Title>
-				<Card.Description>Manage agent binaries and settings</Card.Description>
+{#if framed}
+	<Card.Root>
+		<Card.Header class="pb-3">
+			<div class="flex items-center justify-between">
+				<div>
+					<Card.Title class="text-sm">Agent Configuration</Card.Title>
+					<Card.Description>Set priority and prompt defaults per agent</Card.Description>
+				</div>
+				<Button variant="secondary" size="sm" type="button" onclick={handleRefresh}>
+					Refresh
+				</Button>
 			</div>
-			<Button variant="secondary" size="sm" type="button" onclick={handleRefresh}>
+		</Card.Header>
+		<Card.Content class={contentClass}>
+			{#if agents.length === 0}
+				<div class="rounded-lg border border-dashed border-border p-8 text-center">
+					<p class="text-sm text-muted-foreground">No agents detected</p>
+					<Button variant="outline" size="sm" class="mt-3" onclick={handleRefresh}>
+						Scan for Agents
+					</Button>
+				</div>
+			{:else}
+				<div class={contentClass}>
+					{#each agents as agent}
+						<div class="rounded-lg border border-border/60 bg-background/70 p-4">
+							<div class="flex flex-wrap items-center justify-between gap-4">
+								<div class="flex items-center gap-3">
+									{#if agent.domain}
+										<img
+											class="h-10 w-10 rounded-lg border border-border"
+											src={getAgentIcon(agent.domain)}
+											alt={agent.name}
+										/>
+									{/if}
+									<div>
+										<div class="flex items-center gap-2">
+											<h4 class="font-medium capitalize">{agent.name}</h4>
+											<Badge variant="outline" class={getStatusColor(agent.status)}>
+												{agent.status}
+											</Badge>
+										</div>
+										{#if agent.version}
+											<p class="mt-0.5 text-xs text-muted-foreground">Version {agent.version}</p>
+										{/if}
+									</div>
+								</div>
+								<div class="flex items-center gap-2">
+									<Button
+										variant={agent.enabled ? 'secondary' : 'default'}
+										size="sm"
+										type="button"
+										onclick={() => toggleAgent(agent.name)}
+									>
+										{agent.enabled ? 'Disable' : 'Enable'}
+									</Button>
+								</div>
+							</div>
+
+							{#if agent.enabled && (agent.taskCount || agent.successRate || agent.lastUsed)}
+								<Separator class="my-3" />
+								<div class="grid grid-cols-3 gap-4 text-sm">
+									{#if agent.taskCount !== undefined}
+										<div class="flex items-center gap-2">
+											<Target size={14} class="text-muted-foreground" />
+											<div>
+												<p class="text-xs text-muted-foreground">Tasks</p>
+												<p class="font-medium font-mono">{agent.taskCount}</p>
+											</div>
+										</div>
+									{/if}
+									{#if agent.successRate !== undefined}
+										<div class="flex items-center gap-2">
+											<TrendingUp size={14} class="text-emerald-600" />
+											<div>
+												<p class="text-xs text-muted-foreground">Success</p>
+												<p class="font-medium font-mono text-emerald-600">
+													{agent.successRate}%
+												</p>
+											</div>
+										</div>
+									{/if}
+									{#if agent.lastUsed}
+										<div class="flex items-center gap-2">
+											<Clock size={14} class="text-muted-foreground" />
+											<div>
+												<p class="text-xs text-muted-foreground">Last Used</p>
+												<p class="font-medium">{agent.lastUsed}</p>
+											</div>
+										</div>
+									{/if}
+								</div>
+							{/if}
+
+							<Separator class="my-3" />
+							<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+								<div class="space-y-2">
+									<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+										Default Priority
+									</p>
+									<RadioGroup.Root
+										value={agent.priority}
+										onValueChange={(value) =>
+											updatePriority(agent.name, value as AgentConfig['priority'])
+										}
+										class="flex gap-2"
+										disabled={!agent.enabled}
+									>
+										<label class="flex-1 cursor-pointer">
+											<RadioGroup.Item value="low" class="peer sr-only" />
+											<div
+												class="rounded-md border border-border px-3 py-2 text-center text-xs font-medium peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+											>
+												Low
+											</div>
+										</label>
+										<label class="flex-1 cursor-pointer">
+											<RadioGroup.Item value="normal" class="peer sr-only" />
+											<div
+												class="rounded-md border border-border px-3 py-2 text-center text-xs font-medium peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+											>
+												Normal
+											</div>
+										</label>
+										<label class="flex-1 cursor-pointer">
+											<RadioGroup.Item value="high" class="peer sr-only" />
+											<div
+												class="rounded-md border border-border px-3 py-2 text-center text-xs font-medium peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+											>
+												High
+											</div>
+										</label>
+									</RadioGroup.Root>
+								</div>
+								<div class="space-y-2">
+									<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+										Custom Prompt
+									</p>
+									<p class="text-xs text-muted-foreground">
+										Appended to every run for this agent.
+									</p>
+									<textarea
+										value={agent.customPrompt ?? ''}
+										placeholder="Add default instructions for this agent..."
+										rows="3"
+										class="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+										oninput={(event) =>
+											updatePrompt(agent.name, (event.target as HTMLTextAreaElement).value)
+										}
+										disabled={!agent.enabled}
+									></textarea>
+								</div>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</Card.Content>
+		<Card.Footer class="flex items-center justify-between">
+			<Button variant="ghost" size="sm" type="button" onclick={handleRefresh}>
 				Refresh
 			</Button>
-		</div>
-	</Card.Header>
-	<Card.Content class="space-y-3">
+			<Button type="button" onclick={handleSave}>Save Changes</Button>
+		</Card.Footer>
+	</Card.Root>
+{:else}
+	<div class={contentClass}>
 		{#if agents.length === 0}
 			<div class="rounded-lg border border-dashed border-border p-8 text-center">
 				<p class="text-sm text-muted-foreground">No agents detected</p>
@@ -85,16 +246,15 @@
 				</Button>
 			</div>
 		{:else}
-			<div class="space-y-3">
+			<div class={contentClass}>
 				{#each agents as agent}
-					<div class="rounded-lg border border-border bg-card p-4">
-						<!-- Agent Header -->
-						<div class="flex items-start justify-between gap-4">
+					<div class="rounded-lg border border-border/60 bg-background/70 p-4">
+						<div class="flex flex-wrap items-center justify-between gap-4">
 							<div class="flex items-center gap-3">
 								{#if agent.domain}
-									<img 
-										class="h-10 w-10 rounded-lg border border-border" 
-										src={getAgentIcon(agent.domain)} 
+									<img
+										class="h-10 w-10 rounded-lg border border-border"
+										src={getAgentIcon(agent.domain)}
 										alt={agent.name}
 									/>
 								{/if}
@@ -106,23 +266,22 @@
 										</Badge>
 									</div>
 									{#if agent.version}
-										<p class="text-xs text-muted-foreground mt-0.5">
-											Version {agent.version}
-										</p>
+										<p class="mt-0.5 text-xs text-muted-foreground">Version {agent.version}</p>
 									{/if}
 								</div>
 							</div>
-							<Button
-								variant={agent.enabled ? 'secondary' : 'default'}
-								size="sm"
-								type="button"
-								onclick={() => toggleAgent(agent.name)}
-							>
-								{agent.enabled ? 'Disable' : 'Enable'}
-							</Button>
+							<div class="flex items-center gap-2">
+								<Button
+									variant={agent.enabled ? 'secondary' : 'default'}
+									size="sm"
+									type="button"
+									onclick={() => toggleAgent(agent.name)}
+								>
+									{agent.enabled ? 'Disable' : 'Enable'}
+								</Button>
+							</div>
 						</div>
 
-						<!-- Agent Stats Grid -->
 						{#if agent.enabled && (agent.taskCount || agent.successRate || agent.lastUsed)}
 							<Separator class="my-3" />
 							<div class="grid grid-cols-3 gap-4 text-sm">
@@ -140,7 +299,9 @@
 										<TrendingUp size={14} class="text-emerald-600" />
 										<div>
 											<p class="text-xs text-muted-foreground">Success</p>
-											<p class="font-medium font-mono text-emerald-600">{agent.successRate}%</p>
+											<p class="font-medium font-mono text-emerald-600">
+												{agent.successRate}%
+											</p>
 										</div>
 									</div>
 								{/if}
@@ -156,25 +317,68 @@
 							</div>
 						{/if}
 
-						<!-- Agent Path Input -->
 						<Separator class="my-3" />
-						<div class="space-y-2">
-							<label class="text-xs font-medium text-muted-foreground">Binary Path</label>
-							<Input
-								value={agent.path}
-								placeholder="/usr/local/bin/{agent.name}"
-								oninput={(event) => updatePath(agent.name, (event.target as HTMLInputElement).value)}
-								disabled={!agent.enabled}
-							/>
+						<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+							<div class="space-y-2">
+								<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+									Default Priority
+								</p>
+								<RadioGroup.Root
+									value={agent.priority}
+									onValueChange={(value) =>
+										updatePriority(agent.name, value as AgentConfig['priority'])
+									}
+									class="flex gap-2"
+									disabled={!agent.enabled}
+								>
+									<label class="flex-1 cursor-pointer">
+										<RadioGroup.Item value="low" class="peer sr-only" />
+										<div
+											class="rounded-md border border-border px-3 py-2 text-center text-xs font-medium peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+										>
+											Low
+										</div>
+									</label>
+									<label class="flex-1 cursor-pointer">
+										<RadioGroup.Item value="normal" class="peer sr-only" />
+										<div
+											class="rounded-md border border-border px-3 py-2 text-center text-xs font-medium peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+										>
+											Normal
+										</div>
+									</label>
+									<label class="flex-1 cursor-pointer">
+										<RadioGroup.Item value="high" class="peer sr-only" />
+										<div
+											class="rounded-md border border-border px-3 py-2 text-center text-xs font-medium peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+										>
+											High
+										</div>
+									</label>
+								</RadioGroup.Root>
+							</div>
+							<div class="space-y-2">
+								<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+									Custom Prompt
+								</p>
+								<p class="text-xs text-muted-foreground">
+									Appended to every run for this agent.
+								</p>
+								<textarea
+									value={agent.customPrompt ?? ''}
+									placeholder="Add default instructions for this agent..."
+									rows="3"
+									class="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+									oninput={(event) =>
+										updatePrompt(agent.name, (event.target as HTMLTextAreaElement).value)
+									}
+									disabled={!agent.enabled}
+								></textarea>
+							</div>
 						</div>
 					</div>
 				{/each}
 			</div>
 		{/if}
-	</Card.Content>
-	<Card.Footer>
-		<Button type="button" onclick={handleSave} class="w-full">
-			Save Changes
-		</Button>
-	</Card.Footer>
-</Card.Root>
+	</div>
+{/if}

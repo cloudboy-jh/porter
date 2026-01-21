@@ -12,8 +12,8 @@
 	import AgentSettings from '$lib/components/AgentSettings.svelte';
 	import type { AgentConfig } from '$lib/types/agent';
 
-	let { 
-		open = $bindable(false), 
+	let {
+		open = $bindable(false),
 		agents = $bindable([] as AgentConfig[])
 	}: {
 		open?: boolean;
@@ -37,19 +37,21 @@
 		<Dialog.Header class="flex-shrink-0">
 			<Dialog.Title>Agent Configuration</Dialog.Title>
 			<Dialog.Description>
-				Enable agents and configure binary paths.
+				Enable agents, set priority defaults, and add prompt guidance.
 			</Dialog.Description>
 		</Dialog.Header>
 
 		<div class="flex-1 overflow-y-auto py-4 -mx-6 px-6">
-			<AgentSettings 
+			<AgentSettings
 				bind:agents
 				onsave={handleAgentSave}
 				onrefresh={handleAgentRefresh}
+				framed={false}
 			/>
 		</div>
 
 		<Dialog.Footer class="flex-shrink-0">
+			<Button variant="secondary" onclick={() => handleAgentSave(agents)}>Save Changes</Button>
 			<Button variant="outline" onclick={() => (open = false)}>Close</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

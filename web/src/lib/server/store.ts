@@ -315,7 +315,7 @@ let tasks: Task[] = [
 
 let config: PorterConfig = {
 	version: '1.0.0',
-	executionMode: 'local',
+	executionMode: 'cloud',
 	agents: {
 		opencode: {
 			enabled: true,
@@ -348,7 +348,7 @@ const agentStatus: AgentConfig[] = [
 	{
 		name: 'opencode',
 		enabled: true,
-		path: '~/.local/bin/opencode',
+		priority: 'high',
 		status: 'idle',
 		domain: agentDomains.opencode,
 		version: '0.4.2',
@@ -359,7 +359,7 @@ const agentStatus: AgentConfig[] = [
 	{
 		name: 'claude',
 		enabled: true,
-		path: '~/.claude/claude',
+		priority: 'high',
 		status: 'idle',
 		domain: agentDomains.claude,
 		version: '1.1.0',
@@ -370,7 +370,7 @@ const agentStatus: AgentConfig[] = [
 	{
 		name: 'cursor',
 		enabled: true,
-		path: '/Applications/Cursor.app',
+		priority: 'normal',
 		status: 'idle',
 		domain: agentDomains.cursor,
 		version: '0.32.1',
@@ -381,7 +381,7 @@ const agentStatus: AgentConfig[] = [
 	{
 		name: 'windsurf',
 		enabled: false,
-		path: '',
+		priority: 'low',
 		status: 'disabled',
 		domain: agentDomains.windsurf,
 		version: undefined,
@@ -392,7 +392,7 @@ const agentStatus: AgentConfig[] = [
 	{
 		name: 'cline',
 		enabled: false,
-		path: '',
+		priority: 'low',
 		status: 'disabled',
 		domain: agentDomains.cline,
 		version: undefined,
@@ -403,7 +403,7 @@ const agentStatus: AgentConfig[] = [
 	{
 		name: 'aider',
 		enabled: false,
-		path: '/usr/local/bin/aider',
+		priority: 'normal',
 		status: 'disabled',
 		domain: agentDomains.aider,
 		version: '0.35.0',
