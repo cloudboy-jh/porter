@@ -33,26 +33,30 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="sm:max-w-4xl max-h-[85vh] flex flex-col">
+	<Dialog.Content class="sm:max-w-3xl max-h-[85vh] flex flex-col">
 		<Dialog.Header class="flex-shrink-0">
-			<Dialog.Title>Agent Configuration</Dialog.Title>
+			<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+				Agent Controls
+			</p>
+			<Dialog.Title>Quick Agent Configuration</Dialog.Title>
 			<Dialog.Description>
-				Enable agents, set priority defaults, and add prompt guidance.
+				Toggle agents, set priority, and add prompt guidance.
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="flex-1 overflow-y-auto py-4 -mx-6 px-6">
+		<div class="flex-1 overflow-y-auto py-4">
 			<AgentSettings
 				bind:agents
 				onsave={handleAgentSave}
 				onrefresh={handleAgentRefresh}
 				framed={false}
+				mode="quick"
 			/>
 		</div>
 
 		<Dialog.Footer class="flex-shrink-0">
-			<Button variant="secondary" onclick={() => handleAgentSave(agents)}>Save Changes</Button>
-			<Button variant="outline" onclick={() => (open = false)}>Close</Button>
+			<Button onclick={() => handleAgentSave(agents)}>Save Changes</Button>
+			<Button variant="ghost" onclick={() => (open = false)}>Close</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

@@ -1,4 +1,4 @@
-# Next Steps (Jan 21, 2026)
+# Next Steps (Jan 22, 2026)
 
 ## Where we are (per `project-mds/main-spec.md`)
 
@@ -37,6 +37,6 @@
 
 ## Summary (Latest)
 
-- Settings bento layout + agent configuration refinements.
-- Platform-wide UI polish: tokens, cards, buttons, inputs, and filters.
-- Phosphor icon system adopted across the app.
+- History smart search, table header cleanup, and export placement polish.
+- Agent configuration quick mode styling for dashboard modal.
+- Continued UI refinements across cards, inputs, and status cues.

@@ -21,12 +21,14 @@
 		agents = $bindable([] as AgentConfig[]),
 		onrefresh,
 		onsave,
-		framed = true
+		framed = true,
+		mode = 'full'
 	}: {
 		agents?: AgentConfig[];
 		onrefresh?: () => void;
 		onsave?: (config: AgentConfig[]) => void;
 		framed?: boolean;
+		mode?: 'full' | 'quick';
 	} = $props();
 
 	const getAgentIcon = (domain?: string) =>
@@ -78,9 +80,132 @@
 	};
 
 	const contentClass = framed ? 'space-y-3' : 'space-y-4';
+	const isQuick = mode === 'quick';
 </script>
 
-{#if framed}
+{#if isQuick}
+	<div class="space-y-3">
+		{#if agents.length === 0}
+			<div class="rounded-2xl border border-dashed border-border/60 bg-card/50 p-8 text-center">
+				<p class="text-sm text-muted-foreground">No agents detected</p>
+				<Button variant="outline" size="sm" class="mt-3" onclick={handleRefresh}>
+					Scan for Agents
+				</Button>
+			</div>
+		{:else}
+			<div class="space-y-3">
+				{#each agents as agent}
+					<div class="rounded-2xl border border-border/60 bg-card/70 p-4 shadow-sm">
+						<div class="flex flex-wrap items-center justify-between gap-4">
+							<div class="flex items-center gap-3">
+								{#if agent.domain}
+									<img
+										class="h-9 w-9 rounded-xl border border-border/60 bg-background/80"
+										src={getAgentIcon(agent.domain)}
+										alt={agent.name}
+									/>
+								{/if}
+								<div>
+									<p class="text-[0.6rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+										Agent
+									</p>
+									<h4 class="text-sm font-semibold capitalize text-foreground">
+										{agent.name}
+									</h4>
+								</div>
+							</div>
+							<Button
+								variant={agent.enabled ? 'secondary' : 'outline'}
+								size="sm"
+								type="button"
+								onclick={() => toggleAgent(agent.name)}
+							>
+								{agent.enabled ? 'Enabled' : 'Disabled'}
+							</Button>
+						</div>
+
+						<div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+							<div class="space-y-2">
+								<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+									Priority
+								</p>
+								<RadioGroup.Root
+									value={agent.priority}
+									onValueChange={(value) =>
+										updatePriority(agent.name, value as AgentConfig['priority'])
+									}
+									class="grid grid-cols-3 gap-1 rounded-xl border border-border/60 bg-muted/40 p-1"
+									disabled={!agent.enabled}
+								>
+									<label class="flex-1 cursor-pointer">
+										<RadioGroup.Item value="low" class="peer sr-only" />
+										<div
+											class="rounded-lg px-3 py-2 text-center text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
+										>
+											Low
+										</div>
+									</label>
+									<label class="flex-1 cursor-pointer">
+										<RadioGroup.Item value="normal" class="peer sr-only" />
+										<div
+											class="rounded-lg px-3 py-2 text-center text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
+										>
+											Normal
+										</div>
+									</label>
+									<label class="flex-1 cursor-pointer">
+										<RadioGroup.Item value="high" class="peer sr-only" />
+										<div
+											class="rounded-lg px-3 py-2 text-center text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
+										>
+											High
+										</div>
+									</label>
+							</RadioGroup.Root>
+						</div>
+						<div class="space-y-2">
+							<div class="flex items-center justify-between">
+								<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+									Prompt Guidance
+								</p>
+								<button
+									type="button"
+									class="text-xs font-semibold text-foreground/70 transition hover:text-foreground"
+									onclick={() => togglePrompt(agent.name)}
+									disabled={!agent.enabled}
+								>
+									{isPromptExpanded(agent.name) ? 'Collapse' : 'Expand'}
+								</button>
+							</div>
+							{#if isPromptExpanded(agent.name)}
+								<textarea
+									value={agent.customPrompt ?? ''}
+									placeholder="Add default instructions for this agent..."
+									rows="3"
+									class="w-full resize-none rounded-xl border border-border/70 bg-background/80 px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
+									oninput={(event) =>
+										updatePrompt(agent.name, (event.target as HTMLTextAreaElement).value)
+									}
+									disabled={!agent.enabled}
+								></textarea>
+							{:else}
+								<input
+									value={agent.customPrompt ?? ''}
+									placeholder="Add default instructions..."
+									class="w-full rounded-xl border border-border/70 bg-background/80 px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
+									oninput={(event) =>
+										updatePrompt(agent.name, (event.target as HTMLInputElement).value)
+									}
+									disabled={!agent.enabled}
+								/>
+							{/if}
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+	</div>
+{:else if framed}
 	<Card.Root>
 		<Card.Header class="pb-3">
 			<div class="flex items-center justify-between">

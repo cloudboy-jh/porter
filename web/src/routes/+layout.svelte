@@ -27,7 +27,7 @@
 				{ label: 'tasks' },
 				{ label: 'history' }
 			],
-			subtitle: 'Review finished tasks and outcomes.'
+			subtitle: ''
 		},
 		'/settings': {
 			title: 'Settings',

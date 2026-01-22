@@ -7,17 +7,15 @@
 		CheckCircle,
 		Clock,
 		DownloadSimple,
-		FunnelX,
 		GitPullRequest,
 		MagnifyingGlass,
 		Percent,
-		Plus
+		X
 	} from 'phosphor-svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
-	import { Separator } from '$lib/components/ui/separator/index.js';
 	import type { Task } from '$lib/server/types';
 
 	const agentDomains: Record<string, string> = {
@@ -37,8 +35,6 @@
 		failed: 'border border-destructive/30 bg-destructive/10 text-destructive'
 	};
 
-	const filterBaseClass =
-		'gap-2 rounded-md border border-transparent px-3 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.16em] transition';
 
 	const formatRelativeTime = (iso?: string) => {
 		if (!iso) return '—';
@@ -73,6 +69,7 @@
 	let dateTo = $state('');
 	let searchInput = $state('');
 	let searchQuery = $state('');
+	let isSearchFocused = $state(false);
 
 	let limit = $state(20);
 	let offset = $state(0);
@@ -126,6 +123,120 @@
 
 	const handleSearchChange = (value: string) => {
 		searchInput = value;
+	};
+
+	const baseSuggestions = [
+		'status:failed',
+		'status:success',
+		'agent:claude',
+		'repo:porter/app',
+		'date:2026-01-21..2026-01-22'
+	];
+
+	const handleSuggestionClick = (suggestion: string) => {
+		const trimmed = searchInput.trim();
+		const nextValue = trimmed ? `${trimmed} ${suggestion}` : suggestion;
+		searchInput = nextValue;
+		applySmartSearch(nextValue);
+		isSearchFocused = true;
+	};
+
+	const getSuggestionTone = (suggestion: string) => {
+		if (suggestion.startsWith('status:failed')) {
+			return 'border-destructive/30 bg-destructive/10 text-destructive';
+		}
+		if (suggestion.startsWith('status:success')) {
+			return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600';
+		}
+		if (suggestion.startsWith('agent:')) {
+			return 'border-sky-500/30 bg-sky-500/10 text-sky-600';
+		}
+		if (suggestion.startsWith('repo:')) {
+			return 'border-amber-500/30 bg-amber-500/10 text-amber-700';
+		}
+		if (suggestion.startsWith('date:')) {
+			return 'border-slate-500/30 bg-slate-500/10 text-slate-600';
+		}
+		return 'border-border/60 bg-muted/40 text-muted-foreground';
+	};
+
+	const getSearchSuggestions = () => {
+		const trimmed = searchInput.trim();
+		const tokens = trimmed ? trimmed.split(/\s+/) : [];
+		const lastToken = tokens[tokens.length - 1] ?? '';
+		if (!lastToken || !lastToken.includes(':')) {
+			return baseSuggestions;
+		}
+		if (lastToken.startsWith('status:')) {
+			return ['status:success', 'status:failed', 'status:all'];
+		}
+		if (lastToken.startsWith('agent:')) {
+			return availableAgents.filter((agent) => agent !== 'all').map((agent) => `agent:${agent}`);
+		}
+		if (lastToken.startsWith('repo:')) {
+			return availableRepos.filter((repo) => repo !== 'all').map((repo) => `repo:${repo}`);
+		}
+		if (lastToken.startsWith('date:')) {
+			return ['date:YYYY-MM-DD..YYYY-MM-DD'];
+		}
+		return baseSuggestions;
+	};
+
+	const parseSearchQuery = (value: string) => {
+		const parsed = {
+			status: 'all',
+			agent: 'all',
+			repo: 'all',
+			dateFrom: '',
+			dateTo: '',
+			freeText: ''
+		};
+		if (!value.trim()) return parsed;
+		const terms: string[] = [];
+		for (const token of value.split(/\s+/)) {
+			const [rawKey, ...rawValueParts] = token.split(':');
+			if (rawValueParts.length === 0) {
+				terms.push(token);
+				continue;
+			}
+			const key = rawKey.toLowerCase();
+			const rawValue = rawValueParts.join(':');
+			const rawValueLower = rawValue.toLowerCase();
+			if (key === 'status') {
+				if (['all', 'success', 'failed'].includes(rawValueLower)) {
+					parsed.status = rawValueLower;
+					continue;
+				}
+			}
+			if (key === 'agent') {
+				parsed.agent = rawValue;
+				continue;
+			}
+			if (key === 'repo') {
+				parsed.repo = rawValue;
+				continue;
+			}
+			if (key === 'date') {
+				const [from, to] = rawValue.split('..');
+				parsed.dateFrom = from ?? '';
+				parsed.dateTo = to ?? '';
+				continue;
+			}
+			terms.push(token);
+		}
+		parsed.freeText = terms.join(' ');
+		return parsed;
+	};
+
+	const applySmartSearch = (value: string) => {
+		const parsed = parseSearchQuery(value);
+		activeStatus = parsed.status as 'all' | 'success' | 'failed';
+		selectedAgent = parsed.agent;
+		selectedRepo = parsed.repo;
+		dateFrom = parsed.dateFrom;
+		dateTo = parsed.dateTo;
+		searchQuery = parsed.freeText;
+		offset = 0;
 	};
 
 	const handleRowKey = (event: KeyboardEvent, id: string) => {
@@ -183,8 +294,7 @@
 
 	$effect(() => {
 		const timeout = setTimeout(() => {
-			searchQuery = searchInput.trim();
-			offset = 0;
+			applySmartSearch(searchInput.trim());
 		}, 300);
 		return () => clearTimeout(timeout);
 	});
@@ -261,145 +371,79 @@
 </script>
 
 <div class="space-y-8">
-	<header class="flex flex-wrap items-center justify-between gap-4">
-		<div class="space-y-1">
-			<p class="text-xs text-muted-foreground">Porter › Task History</p>
-			<h1 class="text-2xl font-semibold text-foreground">Task History</h1>
-		</div>
-		<div class="flex flex-wrap items-center gap-2">
-			<Button variant="secondary" type="button" onclick={handleExport}>
-				<DownloadSimple size={16} weight="bold" />
-				Export
+	<section class="flex flex-col items-center justify-center gap-2">
+		<div class="flex w-full max-w-4xl flex-wrap items-center justify-center gap-2 rounded-2xl border border-border/60 bg-card/70 px-4 py-2 shadow-[0_10px_30px_-24px_rgba(15,15,15,0.5)] transition focus-within:border-border/90 focus-within:bg-card">
+			<span class="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+				Search
+			</span>
+			<MagnifyingGlass size={16} weight="bold" class="text-muted-foreground" />
+			<div class="relative flex-1">
+				<Input
+					value={searchInput}
+					class="h-10 border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
+					oninput={(event) => handleSearchChange((event.currentTarget as HTMLInputElement).value)}
+					onfocus={() => (isSearchFocused = true)}
+					onblur={() => (isSearchFocused = false)}
+				/>
+			</div>
+			<Button variant="ghost" size="sm" disabled={!searchInput} onclick={resetFilters}>
+				<X size={14} weight="bold" />
+				Clear
 			</Button>
-			<Button type="button">
-				<Plus size={16} weight="bold" />
-				New Task
-			</Button>
 		</div>
-	</header>
+		{#if isSearchFocused}
+			<div class="flex w-full max-w-4xl flex-wrap items-center justify-center gap-2">
+				{#each getSearchSuggestions() as suggestion}
+					<button
+						class={`rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] transition hover:border-border/80 hover:bg-muted/60 ${getSuggestionTone(suggestion)}`}
+						on:mousedown|preventDefault={() => handleSuggestionClick(suggestion)}
+					>
+						{suggestion}
+					</button>
+				{/each}
+			</div>
+		{/if}
+	</section>
 
 	<section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 		{#each statCards as stat}
-			<Card.Root class="border border-border/60 bg-background/80">
-				<Card.Content class="flex items-center justify-between gap-4 p-4">
+			<Card.Root class="group relative overflow-hidden rounded-2xl border border-border/60 bg-card/70 shadow-[0_12px_30px_-28px_rgba(15,15,15,0.5)] transition hover:border-border/90">
+				<Card.Content class="flex items-center justify-between gap-4 px-4 py-3">
 					<div class="space-y-1">
-						<div class="text-lg font-semibold">{stat.value}</div>
-						<div class="text-xs text-muted-foreground">{stat.label}</div>
+						<div class="text-xl font-semibold text-foreground">{stat.value}</div>
+						<div class="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+							{stat.label}
+						</div>
 					</div>
-					<div class={`flex h-9 w-9 items-center justify-center rounded-lg ${stat.tone}`}>
-								<svelte:component this={stat.icon} size={18} weight="bold" />
+					<div
+						class={`flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-border/40 ${stat.tone}`}
+					>
+						<svelte:component this={stat.icon} size={18} weight="bold" />
 					</div>
 				</Card.Content>
 			</Card.Root>
 		{/each}
 	</section>
 
-	<section class="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-		<aside class="space-y-4">
-			<Card.Root class="border border-border/60 bg-card/70 shadow-lg backdrop-blur">
-				<Card.Header class="flex flex-row items-center justify-between pb-2">
-					<Card.Title class="text-sm">Filters</Card.Title>
-					<Button variant="ghost" size="icon" onclick={resetFilters}>
-						<FunnelX size={16} weight="bold" />
-					</Button>
-				</Card.Header>
-				<Card.Content class="space-y-4">
-					<div class="space-y-2">
-						<p class="text-xs uppercase text-muted-foreground">Status</p>
-						<div class="flex flex-wrap gap-2 rounded-xl border border-border/60 bg-muted/40 p-1">
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={() => (activeStatus = 'all')}
-								class={`${filterBaseClass} ${activeStatus === 'all' ? 'border-border/70 bg-background text-foreground shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'text-muted-foreground hover:border-border/50 hover:bg-background/70 hover:text-foreground'}`}
-							>
-								<span>{totalTasks || historyTasks.length}</span>
-								<span>All</span>
-							</Button>
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={() => (activeStatus = 'success')}
-								class={`${filterBaseClass} ${activeStatus === 'success' ? 'border-emerald-500/30 bg-background text-emerald-700 shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'text-emerald-700/70 hover:border-emerald-500/30 hover:bg-background/70'}`}
-							>
-								<span class="h-2 w-2 rounded-full bg-current/80"></span>
-								<span>{statusCounts.success ?? 0}</span>
-								<span>Success</span>
-							</Button>
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={() => (activeStatus = 'failed')}
-								class={`${filterBaseClass} ${activeStatus === 'failed' ? 'border-destructive/30 bg-background text-destructive shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'text-destructive/70 hover:border-destructive/30 hover:bg-background/70'}`}
-							>
-								<span class="h-2 w-2 rounded-full bg-current/80"></span>
-								<span>{statusCounts.failed ?? 0}</span>
-								<span>Failed</span>
-							</Button>
-						</div>
-					</div>
-					<div class="space-y-2">
-						<p class="text-xs uppercase text-muted-foreground">Search</p>
-						<div class="relative">
-						<MagnifyingGlass size={16} weight="bold" class="absolute left-3 top-3 text-muted-foreground" />
-							<Input
-								value={searchInput}
-								placeholder="Search by issue or title"
-								class="pl-9 bg-background/80 border-border/70 focus-visible:ring-ring/30"
-								oninput={(event) => handleSearchChange((event.currentTarget as HTMLInputElement).value)}
-							/>
-						</div>
-					</div>
-					<div class="space-y-2">
-						<p class="text-xs uppercase text-muted-foreground">Agent</p>
-						<select
-							class="h-10 w-full rounded-lg border border-border/70 bg-background/80 px-3 text-sm text-foreground transition focus:outline-none focus:ring-2 focus:ring-ring/30"
-							bind:value={selectedAgent}
-						>
-							{#each availableAgents as agent}
-								<option value={agent}>{agent === 'all' ? 'All Agents' : agent}</option>
-							{/each}
-						</select>
-					</div>
-					<div class="space-y-2">
-						<p class="text-xs uppercase text-muted-foreground">Repository</p>
-						<select
-							class="h-10 w-full rounded-lg border border-border/70 bg-background/80 px-3 text-sm text-foreground transition focus:outline-none focus:ring-2 focus:ring-ring/30"
-							bind:value={selectedRepo}
-						>
-							{#each availableRepos as repo}
-								<option value={repo}>{repo === 'all' ? 'All Repositories' : repo}</option>
-							{/each}
-						</select>
-					</div>
-					<div class="space-y-2">
-						<p class="text-xs uppercase text-muted-foreground">Date Range</p>
-						<div class="grid grid-cols-2 gap-2">
-							<input
-								type="date"
-								class="h-10 rounded-lg border border-border/70 bg-background/80 px-3 text-sm text-foreground transition focus:outline-none focus:ring-2 focus:ring-ring/30"
-								bind:value={dateFrom}
-							/>
-							<input
-								type="date"
-								class="h-10 rounded-lg border border-border/70 bg-background/80 px-3 text-sm text-foreground transition focus:outline-none focus:ring-2 focus:ring-ring/30"
-								bind:value={dateTo}
-							/>
-						</div>
-					</div>
-				</Card.Content>
-			</Card.Root>
-		</aside>
-
+	<section class="space-y-6">
 		<section class="rounded-2xl border border-border/60 bg-card/70 p-4 shadow-lg backdrop-blur">
-	<div class="grid grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 border-b border-border/60 pb-3 text-xs font-semibold uppercase text-muted-foreground">
-		<span>Status</span>
-		<span>Task</span>
-		<span>Repository</span>
-		<span>Agent</span>
-		<span>Completed</span>
-		<span class="text-right">Actions</span>
-	</div>
+			<div class="flex items-center justify-between gap-3">
+				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+					History Table
+				</p>
+				<Button variant="secondary" size="icon" type="button" onclick={handleExport}>
+					<DownloadSimple size={16} weight="bold" />
+					<span class="sr-only">Download CSV</span>
+				</Button>
+			</div>
+			<div class="mt-3 grid grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 rounded-xl bg-muted/40 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
+				<span>Status</span>
+				<span>Task</span>
+				<span>Repository</span>
+				<span>Agent</span>
+				<span>Completed</span>
+				<span class="text-right">Actions</span>
+			</div>
 
 	{#if isLoading}
 		<div class="mt-4 space-y-3">
@@ -422,31 +466,31 @@
 	{:else if historyTasks.length === 0}
 		<div class="flex flex-col items-center gap-2 py-12 text-center">
 			<p class="text-sm font-medium">No completed tasks found</p>
-			<p class="text-xs text-muted-foreground">Try adjusting your filters or create a new task.</p>
+			<p class="text-xs text-muted-foreground">Try adjusting your filters to widen the results.</p>
 			<Button variant="secondary" size="sm" onclick={resetFilters}>Clear filters</Button>
 		</div>
 	{:else}
 		<div class="mt-4 space-y-3">
 			{#each historyTasks as task}
 				<Card.Root
-					class="border border-border/60 bg-background/80"
+					class="border border-border/60 bg-background/80 transition hover:border-border/80 hover:bg-background/95"
 					role="button"
 					tabindex={0}
 					onclick={() => toggleExpanded(task.id)}
 					onkeydown={(event: KeyboardEvent) => handleRowKey(event, task.id)}
 				>
-					<Card.Content class="grid min-h-[72px] grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 py-3">
-					<Badge class={`text-[0.65rem] font-semibold uppercase tracking-[0.18em] ${statusStyles[task.status]}`}>
-						{task.status === 'success' ? 'DONE' : 'FAIL'}
-					</Badge>
+					<Card.Content class="grid min-h-[72px] grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 px-2 py-3">
+						<Badge class={`text-[0.6rem] font-semibold uppercase tracking-[0.2em] ${statusStyles[task.status]}`}>
+							{task.status === 'success' ? 'DONE' : 'FAIL'}
+						</Badge>
 						<div>
-							<div class="font-medium">{task.issueTitle}</div>
+							<div class="font-medium text-foreground">{task.issueTitle}</div>
 							<div class="text-xs text-muted-foreground">
 								Issue #{task.issueNumber}
 								{task.prNumber ? ` · PR #${task.prNumber}` : ''}
 							</div>
 						</div>
-						<div class="text-sm text-muted-foreground font-mono">
+						<div class="text-xs text-muted-foreground font-mono">
 							{task.repoOwner}/{task.repoName}
 						</div>
 						<Badge variant="outline" class="text-xs capitalize font-mono gap-2">
@@ -461,10 +505,10 @@
 								View
 							</Button>
 							{#if expandedTasks[task.id]}
-									<CaretUp size={16} weight="bold" class="text-muted-foreground" />
-								{:else}
-									<CaretDown size={16} weight="bold" class="text-muted-foreground" />
-								{/if}
+								<CaretUp size={16} weight="bold" class="text-muted-foreground" />
+							{:else}
+								<CaretDown size={16} weight="bold" class="text-muted-foreground" />
+							{/if}
 						</div>
 					</Card.Content>
 				</Card.Root>
