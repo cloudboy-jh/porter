@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { ClockCounterClockwise, Gear, Lightning, SquaresFour } from 'phosphor-svelte';
+	import { CaretDown, ClockCounterClockwise, Gauge, Gear, Lightning } from 'phosphor-svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -13,7 +13,7 @@
 	let showQuickSettings = $state(false);
 
 	const navItems = [
-		{ label: 'Dashboard', href: '/', icon: SquaresFour, action: null as (() => void) | null, shortcut: null as string | null },
+		{ label: 'Dashboard', href: '/', icon: Gauge, action: null as (() => void) | null, shortcut: null as string | null },
 		{ label: 'History', href: '/history', icon: ClockCounterClockwise, action: null as (() => void) | null, shortcut: null as string | null },
 		{ label: 'Quick Settings', href: null as string | null, icon: Lightning, action: () => showQuickSettings = true, shortcut: '⌘,' },
 		{ label: 'Settings', href: '/settings', icon: Gear, action: null as (() => void) | null, shortcut: null as string | null }
@@ -28,17 +28,21 @@
 		{ name: 'aider', count: 0, domain: 'aider.chat' }
 	];
 
+	const activeAgents = $derived(agents.filter((agent) => agent.count > 0));
+	const collapsedAgents = $derived((activeAgents.length ? activeAgents : agents).slice(0, 2));
+
 	const getAgentIcon = (domain: string) =>
 		`https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
 	const stats = [
-		{ label: 'Today', value: '12' },
-		{ label: 'Success', value: '87%' },
-		{ label: 'Avg', value: '8m' },
-		{ label: 'Uptime', value: '4h' }
+		{ label: 'Runs Today', value: '12', detail: 'Tasks launched' },
+		{ label: 'Success Rate', value: '87%', detail: 'Last 7 days' },
+		{ label: 'Avg Runtime', value: '8m', detail: 'Median duration' },
+		{ label: 'Active Agents', value: '4', detail: 'Online now' }
 	];
 
 	let selectedAgent = $state<{ name: string; count: number; domain: string } | null>(null);
+	let agentsOpen = $state(true);
 
 	// Mock task data - replace with actual task data later
 	const getAgentTasks = (agentName: string) => {
@@ -68,7 +72,7 @@
 			</Sidebar.MenuItem>
 		</Sidebar.Menu>
 	</Sidebar.Header>
-	<Sidebar.Content class="gap-6 py-4">
+	<Sidebar.Content class="gap-6 py-4 pb-32">
 		<Sidebar.Group>
 		<Sidebar.GroupLabel class="text-[0.65rem] font-semibold uppercase tracking-[0.18em]">
 			Platform
@@ -98,40 +102,76 @@
 		</Sidebar.Group>
 		<Sidebar.Separator />
 		<Sidebar.Group class="group-data-[collapsible=icon]:hidden">
-		<Sidebar.GroupLabel class="text-[0.65rem] font-semibold uppercase tracking-[0.18em]">
-			Agents
-		</Sidebar.GroupLabel>
-			<Sidebar.GroupContent>
-				<div class="grid gap-2">
-					{#each agents as agent}
-					<button
-						class="flex items-center gap-3 rounded-lg border border-sidebar-border/60 bg-sidebar-accent/60 px-2 py-1.5 text-sm transition hover:border-sidebar-border hover:bg-sidebar-accent"
-						onclick={() => agent.count > 0 ? (selectedAgent = agent) : null}
-							disabled={agent.count === 0}
-							class:opacity-50={agent.count === 0}
-							class:cursor-not-allowed={agent.count === 0}
-						>
-						<img class="h-7 w-7 rounded-lg border border-sidebar-border/60" src={getAgentIcon(agent.domain)} alt="" />
-						<span class="flex-1 capitalize text-sidebar-foreground/80 font-mono text-left">
-							{agent.name}
-						</span>
-						{#if agent.count}
-							<span
-								class="rounded-full border border-sidebar-border/60 bg-sidebar px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/70"
+			<Sidebar.GroupLabel class="text-[0.65rem] font-semibold uppercase tracking-[0.18em]">
+				Agents
+			</Sidebar.GroupLabel>
+			<Sidebar.GroupAction
+				onclick={() => (agentsOpen = !agentsOpen)}
+				aria-expanded={agentsOpen}
+				class={agentsOpen ? '' : '-rotate-90'}
+			>
+				<CaretDown size={14} weight="bold" />
+				<span class="sr-only">Toggle agents</span>
+			</Sidebar.GroupAction>
+			{#if agentsOpen}
+				<Sidebar.GroupContent>
+					<div class="grid gap-2">
+						{#each agents as agent}
+							<button
+								class="flex items-center gap-3 rounded-lg border border-sidebar-border/60 bg-sidebar-accent/60 px-2 py-1.5 text-sm transition hover:border-sidebar-border hover:bg-sidebar-accent"
+								onclick={() => agent.count > 0 ? (selectedAgent = agent) : null}
+								disabled={agent.count === 0}
+								class:opacity-50={agent.count === 0}
+								class:cursor-not-allowed={agent.count === 0}
 							>
-								{agent.count}
-							</span>
-						{/if}
-					</button>
-					{/each}
-				</div>
-			</Sidebar.GroupContent>
+								<img class="h-7 w-7 rounded-lg border border-sidebar-border/60" src={getAgentIcon(agent.domain)} alt="" />
+								<span class="flex-1 font-mono text-left capitalize text-sidebar-foreground/80">
+									{agent.name}
+								</span>
+								{#if agent.count}
+									<span
+										class="rounded-full border border-sidebar-border/60 bg-sidebar px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/70"
+									>
+										{agent.count}
+									</span>
+								{/if}
+							</button>
+						{/each}
+					</div>
+				</Sidebar.GroupContent>
+			{:else}
+				<Sidebar.GroupContent>
+					<div class="grid gap-2">
+						{#each collapsedAgents as agent}
+							<button
+								class="flex items-center gap-3 rounded-lg border border-sidebar-border/60 bg-sidebar-accent/40 px-2 py-1.5 text-sm transition hover:border-sidebar-border hover:bg-sidebar-accent"
+								onclick={() => agent.count > 0 ? (selectedAgent = agent) : null}
+								disabled={agent.count === 0}
+								class:opacity-60={agent.count === 0}
+								class:cursor-not-allowed={agent.count === 0}
+							>
+								<img class="h-7 w-7 rounded-lg border border-sidebar-border/60" src={getAgentIcon(agent.domain)} alt="" />
+								<span class="flex-1 font-mono text-left capitalize text-sidebar-foreground/75">
+									{agent.name}
+								</span>
+								{#if agent.count}
+									<span
+										class="rounded-full border border-sidebar-border/60 bg-sidebar px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/70"
+									>
+										{agent.count}
+									</span>
+								{/if}
+							</button>
+						{/each}
+					</div>
+				</Sidebar.GroupContent>
+			{/if}
 		</Sidebar.Group>
 		<Sidebar.Separator class="group-data-[collapsible=icon]:hidden" />
 		<Sidebar.Group class="group-data-[collapsible=icon]:hidden">
-		<Sidebar.GroupLabel class="text-[0.65rem] font-semibold uppercase tracking-[0.18em]">
-			Stats
-		</Sidebar.GroupLabel>
+			<Sidebar.GroupLabel class="text-[0.65rem] font-semibold uppercase tracking-[0.18em]">
+				Stats
+			</Sidebar.GroupLabel>
 			<Sidebar.GroupContent>
 				<div class="grid grid-cols-2 gap-2">
 					{#each stats as stat}
@@ -140,17 +180,21 @@
 							<div class="text-[0.65rem] uppercase tracking-[0.18em] text-sidebar-foreground/60">
 								{stat.label}
 							</div>
+							<div class="mt-1 text-[0.6rem] text-sidebar-foreground/55">
+								{stat.detail}
+							</div>
 						</div>
 					{/each}
 				</div>
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
 	</Sidebar.Content>
-	<Sidebar.Footer class="gap-4 border-t border-sidebar-border px-4 py-4">
-		<div class="flex items-center justify-between group-data-[collapsible=icon]:hidden">
+	<Sidebar.Footer class="absolute inset-x-0 bottom-0 border-t border-sidebar-border bg-sidebar/95 px-4 py-3 backdrop-blur group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-2">
+		<div class="flex items-center justify-center gap-3 group-data-[collapsible=icon]:gap-2">
 			<ThemeToggle />
+			<div class="h-5 w-px bg-sidebar-border/70 group-data-[collapsible=icon]:hidden"></div>
+			<NavUser iconOnly />
 		</div>
-		<NavUser />
 	</Sidebar.Footer>
 	<Sidebar.Rail />
 </Sidebar.Root>

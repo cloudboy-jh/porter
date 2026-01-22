@@ -36,6 +36,14 @@
 				{ label: 'settings' }
 			],
 			subtitle: ''
+		},
+		'/account': {
+			title: 'Account',
+			breadcrumb: [
+				{ label: 'porter', href: '/' },
+				{ label: 'account' }
+			],
+			subtitle: 'Profile, workspace access, and connections.'
 		}
 	};
 

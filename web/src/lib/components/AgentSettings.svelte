@@ -151,7 +151,7 @@
 									{/if}
 									{#if agent.successRate !== undefined}
 										<div class="flex items-center gap-2">
-											<TrendingUp size={14} class="text-emerald-600" />
+										<TrendUp size={14} class="text-emerald-600" />
 											<div>
 												<p class="text-xs text-muted-foreground">Success</p>
 												<p class="font-medium font-mono text-emerald-600">

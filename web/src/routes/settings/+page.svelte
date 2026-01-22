@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { GithubLogo, Robot, Stack, Server } from 'phosphor-svelte';
+	import { GithubLogo, Robot, Stack } from 'phosphor-svelte';
 	import { onMount } from 'svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -104,7 +104,7 @@
 						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
 							<div class="flex items-center justify-between gap-2">
 								<div class="flex items-center gap-2 text-sm">
-									<Server size={14} weight="bold" class="text-muted-foreground" />
+									<Stack size={14} weight="bold" class="text-muted-foreground" />
 									Modal runtime
 								</div>
 								<Badge variant="secondary" class="text-[0.65rem] uppercase tracking-[0.18em]">
@@ -146,7 +146,7 @@
 					<Card.Header class="pb-3">
 						<div class="flex items-start gap-4">
 							<div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-muted/70 text-muted-foreground">
-									<Server size={18} weight="bold" />
+									<Stack size={18} weight="bold" />
 							</div>
 							<div class="space-y-1">
 								<p class={headerLabelClass}>Runtime</p>
