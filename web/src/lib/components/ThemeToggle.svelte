@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Moon, Sun } from '@lucide/svelte';
+	import { Moon, Sun } from 'phosphor-svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 
 	let theme = $state('dark');
@@ -39,8 +39,8 @@
 
 <Button variant="ghost" size="icon" onclick={toggleTheme} aria-label="Toggle theme">
 	{#if theme === 'dark'}
-		<Moon size={16} />
+		<Moon size={16} weight="bold" />
 	{:else}
-		<Sun size={16} />
+		<Sun size={16} weight="bold" />
 	{/if}
 </Button>

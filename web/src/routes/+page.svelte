@@ -3,7 +3,7 @@
 	import AgentSettingsModal from '$lib/components/AgentSettingsModal.svelte';
 	import CommandBar from '$lib/components/CommandBar.svelte';
 	import TaskFeed from '$lib/components/TaskFeed.svelte';
-	import { Plus } from '@lucide/svelte';
+	import { Plus } from 'phosphor-svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import type { AgentConfig, ParsedCommand } from '$lib/types/agent';
 	import type { Task } from '$lib/types/task';
@@ -352,11 +352,14 @@
 	};
 
 	const statusStyles: Record<string, string> = {
-		running: 'bg-amber-500/15 text-amber-600 border-transparent',
-		queued: 'bg-muted text-muted-foreground border-transparent',
-		success: 'bg-emerald-500/15 text-emerald-600 border-transparent',
-		failed: 'bg-destructive/15 text-destructive border-transparent'
+		running: 'text-primary',
+		queued: 'text-muted-foreground',
+		success: 'text-emerald-600',
+		failed: 'text-destructive'
 	};
+
+	const filterBaseClass =
+		'gap-2 rounded-md border border-transparent px-3 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.16em] transition';
 
 	let activeFilter = $state('All');
 
@@ -411,56 +414,55 @@
 	const highlightStatus = $derived(activeFilter === 'All' ? null : filterMap[activeFilter]);
 </script>
 
-<div class="flex min-h-full items-center justify-center py-8">
-	<div class="w-full max-w-6xl space-y-6">
+	<div class="flex min-h-full items-center justify-center py-6">
+		<div class="w-full max-w-6xl space-y-5">
+			<section class="flex flex-wrap items-center justify-between gap-3">
+				<div class="flex flex-wrap gap-2 rounded-xl border border-border/60 bg-muted/40 p-1">
+					<Button
+						variant="ghost"
+						size="sm"
+						onclick={() => (activeFilter = 'All')}
+						class={`${filterBaseClass} ${activeFilter === 'All' ? 'border-border/70 bg-background text-foreground shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'text-muted-foreground hover:border-border/50 hover:bg-background/70 hover:text-foreground'}`}
+					>
+						<span>{tasks.length}</span>
+						<span>All</span>
+					</Button>
+					{#each statusPills as pill}
+						<Button
+							variant="ghost"
+							size="sm"
+							onclick={() => (activeFilter = pill.label === 'Completed' ? 'Completed' : pill.label)}
+							class={`${filterBaseClass} ${statusStyles[pill.key]} ${activeFilter === (pill.label === 'Completed' ? 'Completed' : pill.label) ? 'border-border/70 bg-background text-foreground shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'hover:border-border/50 hover:bg-background/70 hover:text-foreground'}`}
+						>
+							<span class="h-2 w-2 rounded-full bg-current/80"></span>
+							<span>{pill.count}</span>
+							<span>{pill.label}</span>
+						</Button>
+					{/each}
+				</div>
+				<div class="flex flex-wrap gap-2">
+					<Button variant="secondary" type="button" onclick={() => (showAgentSettings = true)}>
+						Agents
+					</Button>
+					<Button type="button" onclick={() => (showDispatch = true)}>
+						<Plus size={16} weight="bold" />
+						Dispatch
+						<span class="text-xs opacity-70">⌘K</span>
+					</Button>
+				</div>
+			</section>
 
-<section class="flex flex-wrap items-center justify-between gap-2">
-	<div class="flex flex-wrap gap-2">
-		<Button
-			variant={activeFilter === 'All' ? 'secondary' : 'outline'}
-			size="sm"
-			onclick={() => (activeFilter = 'All')}
-			class="gap-2"
-		>
-			<span>{tasks.length}</span>
-			<span>All</span>
-		</Button>
-		{#each statusPills as pill}
-			<Button
-				variant={activeFilter === (pill.label === 'Completed' ? 'Completed' : pill.label) ? 'secondary' : 'outline'}
-				size="sm"
-				onclick={() => (activeFilter = pill.label === 'Completed' ? 'Completed' : pill.label)}
-				class={`gap-2 ${statusStyles[pill.key]}`}
-			>
-				<span class="h-2 w-2 rounded-full bg-current"></span>
-				<span>{pill.count}</span>
-				<span>{pill.label}</span>
-			</Button>
-		{/each}
+			<section class="px-2">
+				<TaskFeed
+					tasks={filteredTasks}
+					onToggleExpanded={toggleExpanded}
+					onStop={handleStop}
+					onRestart={handleRestart}
+					highlightStatus={highlightStatus}
+				/>
+			</section>
+		</div>
 	</div>
-	<div class="flex flex-wrap gap-2">
-		<Button variant="secondary" type="button" onclick={() => (showAgentSettings = true)}>
-			Agents
-		</Button>
-		<Button type="button" onclick={() => (showDispatch = true)}>
-			<Plus size={16} />
-			Dispatch
-			<span class="text-xs opacity-70">⌘K</span>
-		</Button>
-	</div>
-</section>
-
-<section class="px-2">
-	<TaskFeed
-		tasks={filteredTasks}
-		onToggleExpanded={toggleExpanded}
-		onStop={handleStop}
-		onRestart={handleRestart}
-		highlightStatus={highlightStatus}
-	/>
-</section>
-	</div>
-</div>
 
 <CommandBar bind:open={showDispatch} agents={agentConfig} onsubmit={handleCommandSubmit} />
 <AgentSettingsModal bind:open={showAgentSettings} agents={agentConfig} />

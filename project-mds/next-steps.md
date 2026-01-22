@@ -34,3 +34,9 @@
 ## Notes
 
 - Cloud-native only: remove any local/daemon wording going forward.
+
+## Summary (Latest)
+
+- Settings bento layout + agent configuration refinements.
+- Platform-wide UI polish: tokens, cards, buttons, inputs, and filters.
+- Phosphor icon system adopted across the app.

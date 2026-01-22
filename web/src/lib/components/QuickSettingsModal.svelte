@@ -11,7 +11,7 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Moon, Sun, Github } from '@lucide/svelte';
+	import { GithubLogo, Moon, Sun } from 'phosphor-svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
@@ -123,9 +123,9 @@
 				</div>
 				<Button variant="outline" size="icon" onclick={toggleTheme}>
 					{#if theme === 'dark'}
-						<Moon size={16} />
+							<Moon size={16} weight="bold" />
 					{:else}
-						<Sun size={16} />
+							<Sun size={16} weight="bold" />
 					{/if}
 				</Button>
 			</div>
@@ -137,7 +137,7 @@
 				<Label>GitHub Connection</Label>
 				<div class="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-3">
 					<div class="flex items-center gap-2">
-						<Github size={16} class="text-muted-foreground" />
+							<GithubLogo size={16} weight="bold" class="text-muted-foreground" />
 						{#if github.connected}
 							<div>
 								<p class="text-sm font-medium">Connected</p>

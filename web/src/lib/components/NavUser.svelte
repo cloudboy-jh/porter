@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { ChevronsUpDown, GitBranch, LogOut, Settings, User } from '@lucide/svelte';
+	import { CaretUpDown, Gear, GitBranch, SignOut, User } from 'phosphor-svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Avatar, AvatarFallback, AvatarImage } from '$lib/components/ui/avatar/index.js';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
@@ -35,7 +35,7 @@
 					<span class="text-xs text-sidebar-foreground/60">{user.handle}</span>
 				</div>
 			</div>
-			<ChevronsUpDown class="size-4 text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden" />
+			<CaretUpDown size={16} weight="bold" class="text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden" />
 		</Sidebar.MenuButton>
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Content side="top" align="start" class="w-64">
@@ -61,21 +61,21 @@
 			</div>
 		</div>
 		<DropdownMenu.Item>
-			<GitBranch class="size-4" />
+			<GitBranch size={16} weight="bold" />
 			{github.connected ? 'Disconnect GitHub' : 'Connect GitHub'}
 		</DropdownMenu.Item>
 		<DropdownMenu.Separator />
 		<DropdownMenu.Item onclick={() => goto('/settings')}>
-			<User class="size-4" />
+			<User size={16} weight="bold" />
 			Account
 		</DropdownMenu.Item>
 		<DropdownMenu.Item onclick={() => goto('/settings')}>
-			<Settings class="size-4" />
+			<Gear size={16} weight="bold" />
 			Settings
 		</DropdownMenu.Item>
 		<DropdownMenu.Separator />
 		<DropdownMenu.Item>
-			<LogOut class="size-4" />
+			<SignOut size={16} weight="bold" />
 			Sign out
 		</DropdownMenu.Item>
 	</DropdownMenu.Content>

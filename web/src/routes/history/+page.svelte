@@ -1,18 +1,18 @@
 <script lang="ts">
 	import {
+		ArrowCounterClockwise,
 		ArrowUpRight,
-		CheckCircle2,
-		Clock3,
-		Download,
-		FilterX,
+		CaretDown,
+		CaretUp,
+		CheckCircle,
+		Clock,
+		DownloadSimple,
+		FunnelX,
 		GitPullRequest,
-		Plus,
+		MagnifyingGlass,
 		Percent,
-		RotateCcw,
-		Search,
-		ChevronDown,
-		ChevronUp
-	} from '@lucide/svelte';
+		Plus
+	} from 'phosphor-svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
@@ -33,9 +33,12 @@
 		`https://www.google.com/s2/favicons?domain=${agentDomains[agent] ?? 'github.com'}&sz=64`;
 
 	const statusStyles: Record<string, string> = {
-		success: 'bg-emerald-500/15 text-emerald-600 border-transparent',
-		failed: 'bg-destructive/15 text-destructive border-transparent'
+		success: 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-600',
+		failed: 'border border-destructive/30 bg-destructive/10 text-destructive'
 	};
+
+	const filterBaseClass =
+		'gap-2 rounded-md border border-transparent px-3 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.16em] transition';
 
 	const formatRelativeTime = (iso?: string) => {
 		if (!iso) return '—';
@@ -197,7 +200,7 @@
 		}, {})
 	);
 
-	const statCards: Array<{ label: string; value: string; icon: typeof CheckCircle2; tone: string }> = $derived(
+	const statCards: Array<{ label: string; value: string; icon: typeof CheckCircle; tone: string }> = $derived(
 		(() => {
 			const total = totalTasks || historyTasks.length;
 			const success = statusCounts.success ?? 0;
@@ -218,26 +221,26 @@
 				{
 					label: 'Completed',
 					value: total.toString(),
-					icon: CheckCircle2,
+					icon: CheckCircle,
 					tone: 'text-emerald-600 bg-emerald-500/10'
 				},
 				{
 					label: 'Success Rate',
 					value: `${successRate}%`,
 					icon: Percent,
-					tone: 'text-sky-600 bg-sky-500/10'
+					tone: 'text-primary bg-primary/10'
 				},
 				{
 					label: 'Avg Time',
 					value: averageDuration ? `${averageDuration}m` : '—',
-					icon: Clock3,
+					icon: Clock,
 					tone: 'text-amber-600 bg-amber-500/10'
 				},
 				{
 					label: 'PRs Created',
 					value: prs.toString(),
 					icon: GitPullRequest,
-					tone: 'text-indigo-600 bg-indigo-500/10'
+					tone: 'text-foreground/80 bg-muted/60'
 				}
 			];
 		})()
@@ -262,15 +265,14 @@
 		<div class="space-y-1">
 			<p class="text-xs text-muted-foreground">Porter › Task History</p>
 			<h1 class="text-2xl font-semibold text-foreground">Task History</h1>
-			<p class="text-sm text-muted-foreground">Review finished tasks and outcomes.</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
 			<Button variant="secondary" type="button" onclick={handleExport}>
-				<Download size={16} />
+				<DownloadSimple size={16} weight="bold" />
 				Export
 			</Button>
 			<Button type="button">
-				<Plus size={16} />
+				<Plus size={16} weight="bold" />
 				New Task
 			</Button>
 		</div>
@@ -285,7 +287,7 @@
 						<div class="text-xs text-muted-foreground">{stat.label}</div>
 					</div>
 					<div class={`flex h-9 w-9 items-center justify-center rounded-lg ${stat.tone}`}>
-						<svelte:component this={stat.icon} size={18} />
+								<svelte:component this={stat.icon} size={18} weight="bold" />
 					</div>
 				</Card.Content>
 			</Card.Root>
@@ -298,39 +300,39 @@
 				<Card.Header class="flex flex-row items-center justify-between pb-2">
 					<Card.Title class="text-sm">Filters</Card.Title>
 					<Button variant="ghost" size="icon" onclick={resetFilters}>
-						<FilterX size={16} />
+						<FunnelX size={16} weight="bold" />
 					</Button>
 				</Card.Header>
 				<Card.Content class="space-y-4">
 					<div class="space-y-2">
 						<p class="text-xs uppercase text-muted-foreground">Status</p>
-						<div class="flex flex-wrap gap-2">
+						<div class="flex flex-wrap gap-2 rounded-xl border border-border/60 bg-muted/40 p-1">
 							<Button
-								variant={activeStatus === 'all' ? 'secondary' : 'outline'}
+								variant="ghost"
 								size="sm"
 								onclick={() => (activeStatus = 'all')}
-								class="gap-2"
+								class={`${filterBaseClass} ${activeStatus === 'all' ? 'border-border/70 bg-background text-foreground shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'text-muted-foreground hover:border-border/50 hover:bg-background/70 hover:text-foreground'}`}
 							>
 								<span>{totalTasks || historyTasks.length}</span>
 								<span>All</span>
 							</Button>
 							<Button
-								variant={activeStatus === 'success' ? 'secondary' : 'outline'}
+								variant="ghost"
 								size="sm"
 								onclick={() => (activeStatus = 'success')}
-								class={`gap-2 ${statusStyles.success}`}
+								class={`${filterBaseClass} ${activeStatus === 'success' ? 'border-emerald-500/30 bg-background text-emerald-700 shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'text-emerald-700/70 hover:border-emerald-500/30 hover:bg-background/70'}`}
 							>
-								<span class="h-2 w-2 rounded-full bg-current"></span>
+								<span class="h-2 w-2 rounded-full bg-current/80"></span>
 								<span>{statusCounts.success ?? 0}</span>
 								<span>Success</span>
 							</Button>
 							<Button
-								variant={activeStatus === 'failed' ? 'secondary' : 'outline'}
+								variant="ghost"
 								size="sm"
 								onclick={() => (activeStatus = 'failed')}
-								class={`gap-2 ${statusStyles.failed}`}
+								class={`${filterBaseClass} ${activeStatus === 'failed' ? 'border-destructive/30 bg-background text-destructive shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'text-destructive/70 hover:border-destructive/30 hover:bg-background/70'}`}
 							>
-								<span class="h-2 w-2 rounded-full bg-current"></span>
+								<span class="h-2 w-2 rounded-full bg-current/80"></span>
 								<span>{statusCounts.failed ?? 0}</span>
 								<span>Failed</span>
 							</Button>
@@ -339,11 +341,11 @@
 					<div class="space-y-2">
 						<p class="text-xs uppercase text-muted-foreground">Search</p>
 						<div class="relative">
-							<Search size={16} class="absolute left-3 top-3 text-muted-foreground" />
+						<MagnifyingGlass size={16} weight="bold" class="absolute left-3 top-3 text-muted-foreground" />
 							<Input
 								value={searchInput}
 								placeholder="Search by issue or title"
-								class="pl-9"
+								class="pl-9 bg-background/80 border-border/70 focus-visible:ring-ring/30"
 								oninput={(event) => handleSearchChange((event.currentTarget as HTMLInputElement).value)}
 							/>
 						</div>
@@ -351,7 +353,7 @@
 					<div class="space-y-2">
 						<p class="text-xs uppercase text-muted-foreground">Agent</p>
 						<select
-							class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+							class="h-10 w-full rounded-lg border border-border/70 bg-background/80 px-3 text-sm text-foreground transition focus:outline-none focus:ring-2 focus:ring-ring/30"
 							bind:value={selectedAgent}
 						>
 							{#each availableAgents as agent}
@@ -362,7 +364,7 @@
 					<div class="space-y-2">
 						<p class="text-xs uppercase text-muted-foreground">Repository</p>
 						<select
-							class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+							class="h-10 w-full rounded-lg border border-border/70 bg-background/80 px-3 text-sm text-foreground transition focus:outline-none focus:ring-2 focus:ring-ring/30"
 							bind:value={selectedRepo}
 						>
 							{#each availableRepos as repo}
@@ -375,12 +377,12 @@
 						<div class="grid grid-cols-2 gap-2">
 							<input
 								type="date"
-								class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+								class="h-10 rounded-lg border border-border/70 bg-background/80 px-3 text-sm text-foreground transition focus:outline-none focus:ring-2 focus:ring-ring/30"
 								bind:value={dateFrom}
 							/>
 							<input
 								type="date"
-								class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+								class="h-10 rounded-lg border border-border/70 bg-background/80 px-3 text-sm text-foreground transition focus:outline-none focus:ring-2 focus:ring-ring/30"
 								bind:value={dateTo}
 							/>
 						</div>
@@ -434,9 +436,9 @@
 					onkeydown={(event: KeyboardEvent) => handleRowKey(event, task.id)}
 				>
 					<Card.Content class="grid min-h-[72px] grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 py-3">
-						<Badge class={statusStyles[task.status]}>
-							{task.status === 'success' ? 'DONE' : 'FAIL'}
-						</Badge>
+					<Badge class={`text-[0.65rem] font-semibold uppercase tracking-[0.18em] ${statusStyles[task.status]}`}>
+						{task.status === 'success' ? 'DONE' : 'FAIL'}
+					</Badge>
 						<div>
 							<div class="font-medium">{task.issueTitle}</div>
 							<div class="text-xs text-muted-foreground">
@@ -459,10 +461,10 @@
 								View
 							</Button>
 							{#if expandedTasks[task.id]}
-								<ChevronUp size={16} class="text-muted-foreground" />
-							{:else}
-								<ChevronDown size={16} class="text-muted-foreground" />
-							{/if}
+									<CaretUp size={16} weight="bold" class="text-muted-foreground" />
+								{:else}
+									<CaretDown size={16} weight="bold" class="text-muted-foreground" />
+								{/if}
 						</div>
 					</Card.Content>
 				</Card.Root>
@@ -517,14 +519,14 @@
 							</Card.Root>
 
 							<div class="flex flex-wrap gap-2">
-								<Button variant="secondary" size="sm">
-									<RotateCcw size={14} />
-									Retry
-								</Button>
-								<Button variant="secondary" size="sm" disabled={!task.prNumber}>
-									<ArrowUpRight size={14} />
-									View PR
-								</Button>
+						<Button variant="secondary" size="sm">
+							<ArrowCounterClockwise size={14} weight="bold" />
+							Retry
+						</Button>
+						<Button variant="secondary" size="sm" disabled={!task.prNumber}>
+							<ArrowUpRight size={14} weight="bold" />
+							View PR
+						</Button>
 							</div>
 						</Card.Content>
 					</Card.Root>

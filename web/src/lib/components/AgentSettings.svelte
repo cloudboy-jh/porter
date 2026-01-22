@@ -15,7 +15,7 @@
 	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import type { AgentConfig } from '$lib/types/agent';
-	import { Clock, Target, TrendingUp } from '@lucide/svelte';
+	import { Clock, Target, TrendUp } from 'phosphor-svelte';
 
 	let {
 		agents = $bindable([] as AgentConfig[]),
@@ -44,6 +44,14 @@
 
 	const updatePrompt = (name: string, customPrompt: string) => {
 		agents = agents.map((agent) => (agent.name === name ? { ...agent, customPrompt } : agent));
+	};
+
+	let expandedPrompts = $state<Record<string, boolean>>({});
+
+	const isPromptExpanded = (name: string) => expandedPrompts[name] ?? false;
+
+	const togglePrompt = (name: string) => {
+		expandedPrompts = { ...expandedPrompts, [name]: !isPromptExpanded(name) };
 	};
 
 	const handleSave = () => {
@@ -78,7 +86,6 @@
 			<div class="flex items-center justify-between">
 				<div>
 					<Card.Title class="text-sm">Agent Configuration</Card.Title>
-					<Card.Description>Set priority and prompt defaults per agent</Card.Description>
 				</div>
 				<Button variant="secondary" size="sm" type="button" onclick={handleRefresh}>
 					Refresh
@@ -135,7 +142,7 @@
 								<div class="grid grid-cols-3 gap-4 text-sm">
 									{#if agent.taskCount !== undefined}
 										<div class="flex items-center gap-2">
-											<Target size={14} class="text-muted-foreground" />
+										<Target size={14} weight="bold" class="text-muted-foreground" />
 											<div>
 												<p class="text-xs text-muted-foreground">Tasks</p>
 												<p class="font-medium font-mono">{agent.taskCount}</p>
@@ -155,7 +162,7 @@
 									{/if}
 									{#if agent.lastUsed}
 										<div class="flex items-center gap-2">
-											<Clock size={14} class="text-muted-foreground" />
+										<Clock size={14} weight="bold" class="text-muted-foreground" />
 											<div>
 												<p class="text-xs text-muted-foreground">Last Used</p>
 												<p class="font-medium">{agent.lastUsed}</p>
@@ -176,13 +183,13 @@
 										onValueChange={(value) =>
 											updatePriority(agent.name, value as AgentConfig['priority'])
 										}
-										class="flex gap-2"
+										class="grid grid-cols-3 gap-1 rounded-lg border border-border/60 bg-muted/40 p-1"
 										disabled={!agent.enabled}
 									>
 										<label class="flex-1 cursor-pointer">
 											<RadioGroup.Item value="low" class="peer sr-only" />
 											<div
-												class="rounded-md border border-border px-3 py-2 text-center text-xs font-medium peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+												class="rounded-md px-3 py-2 text-center text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
 											>
 												Low
 											</div>
@@ -190,7 +197,7 @@
 										<label class="flex-1 cursor-pointer">
 											<RadioGroup.Item value="normal" class="peer sr-only" />
 											<div
-												class="rounded-md border border-border px-3 py-2 text-center text-xs font-medium peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+												class="rounded-md px-3 py-2 text-center text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
 											>
 												Normal
 											</div>
@@ -198,7 +205,7 @@
 										<label class="flex-1 cursor-pointer">
 											<RadioGroup.Item value="high" class="peer sr-only" />
 											<div
-												class="rounded-md border border-border px-3 py-2 text-center text-xs font-medium peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+												class="rounded-md px-3 py-2 text-center text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
 											>
 												High
 											</div>
@@ -206,22 +213,41 @@
 									</RadioGroup.Root>
 								</div>
 								<div class="space-y-2">
-									<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-										Custom Prompt
-									</p>
-									<p class="text-xs text-muted-foreground">
-										Appended to every run for this agent.
-									</p>
-									<textarea
-										value={agent.customPrompt ?? ''}
-										placeholder="Add default instructions for this agent..."
-										rows="3"
-										class="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-										oninput={(event) =>
-											updatePrompt(agent.name, (event.target as HTMLTextAreaElement).value)
-										}
-										disabled={!agent.enabled}
-									></textarea>
+									<div class="flex items-center justify-between">
+										<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+											Custom Prompt
+										</p>
+										<button
+											type="button"
+											class="text-xs font-semibold text-foreground/70 transition hover:text-foreground"
+											onclick={() => togglePrompt(agent.name)}
+											disabled={!agent.enabled}
+										>
+											{isPromptExpanded(agent.name) ? 'Collapse' : 'Expand'}
+										</button>
+									</div>
+									{#if isPromptExpanded(agent.name)}
+										<textarea
+											value={agent.customPrompt ?? ''}
+											placeholder="Add default instructions for this agent..."
+											rows="3"
+											class="w-full resize-none rounded-lg border border-border/70 bg-background px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
+											oninput={(event) =>
+												updatePrompt(agent.name, (event.target as HTMLTextAreaElement).value)
+											}
+											disabled={!agent.enabled}
+										></textarea>
+									{:else}
+										<input
+											value={agent.customPrompt ?? ''}
+											placeholder="Add default instructions..."
+											class="w-full rounded-lg border border-border/70 bg-background px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
+											oninput={(event) =>
+												updatePrompt(agent.name, (event.target as HTMLInputElement).value)
+											}
+											disabled={!agent.enabled}
+										/>
+									{/if}
 								</div>
 							</div>
 						</div>
@@ -287,7 +313,7 @@
 							<div class="grid grid-cols-3 gap-4 text-sm">
 								{#if agent.taskCount !== undefined}
 									<div class="flex items-center gap-2">
-										<Target size={14} class="text-muted-foreground" />
+										<Target size={14} weight="bold" class="text-muted-foreground" />
 										<div>
 											<p class="text-xs text-muted-foreground">Tasks</p>
 											<p class="font-medium font-mono">{agent.taskCount}</p>
@@ -296,7 +322,7 @@
 								{/if}
 								{#if agent.successRate !== undefined}
 									<div class="flex items-center gap-2">
-										<TrendingUp size={14} class="text-emerald-600" />
+										<TrendUp size={14} weight="bold" class="text-emerald-600" />
 										<div>
 											<p class="text-xs text-muted-foreground">Success</p>
 											<p class="font-medium font-mono text-emerald-600">
@@ -307,7 +333,7 @@
 								{/if}
 								{#if agent.lastUsed}
 									<div class="flex items-center gap-2">
-										<Clock size={14} class="text-muted-foreground" />
+										<Clock size={14} weight="bold" class="text-muted-foreground" />
 										<div>
 											<p class="text-xs text-muted-foreground">Last Used</p>
 											<p class="font-medium">{agent.lastUsed}</p>
@@ -328,13 +354,13 @@
 									onValueChange={(value) =>
 										updatePriority(agent.name, value as AgentConfig['priority'])
 									}
-									class="flex gap-2"
+									class="grid grid-cols-3 gap-1 rounded-lg border border-border/60 bg-muted/40 p-1"
 									disabled={!agent.enabled}
 								>
 									<label class="flex-1 cursor-pointer">
 										<RadioGroup.Item value="low" class="peer sr-only" />
 										<div
-											class="rounded-md border border-border px-3 py-2 text-center text-xs font-medium peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+											class="rounded-md px-3 py-2 text-center text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
 										>
 											Low
 										</div>
@@ -342,7 +368,7 @@
 									<label class="flex-1 cursor-pointer">
 										<RadioGroup.Item value="normal" class="peer sr-only" />
 										<div
-											class="rounded-md border border-border px-3 py-2 text-center text-xs font-medium peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+											class="rounded-md px-3 py-2 text-center text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
 										>
 											Normal
 										</div>
@@ -350,7 +376,7 @@
 									<label class="flex-1 cursor-pointer">
 										<RadioGroup.Item value="high" class="peer sr-only" />
 										<div
-											class="rounded-md border border-border px-3 py-2 text-center text-xs font-medium peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+											class="rounded-md px-3 py-2 text-center text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
 										>
 											High
 										</div>
@@ -358,22 +384,41 @@
 								</RadioGroup.Root>
 							</div>
 							<div class="space-y-2">
-								<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-									Custom Prompt
-								</p>
-								<p class="text-xs text-muted-foreground">
-									Appended to every run for this agent.
-								</p>
-								<textarea
-									value={agent.customPrompt ?? ''}
-									placeholder="Add default instructions for this agent..."
-									rows="3"
-									class="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-									oninput={(event) =>
-										updatePrompt(agent.name, (event.target as HTMLTextAreaElement).value)
-									}
-									disabled={!agent.enabled}
-								></textarea>
+								<div class="flex items-center justify-between">
+									<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+										Custom Prompt
+									</p>
+									<button
+										type="button"
+										class="text-xs font-semibold text-foreground/70 transition hover:text-foreground"
+										onclick={() => togglePrompt(agent.name)}
+										disabled={!agent.enabled}
+									>
+										{isPromptExpanded(agent.name) ? 'Collapse' : 'Expand'}
+									</button>
+								</div>
+								{#if isPromptExpanded(agent.name)}
+									<textarea
+										value={agent.customPrompt ?? ''}
+										placeholder="Add default instructions for this agent..."
+										rows="3"
+										class="w-full resize-none rounded-lg border border-border/70 bg-background px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
+										oninput={(event) =>
+											updatePrompt(agent.name, (event.target as HTMLTextAreaElement).value)
+										}
+										disabled={!agent.enabled}
+									></textarea>
+								{:else}
+									<input
+										value={agent.customPrompt ?? ''}
+										placeholder="Add default instructions..."
+										class="w-full rounded-lg border border-border/70 bg-background px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
+										oninput={(event) =>
+											updatePrompt(agent.name, (event.target as HTMLInputElement).value)
+										}
+										disabled={!agent.enabled}
+									/>
+								{/if}
 							</div>
 						</div>
 					</div>

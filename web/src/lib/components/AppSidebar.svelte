@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { History, LayoutDashboard, Settings, Zap } from '@lucide/svelte';
+	import { ClockCounterClockwise, Gear, Lightning, SquaresFour } from 'phosphor-svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -13,11 +13,11 @@
 	let showQuickSettings = $state(false);
 
 	const navItems = [
-		{ label: 'Dashboard', href: '/', icon: LayoutDashboard, action: null as (() => void) | null, shortcut: null as string | null },
-		{ label: 'History', href: '/history', icon: History, action: null as (() => void) | null, shortcut: null as string | null },
-		{ label: 'Quick Settings', href: null as string | null, icon: Zap, action: () => showQuickSettings = true, shortcut: '⌘,' },
-		{ label: 'Settings', href: '/settings', icon: Settings, action: null as (() => void) | null, shortcut: null as string | null }
-	];
+		{ label: 'Dashboard', href: '/', icon: SquaresFour, action: null as (() => void) | null, shortcut: null as string | null },
+		{ label: 'History', href: '/history', icon: ClockCounterClockwise, action: null as (() => void) | null, shortcut: null as string | null },
+		{ label: 'Quick Settings', href: null as string | null, icon: Lightning, action: () => showQuickSettings = true, shortcut: '⌘,' },
+		{ label: 'Settings', href: '/settings', icon: Gear, action: null as (() => void) | null, shortcut: null as string | null }
+	] as const;
 
 	const agents = [
 		{ name: 'opencode', count: 2, domain: 'opencode.ai' },
@@ -50,82 +50,96 @@
 </script>
 
 <Sidebar.Root variant="inset" collapsible="icon">
-	<Sidebar.Header class="flex h-16 items-center border-b border-sidebar-border px-6">
+<Sidebar.Header class="flex h-16 items-center border-b border-sidebar-border px-6 group-data-[collapsible=icon]:px-3">
 		<Sidebar.Menu>
 			<Sidebar.MenuItem>
-				<Sidebar.MenuButton size="lg" class="gap-3" onclick={() => goto('/')}>
-					<div class="flex size-8 items-center justify-center rounded-lg">
-						<img class="h-5 w-5" src={logoMain} alt="Porter logo" />
-					</div>
-					<div class="flex flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">
-						<span class="font-medium">Porter</span>
-						<span class="text-xs text-sidebar-foreground/60">Task Orchestrator</span>
-					</div>
-				</Sidebar.MenuButton>
+			<Sidebar.MenuButton
+				size="lg"
+				class="gap-3 group-data-[collapsible=icon]:justify-center"
+				onclick={() => goto('/')}
+			>
+				<div class="flex size-8 items-center justify-center rounded-xl border border-sidebar-border/60 bg-sidebar-accent/60 group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-9">
+					<img class="h-5 w-5" src={logoMain} alt="Porter logo" />
+				</div>
+				<div class="flex flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">
+					<span class="text-sm font-semibold tracking-[0.18em] uppercase">Porter</span>
+				</div>
+			</Sidebar.MenuButton>
 			</Sidebar.MenuItem>
 		</Sidebar.Menu>
 	</Sidebar.Header>
 	<Sidebar.Content class="gap-6 py-4">
 		<Sidebar.Group>
-			<Sidebar.GroupLabel>Platform</Sidebar.GroupLabel>
+		<Sidebar.GroupLabel class="text-[0.65rem] font-semibold uppercase tracking-[0.18em]">
+			Platform
+		</Sidebar.GroupLabel>
 			<Sidebar.GroupContent>
 				<Sidebar.Menu>
 					{#each navItems as item}
 						<Sidebar.MenuItem>
-							<Sidebar.MenuButton
-								tooltipContent={item.label}
-								isActive={item.href ? $page.url.pathname === item.href : false}
-								onclick={() => item.action ? item.action() : item.href && goto(item.href)}
-							>
-								<item.icon />
-								<span>{item.label}</span>
-								{#if item.shortcut}
-									<span class="ml-auto text-xs text-sidebar-foreground/60">{item.shortcut}</span>
-								{/if}
-							</Sidebar.MenuButton>
-						</Sidebar.MenuItem>
-					{/each}
+						<Sidebar.MenuButton
+							tooltipContent={item.label}
+							isActive={item.href ? $page.url.pathname === item.href : false}
+							onclick={() => item.action ? item.action() : item.href && goto(item.href)}
+							class="rounded-lg border border-transparent transition hover:border-sidebar-border/60 hover:bg-sidebar-accent/70"
+						>
+						<svelte:component this={item.icon} size={16} weight="bold" />
+							<span>{item.label}</span>
+							{#if item.shortcut}
+								<span class="ml-auto text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/60">
+									{item.shortcut}
+								</span>
+							{/if}
+						</Sidebar.MenuButton>
+					</Sidebar.MenuItem>
+				{/each}
 				</Sidebar.Menu>
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
 		<Sidebar.Separator />
 		<Sidebar.Group class="group-data-[collapsible=icon]:hidden">
-			<Sidebar.GroupLabel>Agents</Sidebar.GroupLabel>
+		<Sidebar.GroupLabel class="text-[0.65rem] font-semibold uppercase tracking-[0.18em]">
+			Agents
+		</Sidebar.GroupLabel>
 			<Sidebar.GroupContent>
 				<div class="grid gap-2">
 					{#each agents as agent}
-						<button
-							class="flex items-center gap-2 text-sm rounded-md px-2 py-1.5 transition hover:bg-sidebar-accent"
-							onclick={() => agent.count > 0 ? (selectedAgent = agent) : null}
+					<button
+						class="flex items-center gap-3 rounded-lg border border-sidebar-border/60 bg-sidebar-accent/60 px-2 py-1.5 text-sm transition hover:border-sidebar-border hover:bg-sidebar-accent"
+						onclick={() => agent.count > 0 ? (selectedAgent = agent) : null}
 							disabled={agent.count === 0}
 							class:opacity-50={agent.count === 0}
 							class:cursor-not-allowed={agent.count === 0}
 						>
-							<img class="h-7 w-7 rounded-full" src={getAgentIcon(agent.domain)} alt="" />
-							<span class="flex-1 capitalize text-sidebar-foreground/80 font-mono text-left">
-								{agent.name}
+						<img class="h-7 w-7 rounded-lg border border-sidebar-border/60" src={getAgentIcon(agent.domain)} alt="" />
+						<span class="flex-1 capitalize text-sidebar-foreground/80 font-mono text-left">
+							{agent.name}
+						</span>
+						{#if agent.count}
+							<span
+								class="rounded-full border border-sidebar-border/60 bg-sidebar px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/70"
+							>
+								{agent.count}
 							</span>
-							{#if agent.count}
-								<span
-									class="rounded-full bg-sidebar-accent px-2 py-0.5 text-xs text-sidebar-foreground/70 font-mono"
-								>
-									{agent.count}
-								</span>
-							{/if}
-						</button>
+						{/if}
+					</button>
 					{/each}
 				</div>
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
 		<Sidebar.Separator class="group-data-[collapsible=icon]:hidden" />
 		<Sidebar.Group class="group-data-[collapsible=icon]:hidden">
-			<Sidebar.GroupLabel>Stats</Sidebar.GroupLabel>
+		<Sidebar.GroupLabel class="text-[0.65rem] font-semibold uppercase tracking-[0.18em]">
+			Stats
+		</Sidebar.GroupLabel>
 			<Sidebar.GroupContent>
 				<div class="grid grid-cols-2 gap-2">
 					{#each stats as stat}
-						<div class="rounded-md border border-sidebar-border bg-sidebar-accent p-2">
+						<div class="rounded-lg border border-sidebar-border/60 bg-sidebar-accent/70 p-2">
 							<div class="text-sm font-semibold text-sidebar-foreground">{stat.value}</div>
-							<div class="text-xs text-sidebar-foreground/60">{stat.label}</div>
+							<div class="text-[0.65rem] uppercase tracking-[0.18em] text-sidebar-foreground/60">
+								{stat.label}
+							</div>
 						</div>
 					{/each}
 				</div>
@@ -148,12 +162,11 @@
 				{#if selectedAgent}
 					<img class="h-6 w-6 rounded-full" src={getAgentIcon(selectedAgent.domain)} alt="" />
 					<span class="capitalize">{selectedAgent.name}</span>
-					<Badge variant="secondary">{selectedAgent.count} task{selectedAgent.count !== 1 ? 's' : ''}</Badge>
+					<Badge variant="outline" class="text-[0.65rem] uppercase tracking-[0.18em]">
+						{selectedAgent.count} task{selectedAgent.count !== 1 ? 's' : ''}
+					</Badge>
 				{/if}
 			</Dialog.Title>
-			<Dialog.Description>
-				Active tasks running on this agent
-			</Dialog.Description>
 		</Dialog.Header>
 		<div class="space-y-2">
 			{#if selectedAgent}
@@ -166,7 +179,14 @@
 									{task.repo} • Issue {task.issue}
 								</p>
 							</div>
-							<Badge variant={task.status === 'running' ? 'default' : 'destructive'}>
+							<Badge
+								variant="outline"
+								class={
+									task.status === 'running'
+										? 'border-primary/40 bg-primary/10 text-primary'
+										: 'border-destructive/40 bg-destructive/10 text-destructive'
+								}
+							>
 								{task.status}
 							</Badge>
 						</div>

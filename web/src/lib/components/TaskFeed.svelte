@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { ArrowUpRight, FolderGit2, Github, GitBranch, RotateCcw, Square } from '@lucide/svelte';
+	import {
+		ArrowCounterClockwise,
+		ArrowUpRight,
+		Folder,
+		GithubLogo,
+		GitBranch,
+		Square
+	} from 'phosphor-svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
@@ -49,24 +56,24 @@
 	};
 
 	const nodeStyles: Record<Task['status'], string> = {
-		running: 'border-amber-400/70 bg-amber-500/15 text-amber-200',
-		queued: 'border-slate-500/55 bg-slate-500/15 text-slate-200',
-		success: 'border-emerald-400/70 bg-emerald-500/15 text-emerald-200',
-		failed: 'border-rose-400/70 bg-rose-500/15 text-rose-200'
+		running: 'border-primary/70 bg-primary/15 text-primary',
+		queued: 'border-border/70 bg-muted/70 text-muted-foreground',
+		success: 'border-emerald-400/70 bg-emerald-500/12 text-emerald-200',
+		failed: 'border-rose-400/70 bg-rose-500/12 text-rose-200'
 	};
 
 	const nodeGlow: Record<Task['status'], string> = {
-		running: 'shadow-[0_0_0_3px_rgba(251,191,36,0.18),0_0_20px_rgba(251,191,36,0.45)]',
-		queued: 'shadow-[0_0_0_3px_rgba(148,163,184,0.16),0_0_16px_rgba(148,163,184,0.3)]',
-		success: 'shadow-[0_0_0_3px_rgba(52,211,153,0.18),0_0_20px_rgba(52,211,153,0.45)]',
-		failed: 'shadow-[0_0_0_3px_rgba(251,113,133,0.18),0_0_20px_rgba(251,113,133,0.45)]'
+		running: 'shadow-[0_0_0_2px_rgba(251,146,60,0.2)]',
+		queued: 'shadow-[0_0_0_2px_rgba(160,150,140,0.2)]',
+		success: 'shadow-[0_0_0_2px_rgba(52,211,153,0.2)]',
+		failed: 'shadow-[0_0_0_2px_rgba(251,113,133,0.2)]'
 	};
 
 	const lineGlow: Record<Task['status'], string> = {
-		running: 'bg-gradient-to-b from-amber-400/70 via-amber-400/45 to-transparent',
-		queued: 'bg-gradient-to-b from-slate-400/55 via-slate-400/30 to-transparent',
-		success: 'bg-gradient-to-b from-emerald-400/70 via-emerald-400/45 to-transparent',
-		failed: 'bg-gradient-to-b from-rose-400/70 via-rose-400/45 to-transparent'
+		running: 'bg-gradient-to-b from-primary/60 via-primary/30 to-transparent',
+		queued: 'bg-gradient-to-b from-border/80 via-border/40 to-transparent',
+		success: 'bg-gradient-to-b from-emerald-400/60 via-emerald-400/30 to-transparent',
+		failed: 'bg-gradient-to-b from-rose-400/60 via-rose-400/30 to-transparent'
 	};
 
 	const isHighlighted = (task: Task) =>
@@ -75,7 +82,7 @@
 
 <div class="mt-2 max-h-[80vh] overflow-y-auto pr-1 hide-scrollbar">
 	<div class="relative">
-		<div class="pointer-events-none absolute left-5 top-0 h-full w-0.5 bg-gradient-to-b from-border/80 via-border/70 to-transparent"></div>
+		<div class="pointer-events-none absolute left-5 top-0 h-full w-0.5 bg-gradient-to-b from-border/80 via-border/50 to-transparent"></div>
 		<div class="space-y-8">
 			{#each tasks as task}
 				<div class="relative pl-10">
@@ -83,9 +90,9 @@
 						<span class={`pointer-events-none absolute left-5 top-2 h-[calc(100%-0.75rem)] w-0.5 ${lineGlow[task.status]}`}></span>
 					{/if}
 					<div
-						class={`absolute left-3 top-6 flex h-4 w-4 items-center justify-center rounded-[6px] border ${nodeStyles[task.status]} ${isHighlighted(task) ? nodeGlow[task.status] : ''} ${task.status === 'running' ? 'animate-[pulse_4.32s_ease-in-out_infinite]' : ''}`}
+						class={`absolute left-3 top-6 flex h-4 w-4 items-center justify-center rounded-[6px] border ${nodeStyles[task.status]} ${isHighlighted(task) ? nodeGlow[task.status] : ''}`}
 					>
-						<span class="h-1.5 w-1.5 rounded-[3px] bg-current/80"></span>
+						<span class="h-1.5 w-1.5 rounded-[3px] bg-current/70"></span>
 					</div>
 					<Card.Root
 						class={`group task-card task-card--${task.status} rounded-2xl border border-border/60 bg-background/80 ${task.expanded ? 'is-expanded' : ''}`}
@@ -187,14 +194,14 @@
 									<div>
 										<p class="text-xs uppercase text-muted-foreground">Repository</p>
 										<p class="flex items-center gap-2 text-sm font-medium">
-											<FolderGit2 size={14} class="text-muted-foreground" />
+									<Folder size={14} weight="bold" class="text-muted-foreground" />
 											jackgolding/{task.repo}
 										</p>
 									</div>
 									<div>
 										<p class="text-xs uppercase text-muted-foreground">Branch</p>
 										<p class="flex items-center gap-2 text-sm font-medium">
-											<GitBranch size={14} class="text-muted-foreground" />
+									<GitBranch size={14} weight="bold" class="text-muted-foreground" />
 											{task.branch ?? 'main'}
 										</p>
 									</div>
@@ -239,7 +246,7 @@
 										size="sm"
 										onclick={(event: MouseEvent) => handleStopClick(event, task.id)}
 									>
-										<Square size={14} />
+									<Square size={14} weight="bold" />
 										Stop
 									</Button>
 									<Button
@@ -247,7 +254,7 @@
 										size="sm"
 										onclick={(event: MouseEvent) => handleRestartClick(event, task.id)}
 									>
-										<RotateCcw size={14} />
+									<ArrowCounterClockwise size={14} weight="bold" />
 										Restart
 									</Button>
 						<Button
@@ -261,8 +268,8 @@
 								);
 							}}
 						>
-							<Github size={14} />
-							<ArrowUpRight size={14} />
+							<GithubLogo size={14} weight="bold" />
+									<ArrowUpRight size={14} weight="bold" />
 							View in GitHub
 						</Button>
 								</div>

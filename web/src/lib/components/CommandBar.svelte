@@ -1,6 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Check, ChevronDown, ChevronUp, Clock, Command, ExternalLink, GitBranch, Sparkles, X } from '@lucide/svelte';
+	import {
+		ArrowSquareOut,
+		CaretDown,
+		CaretUp,
+		Check,
+		Clock,
+		Command,
+		GitBranch,
+		Sparkle,
+		X
+	} from 'phosphor-svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -281,7 +291,7 @@
 						class="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
 					>
 						View on GitHub
-						<ExternalLink size={12} />
+							<ArrowSquareOut size={12} weight="bold" />
 					</a>
 				</div>
 			{/if}
@@ -294,9 +304,9 @@
 			>
 				Advanced Options
 				{#if showAdvanced}
-					<ChevronUp size={16} />
+					<CaretUp size={16} weight="bold" />
 				{:else}
-					<ChevronDown size={16} />
+					<CaretDown size={16} weight="bold" />
 				{/if}
 			</button>
 
@@ -347,12 +357,12 @@
 				onclick={() => showTemplates = !showTemplates}
 				class="flex items-center gap-2 text-sm font-medium py-2"
 			>
-				<Sparkles size={16} />
+				<Sparkle size={16} weight="bold" />
 				Use Template
 				{#if showTemplates}
-					<ChevronUp size={16} class="ml-auto" />
+					<CaretUp size={16} weight="bold" class="ml-auto" />
 				{:else}
-					<ChevronDown size={16} class="ml-auto" />
+					<CaretDown size={16} weight="bold" class="ml-auto" />
 				{/if}
 			</button>
 
@@ -364,7 +374,7 @@
 							onclick={() => useTemplate(template)}
 							class="flex items-start gap-3 rounded-lg border border-border p-3 text-left transition hover:bg-muted/50"
 						>
-							<Sparkles size={16} class="mt-0.5 text-muted-foreground" />
+							<Sparkle size={16} weight="bold" class="mt-0.5 text-muted-foreground" />
 							<div class="flex-1">
 								<p class="font-medium text-sm">{template.name}</p>
 								<p class="text-xs text-muted-foreground">{template.description}</p>
@@ -387,9 +397,9 @@
 					<Clock size={16} />
 					Recent Commands
 					{#if showRecent}
-						<ChevronUp size={16} class="ml-auto" />
+					<CaretUp size={16} weight="bold" class="ml-auto" />
 					{:else}
-						<ChevronDown size={16} class="ml-auto" />
+					<CaretDown size={16} weight="bold" class="ml-auto" />
 					{/if}
 				</button>
 
