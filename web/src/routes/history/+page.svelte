@@ -7,15 +7,21 @@
 		CheckCircle,
 		Clock,
 		DownloadSimple,
+		GitBranch,
+		GitCommit,
 		GitPullRequest,
 		MagnifyingGlass,
 		Percent,
+		Robot,
+		WarningCircle,
 		X
 	} from 'phosphor-svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
+	import DateFilterButton from '$lib/components/DateFilterButton.svelte';
+	import GitFilterButton from '$lib/components/GitFilterButton.svelte';
 	import type { Task } from '$lib/server/types';
 
 	const agentDomains: Record<string, string> = {
@@ -61,10 +67,14 @@
 	let totalTasks = $state(0);
 	let isLoading = $state(false);
 	let expandedTasks = $state<Record<string, boolean>>({});
+	let isConnected = $state(true);
 
 	let activeStatus = $state<'all' | 'success' | 'failed'>('all');
 	let selectedAgent = $state('all');
 	let selectedRepo = $state('all');
+	let selectedBranch = $state<string | null>(null);
+	let selectedIssue = $state<string | null>(null);
+	let selectedDate = $state('any');
 	let dateFrom = $state('');
 	let dateTo = $state('');
 	let searchInput = $state('');
@@ -80,7 +90,12 @@
 			const params = new URLSearchParams();
 			if (activeStatus !== 'all') params.set('status', activeStatus);
 			if (selectedAgent !== 'all') params.set('agent', selectedAgent);
-			if (selectedRepo !== 'all') params.set('repo', selectedRepo);
+			if (selectedRepo && selectedRepo !== 'all') params.set('repo', selectedRepo);
+			if (selectedBranch) params.set('branch', selectedBranch);
+			if (selectedIssue) {
+				const issueNum = parseInt(selectedIssue.replace('#', ''));
+				if (!isNaN(issueNum)) params.set('issueNumber', issueNum.toString());
+			}
 			if (searchQuery) params.set('search', searchQuery);
 			if (dateFrom) params.set('from', dateFrom);
 			if (dateTo) params.set('to', dateTo);
@@ -89,6 +104,12 @@
 
 			const response = await fetch(`/api/tasks/history?${params.toString()}`);
 			if (!response.ok) return;
+
+			if (typeof window !== 'undefined') {
+				const url = new URL(window.location.href);
+				url.search = params.toString();
+				window.history.replaceState({}, '', url.toString());
+			}
 			const data = (await response.json()) as {
 				tasks: Task[];
 				total: number;
@@ -109,6 +130,9 @@
 		activeStatus = 'all';
 		selectedAgent = 'all';
 		selectedRepo = 'all';
+		selectedBranch = null;
+		selectedIssue = null;
+		selectedDate = 'any';
 		dateFrom = '';
 		dateTo = '';
 		searchInput = '';
@@ -125,117 +149,8 @@
 		searchInput = value;
 	};
 
-	const baseSuggestions = [
-		'status:failed',
-		'status:success',
-		'agent:claude',
-		'repo:porter/app',
-		'date:2026-01-21..2026-01-22'
-	];
-
-	const handleSuggestionClick = (suggestion: string) => {
-		const trimmed = searchInput.trim();
-		const nextValue = trimmed ? `${trimmed} ${suggestion}` : suggestion;
-		searchInput = nextValue;
-		applySmartSearch(nextValue);
-		isSearchFocused = true;
-	};
-
-	const getSuggestionTone = (suggestion: string) => {
-		if (suggestion.startsWith('status:failed')) {
-			return 'border-destructive/30 bg-destructive/10 text-destructive';
-		}
-		if (suggestion.startsWith('status:success')) {
-			return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600';
-		}
-		if (suggestion.startsWith('agent:')) {
-			return 'border-sky-500/30 bg-sky-500/10 text-sky-600';
-		}
-		if (suggestion.startsWith('repo:')) {
-			return 'border-amber-500/30 bg-amber-500/10 text-amber-700';
-		}
-		if (suggestion.startsWith('date:')) {
-			return 'border-slate-500/30 bg-slate-500/10 text-slate-600';
-		}
-		return 'border-border/60 bg-muted/40 text-muted-foreground';
-	};
-
-	const getSearchSuggestions = () => {
-		const trimmed = searchInput.trim();
-		const tokens = trimmed ? trimmed.split(/\s+/) : [];
-		const lastToken = tokens[tokens.length - 1] ?? '';
-		if (!lastToken || !lastToken.includes(':')) {
-			return baseSuggestions;
-		}
-		if (lastToken.startsWith('status:')) {
-			return ['status:success', 'status:failed', 'status:all'];
-		}
-		if (lastToken.startsWith('agent:')) {
-			return availableAgents.filter((agent) => agent !== 'all').map((agent) => `agent:${agent}`);
-		}
-		if (lastToken.startsWith('repo:')) {
-			return availableRepos.filter((repo) => repo !== 'all').map((repo) => `repo:${repo}`);
-		}
-		if (lastToken.startsWith('date:')) {
-			return ['date:YYYY-MM-DD..YYYY-MM-DD'];
-		}
-		return baseSuggestions;
-	};
-
-	const parseSearchQuery = (value: string) => {
-		const parsed = {
-			status: 'all',
-			agent: 'all',
-			repo: 'all',
-			dateFrom: '',
-			dateTo: '',
-			freeText: ''
-		};
-		if (!value.trim()) return parsed;
-		const terms: string[] = [];
-		for (const token of value.split(/\s+/)) {
-			const [rawKey, ...rawValueParts] = token.split(':');
-			if (rawValueParts.length === 0) {
-				terms.push(token);
-				continue;
-			}
-			const key = rawKey.toLowerCase();
-			const rawValue = rawValueParts.join(':');
-			const rawValueLower = rawValue.toLowerCase();
-			if (key === 'status') {
-				if (['all', 'success', 'failed'].includes(rawValueLower)) {
-					parsed.status = rawValueLower;
-					continue;
-				}
-			}
-			if (key === 'agent') {
-				parsed.agent = rawValue;
-				continue;
-			}
-			if (key === 'repo') {
-				parsed.repo = rawValue;
-				continue;
-			}
-			if (key === 'date') {
-				const [from, to] = rawValue.split('..');
-				parsed.dateFrom = from ?? '';
-				parsed.dateTo = to ?? '';
-				continue;
-			}
-			terms.push(token);
-		}
-		parsed.freeText = terms.join(' ');
-		return parsed;
-	};
-
 	const applySmartSearch = (value: string) => {
-		const parsed = parseSearchQuery(value);
-		activeStatus = parsed.status as 'all' | 'success' | 'failed';
-		selectedAgent = parsed.agent;
-		selectedRepo = parsed.repo;
-		dateFrom = parsed.dateFrom;
-		dateTo = parsed.dateTo;
-		searchQuery = parsed.freeText;
+		searchQuery = value;
 		offset = 0;
 	};
 
@@ -299,8 +214,69 @@
 		return () => clearTimeout(timeout);
 	});
 
+	const formatDate = (date: Date) => date.toISOString().slice(0, 10);
+
+	const applyDatePreset = (preset: string) => {
+		if (preset === 'any') {
+			dateFrom = '';
+			dateTo = '';
+			return;
+		}
+		if (preset === 'custom') {
+			return;
+		}
+		const today = new Date();
+		const start = new Date();
+		if (preset === 'today') {
+			dateFrom = formatDate(today);
+			dateTo = formatDate(today);
+			return;
+		}
+		if (preset === 'last 7d') {
+			start.setDate(today.getDate() - 7);
+		}
+		if (preset === 'last 30d') {
+			start.setDate(today.getDate() - 30);
+		}
+		dateFrom = formatDate(start);
+		dateTo = formatDate(today);
+	};
+
+	$effect(() => {
+		applyDatePreset(selectedDate);
+	});
+
 	$effect(() => {
 		loadHistory();
+	});
+
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const params = new URLSearchParams(window.location.search);
+		if (params.get('status')) {
+			const status = params.get('status');
+			if (status === 'success' || status === 'failed') {
+				activeStatus = status;
+			}
+		}
+		if (params.get('agent')) {
+			selectedAgent = params.get('agent') ?? 'all';
+		}
+		if (params.get('repo')) {
+			selectedRepo = params.get('repo') ?? 'all';
+		}
+		if (params.get('branch')) {
+			selectedBranch = params.get('branch');
+		}
+		if (params.get('issueNumber')) {
+			const issueNum = params.get('issueNumber');
+			if (issueNum) selectedIssue = `#${issueNum}`;
+		}
+		if (params.get('from') || params.get('to')) {
+			dateFrom = params.get('from') ?? '';
+			dateTo = params.get('to') ?? '';
+			selectedDate = 'custom';
+		}
 	});
 
 	const statusCounts = $derived(
@@ -366,44 +342,145 @@
 		...Array.from(new Set(historyTasks.map((task) => `${task.repoOwner}/${task.repoName}`)))
 	]);
 
+	const availableBranches: string[] = $derived(
+		Array.from(new Set(['main', 'develop', 'release', 'staging']))
+	);
+
+	const availableIssues: string[] = $derived(
+		Array.from(new Set(historyTasks.map((task) => `#${task.issueNumber}`)))
+	);
+	const repoOptions = $derived(
+		availableRepos.filter((r) => r !== 'all').length
+			? availableRepos.filter((r) => r !== 'all')
+			: ['porter/app', 'atlas/release', 'core/main']
+	);
+	const issueOptions = $derived(
+		availableIssues.length ? availableIssues : ['#412', '#77', '#201']
+	);
+
+	const statusLabel = $derived(activeStatus === 'all' ? 'Status' : activeStatus);
+	const agentLabel = $derived(selectedAgent === 'all' ? 'Agent' : selectedAgent);
+	const dateLabel = $derived(selectedDate === 'any' ? 'Date' : selectedDate === 'custom' ? 'Custom' : selectedDate);
+	const repoLabel = $derived(selectedRepo === 'all' ? 'Repository' : selectedRepo ?? 'Repository');
+	const branchLabel = $derived(selectedBranch ?? 'Branch');
+	const issueLabel = $derived(selectedIssue ?? 'Issue');
+	const statusIcon = $derived(activeStatus === 'failed' ? WarningCircle : CheckCircle);
+	const filtersVisible = $derived(true);
+
+	const filterTone = 'text-primary';
+
+	const statusOptions = ['all', 'success', 'failed'];
+
+	const getStatusTone = (value: string) => {
+		if (value === 'success') return 'text-emerald-600';
+		if (value === 'failed') return 'text-destructive';
+		return 'text-muted-foreground';
+	};
+
+	const getAgentTone = (value: string) => {
+		if (value === 'all') return 'text-muted-foreground';
+		return 'text-primary';
+	};
+
 	const showingCount = $derived(historyTasks.length);
 	const hasMore = $derived(showingCount < totalTasks);
 </script>
 
 <div class="space-y-8">
-	<section class="flex flex-col items-center justify-center gap-2">
-		<div class="flex w-full max-w-4xl flex-wrap items-center justify-center gap-2 rounded-2xl border border-border/60 bg-card/70 px-4 py-2 shadow-[0_10px_30px_-24px_rgba(15,15,15,0.5)] transition focus-within:border-border/90 focus-within:bg-card">
-			<span class="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-				Search
-			</span>
-			<MagnifyingGlass size={16} weight="bold" class="text-muted-foreground" />
-			<div class="relative flex-1">
-				<Input
-					value={searchInput}
-					class="h-10 border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
-					oninput={(event) => handleSearchChange((event.currentTarget as HTMLInputElement).value)}
-					onfocus={() => (isSearchFocused = true)}
-					onblur={() => (isSearchFocused = false)}
-				/>
+	{#if !isConnected}
+		<div class="rounded-2xl border border-border/60 bg-card/70 p-10 text-center">
+			<p class="text-sm font-semibold text-foreground">Connect GitHub to view history</p>
+			<p class="mt-2 text-xs text-muted-foreground">
+				Authorize Porter to record your completed tasks and PRs.
+			</p>
+			<div class="mt-4 flex justify-center">
+				<Button size="lg">Connect GitHub</Button>
 			</div>
-			<Button variant="ghost" size="sm" disabled={!searchInput} onclick={resetFilters}>
-				<X size={14} weight="bold" />
-				Clear
-			</Button>
 		</div>
-		{#if isSearchFocused}
-			<div class="flex w-full max-w-4xl flex-wrap items-center justify-center gap-2">
-				{#each getSearchSuggestions() as suggestion}
-					<button
-						class={`rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] transition hover:border-border/80 hover:bg-muted/60 ${getSuggestionTone(suggestion)}`}
-						on:mousedown|preventDefault={() => handleSuggestionClick(suggestion)}
-					>
-						{suggestion}
-					</button>
-				{/each}
+	{:else}
+		<section class="flex flex-col items-center justify-center gap-2">
+			<div class="flex w-full max-w-4xl flex-wrap items-center justify-center gap-2 rounded-2xl border border-border/60 bg-card/70 px-4 py-2 shadow-[0_10px_30px_-24px_rgba(15,15,15,0.5)] transition focus-within:border-border/90 focus-within:bg-card">
+				<span class="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+					Search
+				</span>
+				<MagnifyingGlass size={16} weight="bold" class="text-muted-foreground" />
+				<div class="relative flex-1">
+					<Input
+						value={searchInput}
+						class="h-10 border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
+						oninput={(event) => handleSearchChange((event.currentTarget as HTMLInputElement).value)}
+						onfocus={() => (isSearchFocused = true)}
+						onblur={() => (isSearchFocused = false)}
+					/>
+				</div>
+				<Button variant="ghost" size="sm" onclick={resetFilters}>
+					<X size={14} weight="bold" />
+					Clear
+				</Button>
 			</div>
-		{/if}
-	</section>
+			{#if filtersVisible}
+				<div class="flex w-full max-w-4xl flex-wrap items-center justify-center gap-2">
+					<GitFilterButton
+						icon={statusIcon}
+						label="Status"
+						options={statusOptions}
+						bind:selected={activeStatus}
+						displayValue={statusLabel}
+						toneClass={filterTone}
+						itemIconType="dot"
+						getItemTone={getStatusTone}
+					/>
+					<GitFilterButton
+						icon={Robot}
+						label="Agent"
+						options={availableAgents}
+						bind:selected={selectedAgent}
+						displayValue={agentLabel}
+						toneClass={filterTone}
+						itemIconType="image"
+						getItemIcon={(value) => (value === 'all' ? null : getAgentIcon(value))}
+						getItemTone={getAgentTone}
+					/>
+					<DateFilterButton
+						label="Date"
+						bind:selectedPreset={selectedDate}
+						bind:dateFrom={dateFrom}
+						bind:dateTo={dateTo}
+						displayValue={dateLabel}
+						toneClass={filterTone}
+						onPresetSelect={applyDatePreset}
+					/>
+					<div class="h-4 w-px bg-border/80"></div>
+					<GitFilterButton
+						icon={GitCommit}
+						label="Repository"
+						options={repoOptions}
+						bind:selected={selectedRepo}
+						displayValue={repoLabel}
+						toneClass={filterTone}
+						onSelect={(value) => {
+							if (!value) selectedRepo = 'all';
+						}}
+					/>
+					<GitFilterButton
+						icon={GitBranch}
+						label="Branch"
+						options={availableBranches}
+						bind:selected={selectedBranch}
+						displayValue={branchLabel}
+						toneClass={filterTone}
+					/>
+					<GitFilterButton
+						icon={GitCommit}
+						label="Issue"
+						options={issueOptions}
+						bind:selected={selectedIssue}
+						displayValue={issueLabel}
+						toneClass={filterTone}
+					/>
+				</div>
+			{/if}
+		</section>
 
 	<section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 		{#each statCards as stat}
@@ -445,145 +522,146 @@
 				<span class="text-right">Actions</span>
 			</div>
 
-	{#if isLoading}
-		<div class="mt-4 space-y-3">
-			{#each Array(4) as _}
-				<Card.Root class="border border-border/60 bg-background/80 animate-pulse">
-					<Card.Content class="grid min-h-[72px] grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 py-3">
-						<div class="h-6 w-16 rounded bg-muted"></div>
-						<div class="space-y-2">
-							<div class="h-4 w-2/3 rounded bg-muted"></div>
-							<div class="h-3 w-1/2 rounded bg-muted"></div>
-						</div>
-						<div class="h-4 w-20 rounded bg-muted"></div>
-						<div class="h-6 w-24 rounded bg-muted"></div>
-						<div class="h-4 w-16 rounded bg-muted"></div>
-						<div class="h-8 w-16 rounded bg-muted"></div>
-					</Card.Content>
-				</Card.Root>
-			{/each}
-		</div>
-	{:else if historyTasks.length === 0}
-		<div class="flex flex-col items-center gap-2 py-12 text-center">
-			<p class="text-sm font-medium">No completed tasks found</p>
-			<p class="text-xs text-muted-foreground">Try adjusting your filters to widen the results.</p>
-			<Button variant="secondary" size="sm" onclick={resetFilters}>Clear filters</Button>
-		</div>
-	{:else}
-		<div class="mt-4 space-y-3">
-			{#each historyTasks as task}
-				<Card.Root
-					class="border border-border/60 bg-background/80 transition hover:border-border/80 hover:bg-background/95"
-					role="button"
-					tabindex={0}
-					onclick={() => toggleExpanded(task.id)}
-					onkeydown={(event: KeyboardEvent) => handleRowKey(event, task.id)}
-				>
-					<Card.Content class="grid min-h-[72px] grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 px-2 py-3">
-						<Badge class={`text-[0.6rem] font-semibold uppercase tracking-[0.2em] ${statusStyles[task.status]}`}>
-							{task.status === 'success' ? 'DONE' : 'FAIL'}
-						</Badge>
-						<div>
-							<div class="font-medium text-foreground">{task.issueTitle}</div>
-							<div class="text-xs text-muted-foreground">
-								Issue #{task.issueNumber}
-								{task.prNumber ? ` · PR #${task.prNumber}` : ''}
-							</div>
-						</div>
-						<div class="text-xs text-muted-foreground font-mono">
-							{task.repoOwner}/{task.repoName}
-						</div>
-						<Badge variant="outline" class="text-xs capitalize font-mono gap-2">
-							<img class="h-3.5 w-3.5" src={getAgentIcon(task.agent)} alt={task.agent} />
-							{task.agent}
-						</Badge>
-						<span class="text-xs text-muted-foreground font-mono">
-							{formatRelativeTime(task.completedAt)}
-						</span>
-						<div class="flex items-center justify-end gap-2">
-							<Button variant="ghost" size="sm" onclick={(event) => handleViewClick(event, task.id)}>
-								View
-							</Button>
-							{#if expandedTasks[task.id]}
-								<CaretUp size={16} weight="bold" class="text-muted-foreground" />
-							{:else}
-								<CaretDown size={16} weight="bold" class="text-muted-foreground" />
-							{/if}
-						</div>
-					</Card.Content>
-				</Card.Root>
-
-				{#if expandedTasks[task.id]}
-					<Card.Root class="border border-border/60 bg-background/70">
-						<Card.Content class="space-y-4 p-4">
-							<div class="grid gap-4 md:grid-cols-4">
+			{#if isLoading}
+				<div class="mt-4 space-y-3">
+					{#each Array(4) as _}
+						<Card.Root class="border border-border/60 bg-background/80 animate-pulse">
+							<Card.Content class="grid min-h-[72px] grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 py-3">
+								<div class="h-6 w-16 rounded bg-muted"></div>
+								<div class="space-y-2">
+									<div class="h-4 w-2/3 rounded bg-muted"></div>
+									<div class="h-3 w-1/2 rounded bg-muted"></div>
+								</div>
+								<div class="h-4 w-20 rounded bg-muted"></div>
+								<div class="h-6 w-24 rounded bg-muted"></div>
+								<div class="h-4 w-16 rounded bg-muted"></div>
+								<div class="h-8 w-16 rounded bg-muted"></div>
+							</Card.Content>
+						</Card.Root>
+					{/each}
+				</div>
+			{:else if historyTasks.length === 0}
+				<div class="flex flex-col items-center gap-2 py-12 text-center">
+					<p class="text-sm font-medium">No completed tasks found</p>
+					<p class="text-xs text-muted-foreground">Try adjusting your filters to widen the results.</p>
+					<Button variant="secondary" size="sm" onclick={resetFilters}>Clear filters</Button>
+				</div>
+			{:else}
+				<div class="mt-4 space-y-3">
+					{#each historyTasks as task}
+						<Card.Root
+							class="border border-border/60 bg-background/80 transition hover:border-border/80 hover:bg-background/95"
+							role="button"
+							tabindex={0}
+							onclick={() => toggleExpanded(task.id)}
+							onkeydown={(event: KeyboardEvent) => handleRowKey(event, task.id)}
+						>
+							<Card.Content class="grid min-h-[72px] grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 px-2 py-3">
+								<Badge class={`text-[0.6rem] font-semibold uppercase tracking-[0.2em] ${statusStyles[task.status]}`}>
+									{task.status === 'success' ? 'DONE' : 'FAIL'}
+								</Badge>
 								<div>
-									<p class="text-xs uppercase text-muted-foreground">Issue</p>
-									<p class="text-sm font-medium">#{task.issueNumber}</p>
+									<div class="font-medium text-foreground">{task.issueTitle}</div>
+									<div class="text-xs text-muted-foreground">
+										Issue #{task.issueNumber}
+										{task.prNumber ? ` · PR #${task.prNumber}` : ''}
+									</div>
 								</div>
-								<div>
-									<p class="text-xs uppercase text-muted-foreground">Repository</p>
-									<p class="text-sm font-medium">{task.repoOwner}/{task.repoName}</p>
+								<div class="text-xs text-muted-foreground font-mono">
+									{task.repoOwner}/{task.repoName}
 								</div>
-								<div>
-									<p class="text-xs uppercase text-muted-foreground">Duration</p>
-									<p class="text-sm font-medium">
-										{formatDuration(task.startedAt, task.completedAt)}
-									</p>
-								</div>
-								<div>
-									<p class="text-xs uppercase text-muted-foreground">Completed</p>
-									<p class="text-sm font-medium">{formatRelativeTime(task.completedAt)}</p>
-								</div>
-							</div>
-
-							{#if task.errorMessage}
-								<div class="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-									{task.errorMessage}
-								</div>
-							{/if}
-
-							<Card.Root>
-								<Card.Header class="pb-2">
-									<Card.Title class="text-sm">Task Logs</Card.Title>
-								</Card.Header>
-								<Card.Content class="space-y-2 text-xs">
-									{#if task.logs.length === 0}
-										<div class="text-muted-foreground">No logs recorded.</div>
+								<Badge variant="outline" class="text-xs capitalize font-mono gap-2">
+									<img class="h-3.5 w-3.5" src={getAgentIcon(task.agent)} alt={task.agent} />
+									{task.agent}
+								</Badge>
+								<span class="text-xs text-muted-foreground font-mono">
+									{formatRelativeTime(task.completedAt)}
+								</span>
+								<div class="flex items-center justify-end gap-2">
+									<Button variant="ghost" size="sm" onclick={(event) => handleViewClick(event, task.id)}>
+										View
+									</Button>
+									{#if expandedTasks[task.id]}
+										<CaretUp size={16} weight="bold" class="text-muted-foreground" />
 									{:else}
-										{#each task.logs as log}
-											<div class="grid grid-cols-[70px_80px_1fr] items-center gap-3 text-muted-foreground font-mono">
-												<span>{log.time}</span>
-												<span class="font-semibold uppercase text-foreground">{log.level}</span>
-												<span>{log.message}</span>
-											</div>
-										{/each}
+										<CaretDown size={16} weight="bold" class="text-muted-foreground" />
 									{/if}
+								</div>
+							</Card.Content>
+						</Card.Root>
+
+						{#if expandedTasks[task.id]}
+							<Card.Root class="border border-border/60 bg-background/70">
+								<Card.Content class="space-y-4 p-4">
+									<div class="grid gap-4 md:grid-cols-4">
+										<div>
+											<p class="text-xs uppercase text-muted-foreground">Issue</p>
+											<p class="text-sm font-medium">#{task.issueNumber}</p>
+										</div>
+										<div>
+											<p class="text-xs uppercase text-muted-foreground">Repository</p>
+											<p class="text-sm font-medium">{task.repoOwner}/{task.repoName}</p>
+										</div>
+										<div>
+											<p class="text-xs uppercase text-muted-foreground">Duration</p>
+											<p class="text-sm font-medium">
+												{formatDuration(task.startedAt, task.completedAt)}
+											</p>
+										</div>
+										<div>
+											<p class="text-xs uppercase text-muted-foreground">Completed</p>
+											<p class="text-sm font-medium">{formatRelativeTime(task.completedAt)}</p>
+										</div>
+									</div>
+
+									{#if task.errorMessage}
+										<div class="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+											{task.errorMessage}
+										</div>
+									{/if}
+
+									<Card.Root>
+										<Card.Header class="pb-2">
+											<Card.Title class="text-sm">Task Logs</Card.Title>
+										</Card.Header>
+										<Card.Content class="space-y-2 text-xs">
+											{#if task.logs.length === 0}
+												<div class="text-muted-foreground">No logs recorded.</div>
+											{:else}
+												{#each task.logs as log}
+													<div class="grid grid-cols-[70px_80px_1fr] items-center gap-3 text-muted-foreground font-mono">
+														<span>{log.time}</span>
+														<span class="font-semibold uppercase text-foreground">{log.level}</span>
+														<span>{log.message}</span>
+													</div>
+												{/each}
+											{/if}
+										</Card.Content>
+									</Card.Root>
+
+									<div class="flex flex-wrap gap-2">
+										<Button variant="secondary" size="sm">
+											<ArrowCounterClockwise size={14} weight="bold" />
+											Retry
+										</Button>
+										<Button variant="secondary" size="sm" disabled={!task.prNumber}>
+											<ArrowUpRight size={14} weight="bold" />
+											View PR
+										</Button>
+									</div>
 								</Card.Content>
 							</Card.Root>
+						{/if}
+					{/each}
+				</div>
+			{/if}
+		</section>
 
-							<div class="flex flex-wrap gap-2">
-						<Button variant="secondary" size="sm">
-							<ArrowCounterClockwise size={14} weight="bold" />
-							Retry
-						</Button>
-						<Button variant="secondary" size="sm" disabled={!task.prNumber}>
-							<ArrowUpRight size={14} weight="bold" />
-							View PR
-						</Button>
-							</div>
-						</Card.Content>
-					</Card.Root>
-				{/if}
-			{/each}
-		</div>
-	{/if}
-
-	{#if !isLoading && hasMore}
-		<div class="mt-4 flex items-center justify-center">
-			<Button variant="secondary" size="sm" onclick={handleLoadMore}>Load more</Button>
-		</div>
-	{/if}
-</section>
+		{#if !isLoading && hasMore}
+			<div class="mt-4 flex items-center justify-center">
+				<Button variant="secondary" size="sm" onclick={handleLoadMore}>Load more</Button>
+			</div>
+		{/if}
 	</section>
+	{/if}
 </div>

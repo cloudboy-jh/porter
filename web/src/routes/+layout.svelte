@@ -44,6 +44,22 @@
 				{ label: 'account' }
 			],
 			subtitle: 'Profile, workspace access, and connections.'
+		},
+		'/auth': {
+			title: 'Sign in',
+			breadcrumb: [
+				{ label: 'porter', href: '/' },
+				{ label: 'auth' }
+			],
+			subtitle: 'Authorize GitHub to connect your workspace.'
+		},
+		'/onboarding': {
+			title: 'Onboarding',
+			breadcrumb: [
+				{ label: 'porter', href: '/' },
+				{ label: 'onboarding' }
+			],
+			subtitle: 'Set up GitHub, repos, and agents.'
 		}
 	};
 

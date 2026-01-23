@@ -56,24 +56,43 @@
 	};
 
 	const nodeStyles: Record<Task['status'], string> = {
-		running: 'border-primary/70 bg-primary/15 text-primary',
-		queued: 'border-border/70 bg-muted/70 text-muted-foreground',
-		success: 'border-emerald-400/70 bg-emerald-500/12 text-emerald-200',
-		failed: 'border-rose-400/70 bg-rose-500/12 text-rose-200'
+		running: 'border-primary/60 bg-primary/10 text-primary',
+		queued: 'border-border/70 bg-muted text-muted-foreground',
+		success: 'border-emerald-500/60 bg-emerald-500/10 text-emerald-600',
+		failed: 'border-rose-500/60 bg-rose-500/10 text-rose-600'
 	};
 
-	const nodeGlow: Record<Task['status'], string> = {
-		running: 'shadow-[0_0_0_2px_rgba(251,146,60,0.2)]',
-		queued: 'shadow-[0_0_0_2px_rgba(160,150,140,0.2)]',
-		success: 'shadow-[0_0_0_2px_rgba(52,211,153,0.2)]',
-		failed: 'shadow-[0_0_0_2px_rgba(251,113,133,0.2)]'
+	const highlightRing: Record<Task['status'], string> = {
+		running: 'ring-2 ring-primary/15',
+		queued: 'ring-2 ring-border/40',
+		success: 'ring-2 ring-emerald-500/15',
+		failed: 'ring-2 ring-rose-500/15'
 	};
 
 	const lineGlow: Record<Task['status'], string> = {
-		running: 'bg-gradient-to-b from-primary/60 via-primary/30 to-transparent',
-		queued: 'bg-gradient-to-b from-border/80 via-border/40 to-transparent',
-		success: 'bg-gradient-to-b from-emerald-400/60 via-emerald-400/30 to-transparent',
-		failed: 'bg-gradient-to-b from-rose-400/60 via-rose-400/30 to-transparent'
+		running: 'bg-primary/40',
+		queued: 'bg-border/60',
+		success: 'bg-emerald-500/40',
+		failed: 'bg-rose-500/40'
+	};
+
+	const statusBadge: Record<Task['status'], { label: string; className: string }> = {
+		running: {
+			label: 'Running',
+			className: 'border-primary/30 bg-primary/10 text-primary'
+		},
+		queued: {
+			label: 'Queued',
+			className: 'border-border/60 bg-muted/70 text-muted-foreground'
+		},
+		success: {
+			label: 'Done',
+			className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
+		},
+		failed: {
+			label: 'Failed',
+			className: 'border-rose-500/30 bg-rose-500/10 text-rose-600'
+		}
 	};
 
 	const isHighlighted = (task: Task) =>
@@ -81,107 +100,113 @@
 </script>
 
 <div class="mt-2 max-h-[80vh] overflow-y-auto pr-1 hide-scrollbar">
-	<div class="relative">
-		<div class="pointer-events-none absolute left-5 top-0 h-full w-0.5 bg-gradient-to-b from-border/80 via-border/50 to-transparent"></div>
-		<div class="space-y-8">
-			{#each tasks as task}
-				<div class="relative pl-10">
-					{#if isHighlighted(task)}
-						<span class={`pointer-events-none absolute left-5 top-2 h-[calc(100%-0.75rem)] w-0.5 ${lineGlow[task.status]}`}></span>
-					{/if}
-					<div
-						class={`absolute left-3 top-6 flex h-4 w-4 items-center justify-center rounded-[6px] border ${nodeStyles[task.status]} ${isHighlighted(task) ? nodeGlow[task.status] : ''}`}
-					>
-						<span class="h-1.5 w-1.5 rounded-[3px] bg-current/70"></span>
-					</div>
-					<Card.Root
-						class={`group task-card task-card--${task.status} rounded-2xl border border-border/60 bg-background/80 ${task.expanded ? 'is-expanded' : ''}`}
-						style={`--task-progress: ${task.progress}%`}
-						role="button"
-						tabindex={0}
-						onclick={() => onToggleExpanded(task.id)}
-						onkeydown={(event: KeyboardEvent) => handleRowKey(event, task.id)}
-					>
-						<Card.Content class="space-y-3 p-5">
-							<div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-								<span class="font-medium text-foreground/80">{task.repo}</span>
-								<span class="text-muted-foreground/60">&bull;</span>
-								<span class="flex items-center gap-2 capitalize">
-									<img class="h-4 w-4 rounded-sm" src={getAgentIcon(task.agent)} alt="" />
-									{task.agent}
-								</span>
+		<div class="relative">
+			{#if tasks.length === 0}
+				<div class="rounded-2xl border border-border/60 bg-background/70 p-10 text-center">
+					<p class="text-sm font-semibold text-foreground">No active tasks yet</p>
+					<p class="mt-2 text-xs text-muted-foreground">
+						Start by dispatching a task from the command bar.
+					</p>
+				</div>
+			{:else}
+				<div class="pointer-events-none absolute left-5 top-0 h-full w-0.5 bg-gradient-to-b from-border/80 via-border/50 to-transparent"></div>
+				<div class="space-y-8">
+					{#each tasks as task}
+						<div class="relative pl-10">
+							{#if isHighlighted(task)}
+								<span class={`pointer-events-none absolute left-5 top-2 h-[calc(100%-0.75rem)] w-0.5 ${lineGlow[task.status]}`}></span>
+							{/if}
+							<div
+								class={`absolute left-3 top-6 flex h-4 w-4 items-center justify-center rounded-[6px] border ${nodeStyles[task.status]} ${isHighlighted(task) ? highlightRing[task.status] : ''}`}
+							>
+								<span class="h-1.5 w-1.5 rounded-[3px] bg-current/70"></span>
 							</div>
-							<div class="flex flex-wrap items-center gap-2">
-								<div class="text-base font-semibold text-foreground">{task.title}</div>
-								{#if task.status === 'failed'}
-									<Badge
-										variant="outline"
-										class="border-rose-500/50 bg-rose-500/10 text-[10px] uppercase text-rose-400"
-									>
-										Failed
-									</Badge>
-								{/if}
-							</div>
-							<div class="text-sm text-muted-foreground">
-								{task.technicalSummary ?? 'Summary pending.'}
-							</div>
-							<div class="flex flex-wrap items-center gap-3">
-								<div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-									<GitDiffBadge variant="add" value={task.git?.add ?? 0} />
-									<GitDiffBadge variant="remove" value={task.git?.remove ?? 0} />
-									<span class="text-muted-foreground/60">&bull;</span>
-									{#if task.prUrl}
-										<a
-											class="text-primary hover:text-primary/80"
-											href={task.prUrl}
-											target="_blank"
-											rel="noreferrer"
+							<Card.Root
+								class={`group task-card task-card--${task.status} rounded-2xl border border-border/60 bg-background/80 ${task.expanded ? 'is-expanded' : ''}`}
+								style={`--task-progress: ${task.progress}%`}
+								role="button"
+								tabindex={0}
+								onclick={() => onToggleExpanded(task.id)}
+								onkeydown={(event: KeyboardEvent) => handleRowKey(event, task.id)}
+							>
+								<Card.Content class="space-y-3 p-5">
+									<div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+										<span class="font-medium text-foreground/80">{task.repo}</span>
+										<span class="text-muted-foreground/60">&bull;</span>
+										<span class="flex items-center gap-2 capitalize">
+											<img class="h-4 w-4 rounded-sm" src={getAgentIcon(task.agent)} alt="" />
+											{task.agent}
+										</span>
+									</div>
+									<div class="flex flex-wrap items-center gap-2">
+										<div class="text-base font-semibold text-foreground">{task.title}</div>
+										<Badge
+											variant="outline"
+											class={`text-[10px] uppercase ${statusBadge[task.status].className}`}
 										>
-											PR #{task.prNumber ?? '-'}
-										</a>
-									{:else}
-										<span>PR -</span>
-									{/if}
-									<span class="text-muted-foreground/60">&bull;</span>
-									<span>{task.commitHash ?? 'commit -'}</span>
-									<span class="text-muted-foreground/60">&bull;</span>
-									<a
-										class="text-primary hover:text-primary/80"
-										href={`https://github.com/jackgolding/${task.repo}/issues/${getIssueNumber(task.issue)}`}
-										target="_blank"
-										rel="noreferrer"
-									>
-										{task.issue}
-									</a>
-									<span class="text-muted-foreground/60">&bull;</span>
-									<span>{task.started}</span>
-								</div>
-								<div class="task-actions flex items-center gap-2 md:ml-auto">
-									<Button variant="ghost" size="sm" onclick={(event: MouseEvent) => handleViewClick(event, task.id)}>
-										View
-									</Button>
-									{#if task.status === 'failed'}
-										<Button
-											variant="ghost"
-											size="sm"
-											onclick={(event: MouseEvent) => handleRestartClick(event, task.id)}
-										>
-											Retry
-										</Button>
-									{/if}
-									{#if task.status === 'running' || task.status === 'queued'}
-										<Button
-											variant="ghost"
-											size="sm"
-											onclick={(event: MouseEvent) => handleStopClick(event, task.id)}
-										>
-											Cancel
-										</Button>
-									{/if}
-								</div>
-							</div>
-						</Card.Content>
-					</Card.Root>
+											{statusBadge[task.status].label}
+										</Badge>
+									</div>
+									<div class="text-sm text-muted-foreground">
+										{task.technicalSummary ?? 'Summary pending.'}
+									</div>
+									<div class="flex flex-wrap items-center gap-3">
+										<div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+											<GitDiffBadge variant="add" value={task.git?.add ?? 0} />
+											<GitDiffBadge variant="remove" value={task.git?.remove ?? 0} />
+											<span class="text-muted-foreground/60">&bull;</span>
+											{#if task.prUrl}
+												<a
+													class="text-primary hover:text-primary/80"
+													href={task.prUrl}
+													target="_blank"
+													rel="noreferrer"
+												>
+													PR #{task.prNumber ?? '-'}
+												</a>
+											{:else}
+												<span>PR -</span>
+											{/if}
+											<span class="text-muted-foreground/60">&bull;</span>
+											<span>{task.commitHash ?? 'commit -'}</span>
+											<span class="text-muted-foreground/60">&bull;</span>
+											<a
+												class="text-primary hover:text-primary/80"
+												href={`https://github.com/jackgolding/${task.repo}/issues/${getIssueNumber(task.issue)}`}
+												target="_blank"
+												rel="noreferrer"
+											>
+												{task.issue}
+											</a>
+											<span class="text-muted-foreground/60">&bull;</span>
+											<span>{task.started}</span>
+										</div>
+										<div class="task-actions flex items-center gap-2 md:ml-auto">
+											<Button variant="ghost" size="sm" onclick={(event: MouseEvent) => handleViewClick(event, task.id)}>
+												View
+											</Button>
+											{#if task.status === 'failed'}
+												<Button
+													variant="ghost"
+													size="sm"
+													onclick={(event: MouseEvent) => handleRestartClick(event, task.id)}
+												>
+													Retry
+												</Button>
+											{/if}
+											{#if task.status === 'running' || task.status === 'queued'}
+												<Button
+													variant="ghost"
+													size="sm"
+													onclick={(event: MouseEvent) => handleStopClick(event, task.id)}
+												>
+													Cancel
+												</Button>
+											{/if}
+										</div>
+									</div>
+								</Card.Content>
+							</Card.Root>
 
 					{#if task.expanded}
 						<Card.Root class="border border-border/60 bg-background/70">
@@ -277,7 +302,8 @@
 						</Card.Root>
 					{/if}
 				</div>
-			{/each}
+					{/each}
+				</div>
+			{/if}
 		</div>
-	</div>
 </div>

@@ -119,10 +119,10 @@ body {
 	position: absolute;
 	left: 0;
 	top: 0;
-	width: 3px;
+	width: 2px;
 	height: 100%;
 	background-color: var(--status-color-muted, rgba(107, 114, 128, 0.35));
-	opacity: 0.75;
+	opacity: 0.6;
 }
 
 .task-card::after {
@@ -162,9 +162,7 @@ body {
 .task-card--failed {
 	--status-color: #ef4444;
 	--status-color-muted: rgba(239, 68, 68, 0.3);
-	border-color: rgba(239, 68, 68, 0.4);
-	box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.2);
-	background: linear-gradient(180deg, rgba(239, 68, 68, 0.06), rgba(15, 23, 42, 0));
+	border-color: rgba(239, 68, 68, 0.28);
 }
 
 .task-card--queued {
@@ -176,8 +174,8 @@ body {
 .task-card--queued.is-expanded::after {
 	height: 24px;
 	background-color: var(--status-color, #6b7280);
-	opacity: 0.45;
-	animation: pending-slide-queued 1.92s ease-in-out infinite;
+	opacity: 0.32;
+	animation: pending-slide-queued 2.4s ease-in-out infinite;
 }
 
 @keyframes pending-slide-queued {

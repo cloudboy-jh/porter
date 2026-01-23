@@ -87,7 +87,7 @@
 							onclick={() => item.action ? item.action() : item.href && goto(item.href)}
 							class="rounded-lg border border-transparent transition hover:border-sidebar-border/60 hover:bg-sidebar-accent/70"
 						>
-						<svelte:component this={item.icon} size={16} weight="bold" />
+							<item.icon size={16} weight="bold" />
 							<span>{item.label}</span>
 							{#if item.shortcut}
 								<span class="ml-auto text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/60">

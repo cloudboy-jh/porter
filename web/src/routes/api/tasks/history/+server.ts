@@ -6,6 +6,8 @@ export const GET = ({ url }: { url: URL }) => {
 	const status = url.searchParams.get('status');
 	const agent = url.searchParams.get('agent');
 	const repo = url.searchParams.get('repo');
+	const branch = url.searchParams.get('branch');
+	const issueNumber = url.searchParams.get('issueNumber');
 	const search = url.searchParams.get('search');
 	const from = url.searchParams.get('from');
 	const to = url.searchParams.get('to');
@@ -28,6 +30,20 @@ export const GET = ({ url }: { url: URL }) => {
 		tasks = tasks.filter(
 			(task) => `${task.repoOwner}/${task.repoName}`.toLowerCase().includes(repo.toLowerCase())
 		);
+	}
+
+	if (branch) {
+		tasks = tasks.filter((task) => {
+			const taskBranch = (task as any).branch;
+			return taskBranch?.toLowerCase() === branch.toLowerCase();
+		});
+	}
+
+	if (issueNumber) {
+		const issueNum = parseInt(issueNumber);
+		if (!isNaN(issueNum)) {
+			tasks = tasks.filter((task) => task.issueNumber === issueNum);
+		}
 	}
 
 	if (search) {

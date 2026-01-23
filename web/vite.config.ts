@@ -9,5 +9,10 @@ export default defineConfig({
 	},
 	optimizeDeps: {
 		include: ['phosphor-svelte']
+	},
+	test: {
+		environment: 'jsdom',
+		globals: true,
+		setupFiles: ['./src/test/setup.ts']
 	}
 });

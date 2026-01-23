@@ -8,6 +8,7 @@
 	import type { AgentConfig } from '$lib/types/agent';
 
 	let agentConfig = $state<AgentConfig[]>([]);
+	let isConnected = $state(true);
 
 	const enabledAgents = $derived(agentConfig.filter((agent) => agent.enabled).length);
 	const totalAgents = $derived(agentConfig.length);
@@ -47,10 +48,23 @@
 	});
 </script>
 
+
 <div class="w-full space-y-6">
-	<div class="grid w-full gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-		<section class="space-y-4">
-			<Card.Root class="h-full">
+	{#if !isConnected}
+		<div class="rounded-2xl border border-border/60 bg-card/70 p-10 text-center">
+			<p class="text-sm font-semibold text-foreground">Connect GitHub to unlock settings</p>
+			<p class="mt-2 text-xs text-muted-foreground">
+				Authorize Porter to configure agents, repos, and runtime preferences.
+			</p>
+			<div class="mt-4 flex justify-center">
+				<Button size="lg">Connect GitHub</Button>
+			</div>
+		</div>
+	{/if}
+	{#if isConnected}
+		<div class="grid w-full gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+			<section class="space-y-4">
+				<Card.Root class="h-full">
 				<Card.Header class="pb-3">
 					<div class="flex items-start justify-between gap-4">
 						<div class="flex items-start gap-4">
@@ -247,5 +261,6 @@
 			</Card.Root>
 		</section>
 		</div>
-	</div>
+		</div>
+	{/if}
 </div>

@@ -161,7 +161,7 @@
 											High
 										</div>
 									</label>
-							</RadioGroup.Root>
+								</RadioGroup.Root>
 						</div>
 						<div class="space-y-2">
 							<div class="flex items-center justify-between">
@@ -201,6 +201,7 @@
 							{/if}
 						</div>
 					</div>
+				</div>
 				{/each}
 			</div>
 		{/if}
@@ -376,8 +377,8 @@
 								</div>
 							</div>
 						</div>
-					{/each}
-				</div>
+				{/each}
+			</div>
 			{/if}
 		</Card.Content>
 		<Card.Footer class="flex items-center justify-between">

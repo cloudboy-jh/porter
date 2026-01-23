@@ -12,6 +12,7 @@
 	let showDispatch = $state(false);
 	let agentConfig = $state<AgentConfig[]>([]);
 	let tasks = $state<Task[]>([]);
+	let isConnected = $state(true);
 	const mockTasks: Task[] = [
 		{
 			id: 'task-1001',
@@ -416,51 +417,63 @@
 
 	<div class="flex min-h-full items-center justify-center py-6">
 		<div class="w-full max-w-6xl space-y-5">
-			<section class="flex flex-wrap items-center justify-between gap-3">
-				<div class="flex flex-wrap gap-2 rounded-xl border border-border/60 bg-muted/40 p-1">
-					<Button
-						variant="ghost"
-						size="sm"
-						onclick={() => (activeFilter = 'All')}
-						class={`${filterBaseClass} ${activeFilter === 'All' ? 'border-border/70 bg-background text-foreground shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'text-muted-foreground hover:border-border/50 hover:bg-background/70 hover:text-foreground'}`}
-					>
-						<span>{tasks.length}</span>
-						<span>All</span>
-					</Button>
-					{#each statusPills as pill}
+			{#if !isConnected}
+				<div class="rounded-2xl border border-border/60 bg-card/70 p-10 text-center">
+					<p class="text-sm font-semibold text-foreground">Connect GitHub to see live tasks</p>
+					<p class="mt-2 text-xs text-muted-foreground">
+						Authorize Porter to start dispatching tasks and opening PRs.
+					</p>
+					<div class="mt-4 flex justify-center">
+						<Button size="lg">Connect GitHub</Button>
+					</div>
+				</div>
+			{:else}
+				<section class="flex flex-wrap items-center justify-between gap-3">
+					<div class="flex flex-wrap gap-2 rounded-xl border border-border/60 bg-muted/40 p-1">
 						<Button
 							variant="ghost"
 							size="sm"
-							onclick={() => (activeFilter = pill.label === 'Completed' ? 'Completed' : pill.label)}
-							class={`${filterBaseClass} ${statusStyles[pill.key]} ${activeFilter === (pill.label === 'Completed' ? 'Completed' : pill.label) ? 'border-border/70 bg-background text-foreground shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'hover:border-border/50 hover:bg-background/70 hover:text-foreground'}`}
+							onclick={() => (activeFilter = 'All')}
+							class={`${filterBaseClass} ${activeFilter === 'All' ? 'border-border/70 bg-background text-foreground shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'text-muted-foreground hover:border-border/50 hover:bg-background/70 hover:text-foreground'}`}
 						>
-							<span class="h-2 w-2 rounded-full bg-current/80"></span>
-							<span>{pill.count}</span>
-							<span>{pill.label}</span>
+							<span>{tasks.length}</span>
+							<span>All</span>
 						</Button>
-					{/each}
-				</div>
-				<div class="flex flex-wrap gap-2">
-					<Button variant="secondary" type="button" onclick={() => (showAgentSettings = true)}>
-						Agents
-					</Button>
-					<Button type="button" onclick={() => (showDispatch = true)}>
-						<Plus size={16} weight="bold" />
-						Dispatch
-						<span class="text-xs opacity-70">⌘K</span>
-					</Button>
-				</div>
-			</section>
+						{#each statusPills as pill}
+							<Button
+								variant="ghost"
+								size="sm"
+								onclick={() => (activeFilter = pill.label === 'Completed' ? 'Completed' : pill.label)}
+								class={`${filterBaseClass} ${statusStyles[pill.key]} ${activeFilter === (pill.label === 'Completed' ? 'Completed' : pill.label) ? 'border-border/70 bg-background text-foreground shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'hover:border-border/50 hover:bg-background/70 hover:text-foreground'}`}
+							>
+								<span class="h-2 w-2 rounded-full bg-current/80"></span>
+								<span>{pill.count}</span>
+								<span>{pill.label}</span>
+							</Button>
+						{/each}
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<Button variant="secondary" type="button" onclick={() => (showAgentSettings = true)}>
+							Agents
+						</Button>
+						<Button type="button" onclick={() => (showDispatch = true)}>
+							<Plus size={16} weight="bold" />
+							Dispatch
+							<span class="text-xs opacity-70">⌘K</span>
+						</Button>
+					</div>
+				</section>
 
-			<section class="px-2">
-				<TaskFeed
-					tasks={filteredTasks}
-					onToggleExpanded={toggleExpanded}
-					onStop={handleStop}
-					onRestart={handleRestart}
-					highlightStatus={highlightStatus}
-				/>
-			</section>
+				<section class="px-2">
+					<TaskFeed
+						tasks={filteredTasks}
+						onToggleExpanded={toggleExpanded}
+						onStop={handleStop}
+						onRestart={handleRestart}
+						highlightStatus={highlightStatus}
+					/>
+				</section>
+			{/if}
 		</div>
 	</div>
 
