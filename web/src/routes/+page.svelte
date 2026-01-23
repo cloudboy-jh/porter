@@ -5,14 +5,16 @@
 	import TaskFeed from '$lib/components/TaskFeed.svelte';
 	import { Plus } from 'phosphor-svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import type { PageData } from './$types';
 	import type { AgentConfig, ParsedCommand } from '$lib/types/agent';
 	import type { Task } from '$lib/types/task';
 
 	let showAgentSettings = $state(false);
+	let { data } = $props<{ data: PageData }>();
 	let showDispatch = $state(false);
 	let agentConfig = $state<AgentConfig[]>([]);
 	let tasks = $state<Task[]>([]);
-	let isConnected = $state(true);
+	const isConnected = $derived(Boolean(data?.session));
 	const mockTasks: Task[] = [
 		{
 			id: 'task-1001',
@@ -424,7 +426,7 @@
 						Authorize Porter to start dispatching tasks and opening PRs.
 					</p>
 					<div class="mt-4 flex justify-center">
-						<Button size="lg">Connect GitHub</Button>
+						<Button size="lg" href="/api/auth/github">Connect GitHub</Button>
 					</div>
 				</div>
 			{:else}

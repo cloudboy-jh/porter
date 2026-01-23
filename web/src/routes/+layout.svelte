@@ -64,7 +64,7 @@
 	};
 
 	let sidebarOpen = $state(false);
-	let { children } = $props();
+	let { children, data } = $props();
 </script>
 
 <svelte:head>

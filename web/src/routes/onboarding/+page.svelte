@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { CheckCircle, GithubLogo, ShieldCheck, Stack, UsersThree } from 'phosphor-svelte';
+	import { env } from '$env/dynamic/public';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -22,6 +23,9 @@
 		{ name: 'Claude Code', provider: 'Anthropic', enabled: true },
 		{ name: 'Aider', provider: 'OpenAI', enabled: false }
 	];
+
+	const appInstallUrl =
+		env.PUBLIC_GITHUB_APP_INSTALL_URL || 'https://github.com/apps/porter/installations/new';
 </script>
 
 <div class="grid gap-6 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
@@ -54,7 +58,7 @@
 					Workspace status
 				</div>
 				<p class="text-xs text-muted-foreground">GitHub app is not installed yet.</p>
-				<Button variant="secondary" size="sm" class="gap-2">
+				<Button variant="secondary" size="sm" class="gap-2" href={appInstallUrl}>
 					<GithubLogo size={14} weight="bold" />
 					Install GitHub App
 				</Button>
@@ -73,7 +77,7 @@
 					</p>
 				</div>
 				<div class="flex flex-wrap gap-3">
-					<Button class="gap-2">
+					<Button class="gap-2" href={appInstallUrl}>
 						<GithubLogo size={16} weight="bold" />
 						Install GitHub App
 					</Button>

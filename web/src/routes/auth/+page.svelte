@@ -15,7 +15,7 @@
 						Authorize Porter to run agents, open PRs, and keep your tasks moving while you stay focused.
 					</p>
 					<div class="flex flex-wrap gap-3">
-						<Button size="lg" class="gap-2">
+						<Button size="lg" class="gap-2" href="/api/auth/github">
 							<GithubLogo size={18} weight="bold" />
 							Continue with GitHub
 						</Button>

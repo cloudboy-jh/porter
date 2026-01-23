@@ -22,6 +22,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import DateFilterButton from '$lib/components/DateFilterButton.svelte';
 	import GitFilterButton from '$lib/components/GitFilterButton.svelte';
+	import type { PageData } from './$types';
 	import type { Task } from '$lib/server/types';
 
 	const agentDomains: Record<string, string> = {
@@ -63,11 +64,12 @@
 		return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
 	};
 
+	let { data } = $props<{ data: PageData }>();
 	let historyTasks = $state<Task[]>([]);
 	let totalTasks = $state(0);
 	let isLoading = $state(false);
 	let expandedTasks = $state<Record<string, boolean>>({});
-	let isConnected = $state(true);
+	const isConnected = $derived(Boolean(data?.session));
 
 	let activeStatus = $state<'all' | 'success' | 'failed'>('all');
 	let selectedAgent = $state('all');
@@ -394,7 +396,7 @@
 				Authorize Porter to record your completed tasks and PRs.
 			</p>
 			<div class="mt-4 flex justify-center">
-				<Button size="lg">Connect GitHub</Button>
+				<Button size="lg" href="/api/auth/github">Connect GitHub</Button>
 			</div>
 		</div>
 	{:else}

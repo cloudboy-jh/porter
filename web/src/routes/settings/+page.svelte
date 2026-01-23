@@ -5,10 +5,12 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import AgentSettings from '$lib/components/AgentSettings.svelte';
+	import type { PageData } from './$types';
 	import type { AgentConfig } from '$lib/types/agent';
 
+	let { data } = $props<{ data: PageData }>();
 	let agentConfig = $state<AgentConfig[]>([]);
-	let isConnected = $state(true);
+	const isConnected = $derived(Boolean(data?.session));
 
 	const enabledAgents = $derived(agentConfig.filter((agent) => agent.enabled).length);
 	const totalAgents = $derived(agentConfig.length);
@@ -57,7 +59,7 @@
 				Authorize Porter to configure agents, repos, and runtime preferences.
 			</p>
 			<div class="mt-4 flex justify-center">
-				<Button size="lg">Connect GitHub</Button>
+				<Button size="lg" href="/api/auth/github">Connect GitHub</Button>
 			</div>
 		</div>
 	{/if}
