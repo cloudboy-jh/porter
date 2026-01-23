@@ -13,11 +13,11 @@
 - [ ] UI/UX polish (in progress - timeline + states)
 
 ### Phase 2: Onboarding + Auth
-- [x] Auth landing UI shell
-- [x] Single-page onboarding wizard shell
-- [x] Unauthenticated empty states (dashboard/history/settings)
-- [ ] GitHub OAuth flow + session handling
-- [ ] GitHub App install detection
+- [x] Auth landing UI shell (no sidebar)
+- [x] Single-page onboarding wizard shell (no sidebar)
+- [x] GitHub OAuth flow + session handling
+- [x] GitHub App install detection
+- [x] Repo list from GitHub App installations
 - [ ] Persist onboarding configuration
 
 ### Phase 3: Core API + Task Model
@@ -49,11 +49,11 @@
 - URL persistence for all filters including git filters
 - Clear button resets all filters
 - Removed `repo:` from filter chips (now handled by git buttons)
-- Added Vitest + Testing Library setup with TaskFeed component test
-- Added Playwright scaffolding with a skipped history smoke test
-- Tightened timeline nodes, status badges, and dashboard empty state polish
-- Added auth landing and onboarding wizard UI shells
-- Added unauthenticated empty states for Phase 2 screens
+- Auth + onboarding pages now full-width, no sidebar shell.
+- Sign-in page uses Porter logo and fuller product copy.
+- Onboarding header added, app install required to unlock repo/agent steps.
+- Webhook signature verification added for GitHub events.
+- `.env.example` and setup guide updated for OAuth + webhooks.
 - History smart search, table header cleanup, and export placement polish.
 - Agent configuration quick mode styling for dashboard modal.
 - Continued UI refinements across cards, inputs, and status cues.

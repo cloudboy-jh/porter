@@ -61,7 +61,7 @@ If you want OAuth authentication for users to sign in:
 3. Note down:
    - **Client ID**
    - **Client Secret**
-4. Set **Callback URL**: `http://localhost:5173/auth/callback` (development)
+4. Set **Callback URL**: `http://localhost:5173/api/auth/github/callback` (development)
 
 ## Step 5: Install the App
 
@@ -76,12 +76,19 @@ If you want OAuth authentication for users to sign in:
 Copy your `.env.example` to `.env` and add the following:
 
 ```bash
-# GitHub App Configuration (Optional, for web OAuth)
-VITE_GITHUB_APP_ID=your_app_id
-VITE_GITHUB_CLIENT_ID=your_client_id
+# GitHub OAuth
+GITHUB_CLIENT_ID=your_client_id
+GITHUB_CLIENT_SECRET=your_client_secret
+GITHUB_OAUTH_REDIRECT_URI=http://localhost:5173/api/auth/github/callback
+
+# Session signing secret
+SESSION_SECRET=replace-with-a-secure-random-string
 
 # Webhook Secret (for verifying webhook signatures)
 WEBHOOK_SECRET=your_webhook_secret
+
+# GitHub App install link for onboarding
+PUBLIC_GITHUB_APP_INSTALL_URL=https://github.com/apps/porter/installations/new
 
 # GitHub Token (for desktop daemon)
 GITHUB_TOKEN=ghp_your_personal_access_token

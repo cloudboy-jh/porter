@@ -1,21 +1,27 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { CheckCircle, GithubLogo, ShieldCheck, Stack, UsersThree } from 'phosphor-svelte';
 	import { env } from '$env/dynamic/public';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
+	import type { PageData } from './$types';
+	import logo from '../../logos/porter-logo-main.png';
+
+	type Repo = {
+		id: number;
+		fullName: string;
+		owner: string;
+		name: string;
+		private: boolean;
+		description: string | null;
+	};
 
 	const steps = [
 		{ id: 'connect', label: 'Connect GitHub' },
 		{ id: 'repos', label: 'Select Repos' },
 		{ id: 'agents', label: 'Choose Agents' },
 		{ id: 'review', label: 'Review' }
-	];
-
-	const repos = [
-		{ name: 'porter/porter', status: 'Ready', description: 'Core orchestration service' },
-		{ name: 'porter/web', status: 'Ready', description: 'Dashboard + API routes' },
-		{ name: 'porter/modal', status: 'Install app', description: 'Modal execution layer' }
 	];
 
 	const agents = [
@@ -26,9 +32,62 @@
 
 	const appInstallUrl =
 		env.PUBLIC_GITHUB_APP_INSTALL_URL || 'https://github.com/apps/porter/installations/new';
+
+	let { data } = $props<{ data: PageData }>();
+	let repos = $state<Repo[]>([]);
+	let repoSearch = $state('');
+	let isLoadingRepos = $state(false);
+	let repoError = $state('');
+	let hasInstallation = $state(Boolean(data?.session?.hasInstallation));
+
+	const filteredRepos = $derived(
+		repoSearch
+			? repos.filter((repo) => repo.fullName.toLowerCase().includes(repoSearch.toLowerCase()))
+			: repos
+	);
+
+	onMount(async () => {
+		isLoadingRepos = true;
+		repoError = '';
+		try {
+			const response = await fetch('/api/github/repositories');
+			if (!response.ok) throw new Error('Failed to load repositories');
+			const payload = (await response.json()) as {
+				repositories: Repo[];
+				hasInstallation: boolean;
+			};
+			repos = payload.repositories ?? [];
+			hasInstallation = payload.hasInstallation;
+		} catch (error) {
+			repoError = error instanceof Error ? error.message : 'Failed to load repositories';
+		} finally {
+			isLoadingRepos = false;
+		}
+	});
 </script>
 
-<div class="grid gap-6 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+<div class="space-y-8">
+	<header class="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card/70 p-6 md:flex-row md:items-center md:justify-between">
+		<div class="flex items-center gap-4">
+			<img src={logo} alt="Porter" class="h-12 w-12 rounded-2xl border border-border/60 bg-background/70 p-2" />
+			<div>
+				<p class="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Onboarding</p>
+				<h1 class="text-2xl font-semibold text-foreground">Workspace Setup</h1>
+				<p class="text-sm text-muted-foreground">
+					Connect GitHub, install the app, and choose where Porter will ship code.
+				</p>
+			</div>
+		</div>
+		<div class="flex flex-wrap gap-2">
+			<Button variant="secondary">View setup docs</Button>
+			<Button href={appInstallUrl} class="gap-2">
+				<GithubLogo size={16} weight="bold" />
+				Install GitHub App
+			</Button>
+		</div>
+	</header>
+
+	<div class="grid gap-6 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
 	<section class="space-y-4">
 		<Card.Root class="border border-border/60 bg-card/70">
 			<Card.Content class="space-y-4 p-5">
@@ -57,11 +116,21 @@
 					</span>
 					Workspace status
 				</div>
-				<p class="text-xs text-muted-foreground">GitHub app is not installed yet.</p>
-				<Button variant="secondary" size="sm" class="gap-2" href={appInstallUrl}>
-					<GithubLogo size={14} weight="bold" />
-					Install GitHub App
-				</Button>
+				{#if hasInstallation}
+					<p class="text-xs text-muted-foreground">GitHub app is installed.</p>
+					<div class="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-emerald-600">
+						<CheckCircle size={14} weight="bold" />
+						Installed
+					</div>
+				{:else}
+					<p class="text-xs text-muted-foreground">
+						Required: install the GitHub app to enable webhooks and automation.
+					</p>
+					<Button variant="secondary" size="sm" class="gap-2" href={appInstallUrl}>
+						<GithubLogo size={14} weight="bold" />
+						Install GitHub App
+					</Button>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 	</section>
@@ -77,11 +146,15 @@
 					</p>
 				</div>
 				<div class="flex flex-wrap gap-3">
-					<Button class="gap-2" href={appInstallUrl}>
-						<GithubLogo size={16} weight="bold" />
-						Install GitHub App
-					</Button>
-					<Button variant="secondary">View permissions</Button>
+					{#if hasInstallation}
+						<Button variant="secondary">Review permissions</Button>
+					{:else}
+						<Button class="gap-2" href={appInstallUrl}>
+							<GithubLogo size={16} weight="bold" />
+							Install GitHub App
+						</Button>
+						<Button variant="secondary">View permissions</Button>
+					{/if}
 				</div>
 			</Card.Content>
 		</Card.Root>
@@ -93,20 +166,41 @@
 					<h2 class="text-lg font-semibold text-foreground">Select repositories</h2>
 					<p class="text-sm text-muted-foreground">Choose where Porter should listen for issues.</p>
 				</div>
-				<Input placeholder="Search repositories" />
-				<div class="space-y-3">
-					{#each repos as repo}
-						<div class="flex items-center justify-between rounded-xl border border-border/60 bg-background/70 px-4 py-3">
-							<div>
-								<p class="text-sm font-medium text-foreground">{repo.name}</p>
-								<p class="text-xs text-muted-foreground">{repo.description}</p>
-							</div>
-							<Button variant={repo.status === 'Ready' ? 'secondary' : 'ghost'} size="sm">
-								{repo.status}
-							</Button>
+				<div class={hasInstallation ? '' : 'opacity-50 pointer-events-none'}>
+					<Input bind:value={repoSearch} placeholder="Search repositories" disabled={!hasInstallation} />
+					{#if isLoadingRepos}
+						<div class="rounded-xl border border-border/60 bg-background/70 p-4 text-sm text-muted-foreground">
+							Loading repositories...
 						</div>
-					{/each}
+					{:else if repoError}
+						<div class="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+							{repoError}
+						</div>
+					{:else if filteredRepos.length === 0}
+						<div class="rounded-xl border border-border/60 bg-background/70 p-4 text-sm text-muted-foreground">
+							No repositories found.
+						</div>
+					{:else}
+						<div class="space-y-3">
+							{#each filteredRepos as repo}
+								<div class="flex items-center justify-between rounded-xl border border-border/60 bg-background/70 px-4 py-3">
+									<div>
+										<p class="text-sm font-medium text-foreground">{repo.fullName}</p>
+										<p class="text-xs text-muted-foreground">
+											{repo.description ?? 'Repository access granted.'}
+										</p>
+									</div>
+									<Button variant="secondary" size="sm">Ready</Button>
+								</div>
+							{/each}
+						</div>
+					{/if}
 				</div>
+				{#if !hasInstallation}
+					<div class="rounded-xl border border-border/60 bg-background/70 p-4 text-sm text-muted-foreground">
+						Install the GitHub App to unlock repository selection.
+					</div>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 
@@ -117,7 +211,7 @@
 					<h2 class="text-lg font-semibold text-foreground">Choose agents</h2>
 					<p class="text-sm text-muted-foreground">Enable and prioritize the agents you want available.</p>
 				</div>
-				<div class="grid gap-3 md:grid-cols-3">
+				<div class={`grid gap-3 md:grid-cols-3 ${hasInstallation ? '' : 'opacity-50 pointer-events-none'}`}>
 					{#each agents as agent}
 						<div class="rounded-xl border border-border/60 bg-background/70 p-4">
 							<div class="flex items-center justify-between">
@@ -137,6 +231,11 @@
 						</div>
 					{/each}
 				</div>
+				{#if !hasInstallation}
+					<div class="rounded-xl border border-border/60 bg-background/70 p-4 text-sm text-muted-foreground">
+						Install the GitHub App to enable agents for selected repositories.
+					</div>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 
@@ -147,7 +246,7 @@
 					<h2 class="text-lg font-semibold text-foreground">Review & finish</h2>
 					<p class="text-sm text-muted-foreground">Confirm your workspace setup.</p>
 				</div>
-				<div class="grid gap-3 md:grid-cols-3">
+				<div class={`grid gap-3 md:grid-cols-3 ${hasInstallation ? '' : 'opacity-50 pointer-events-none'}`}>
 					<div class="rounded-xl border border-border/60 bg-background/70 p-4">
 						<div class="flex items-center gap-2 text-xs text-muted-foreground">
 							<UsersThree size={14} weight="bold" />
@@ -171,10 +270,11 @@
 					</div>
 				</div>
 				<div class="flex flex-wrap gap-3">
-					<Button size="lg">Finish setup</Button>
+					<Button size="lg" disabled={!hasInstallation}>Finish setup</Button>
 					<Button variant="secondary" size="lg">Back</Button>
 				</div>
 			</Card.Content>
 		</Card.Root>
 	</section>
+</div>
 </div>

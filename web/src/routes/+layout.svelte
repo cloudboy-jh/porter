@@ -63,6 +63,8 @@
 		}
 	};
 
+	const shelllessRoutes = new Set(['/auth', '/onboarding']);
+
 	let sidebarOpen = $state(false);
 	let { children, data } = $props();
 </script>
@@ -77,22 +79,30 @@
 	/>
 </svelte:head>
 
-<SidebarProvider style="--sidebar-width: 18rem; --sidebar-width-mobile: 20rem;" bind:open={sidebarOpen}>
-	<AppSidebar />
-	<SidebarInset class="page-grid">
-		<header class="flex h-16 items-center justify-between gap-4 border-b border-border px-6">
-			<div class="flex items-center gap-3">
-				<SidebarTrigger />
-				<Breadcrumb items={headerMap[$page.url.pathname]?.breadcrumb ?? [{ label: 'porter' }]} />
-			</div>
-			{#if headerMap[$page.url.pathname]?.subtitle}
-				<p class="hidden text-sm text-muted-foreground md:block">
-					{headerMap[$page.url.pathname]?.subtitle}
-				</p>
-			{/if}
-		</header>
-		<div class="flex flex-1 flex-col gap-6 p-6 md:gap-8 md:p-8">
+{#if shelllessRoutes.has($page.url.pathname)}
+	<div class="min-h-screen bg-background px-6 py-10">
+		<div class="mx-auto flex w-full max-w-6xl flex-col gap-10">
 			{@render children()}
 		</div>
-	</SidebarInset>
-</SidebarProvider>
+	</div>
+{:else}
+	<SidebarProvider style="--sidebar-width: 18rem; --sidebar-width-mobile: 20rem;" bind:open={sidebarOpen}>
+		<AppSidebar />
+		<SidebarInset class="page-grid">
+			<header class="flex h-16 items-center justify-between gap-4 border-b border-border px-6">
+				<div class="flex items-center gap-3">
+					<SidebarTrigger />
+					<Breadcrumb items={headerMap[$page.url.pathname]?.breadcrumb ?? [{ label: 'porter' }]} />
+				</div>
+				{#if headerMap[$page.url.pathname]?.subtitle}
+					<p class="hidden text-sm text-muted-foreground md:block">
+						{headerMap[$page.url.pathname]?.subtitle}
+					</p>
+				{/if}
+			</header>
+			<div class="flex flex-1 flex-col gap-6 p-6 md:gap-8 md:p-8">
+				{@render children()}
+			</div>
+		</SidebarInset>
+	</SidebarProvider>
+{/if}
