@@ -3,8 +3,9 @@
 	import AgentSettingsModal from '$lib/components/AgentSettingsModal.svelte';
 	import CommandBar from '$lib/components/CommandBar.svelte';
 	import TaskFeed from '$lib/components/TaskFeed.svelte';
-	import { Plus } from 'phosphor-svelte';
+	import { GitBranch, Plus, RocketLaunch, Sparkle } from 'phosphor-svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import * as Card from '$lib/components/ui/card/index.js';
 	import type { PageData } from './$types';
 	import type { AgentConfig, ParsedCommand } from '$lib/types/agent';
 	import type { Task } from '$lib/types/task';
@@ -14,183 +15,14 @@
 	let showDispatch = $state(false);
 	let agentConfig = $state<AgentConfig[]>([]);
 	let tasks = $state<Task[]>([]);
+	let isLoadingTasks = $state(false);
+	let tasksError = $state('');
 	const isConnected = $derived(Boolean(data?.session));
-	const mockTasks: Task[] = [
-		{
-			id: 'task-1001',
-			status: 'running',
-			statusLabel: 'RUN',
-			title: 'Upgrade auth middleware',
-			technicalSummary: 'Changed auth middleware: JWT signing -> OAuth2 flow',
-			repo: 'porter',
-			branch: 'main',
-			issue: '#412',
-			agent: 'opencode',
-			progress: 72,
-			started: '3m ago',
-			expanded: true,
-			logs: [
-				{ time: '14:32:01', level: 'info', message: 'Starting task execution' },
-				{ time: '14:32:10', level: 'info', message: 'Scanning repository structure' },
-				{ time: '14:32:24', level: 'warning', message: 'Auth tests failed in staging' }
-			],
-			git: { add: 18, remove: 6 }
-		},
-		{
-			id: 'task-1002',
-			status: 'queued',
-			statusLabel: 'QUE',
-			title: 'Reduce bundle size',
-			technicalSummary: 'Changed build pipeline: full bundle -> split chunks',
-			repo: 'atlas',
-			branch: 'release',
-			issue: '#77',
-			agent: 'claude',
-			progress: 0,
-			started: '-',
-			expanded: false,
-			logs: [],
-			git: { add: 0, remove: 0 }
-		},
-		{
-			id: 'task-1003',
-			status: 'success',
-			statusLabel: 'DONE',
-			title: 'Refresh billing copy',
-			technicalSummary: 'Updated billing copy: verbose -> concise',
-			repo: 'harvest',
-			branch: 'main',
-			issue: '#201',
-			agent: 'cursor',
-			progress: 100,
-			started: '48m ago',
-			expanded: false,
-			prUrl: 'https://github.com/jackgolding/harvest/pull/124',
-			prNumber: 124,
-			commitHash: 'a3f2c91',
-			git: { add: 8, remove: 3 },
-			logs: []
-		},
-		{
-			id: 'task-1004',
-			status: 'failed',
-			statusLabel: 'FAIL',
-			title: 'Normalize telemetry payloads',
-			technicalSummary: 'Normalized telemetry payloads: mixed keys -> schema',
-			repo: 'signal',
-			branch: 'develop',
-			issue: '#89',
-			agent: 'windsurf',
-			progress: 38,
-			started: '12m ago',
-			expanded: false,
-			logs: [],
-			git: { add: 26, remove: 12 }
-		},
-		{
-			id: 'task-1005',
-			status: 'running',
-			statusLabel: 'RUN',
-			title: 'Add audit trail filters',
-			technicalSummary: 'Added filters: date only -> status + date',
-			repo: 'ledger',
-			branch: 'main',
-			issue: '#55',
-			agent: 'opencode',
-			progress: 44,
-			started: '9m ago',
-			expanded: false,
-			logs: [],
-			git: { add: 11, remove: 4 }
-		},
-		{
-			id: 'task-1006',
-			status: 'queued',
-			statusLabel: 'QUE',
-			title: 'Instrument API latency',
-			technicalSummary: 'Added latency metrics: none -> p95 tracking',
-			repo: 'pulse',
-			branch: 'observability',
-			issue: '#133',
-			agent: 'cline',
-			progress: 0,
-			started: '-',
-			expanded: false,
-			logs: [],
-			git: { add: 0, remove: 0 }
-		},
-		{
-			id: 'task-1007',
-			status: 'success',
-			statusLabel: 'DONE',
-			title: 'Update onboarding emails',
-			technicalSummary: 'Updated onboarding emails: 5-step -> 3-step',
-			repo: 'onboard',
-			branch: 'main',
-			issue: '#19',
-			agent: 'claude',
-			progress: 100,
-			started: '2h ago',
-			expanded: false,
-			prUrl: 'https://github.com/jackgolding/onboard/pull/88',
-			prNumber: 88,
-			commitHash: 'c91df08',
-			git: { add: 14, remove: 6 },
-			logs: []
-		},
-		{
-			id: 'task-1008',
-			status: 'failed',
-			statusLabel: 'FAIL',
-			title: 'Refactor plan limits logic',
-			technicalSummary: 'Refactored limits logic: hardcoded -> config-driven',
-			repo: 'meter',
-			branch: 'main',
-			issue: '#247',
-			agent: 'windsurf',
-			progress: 61,
-			started: '28m ago',
-			expanded: false,
-			logs: [],
-			git: { add: 34, remove: 21 }
-		},
-		{
-			id: 'task-1009',
-			status: 'running',
-			statusLabel: 'RUN',
-			title: 'Improve retry backoff',
-			technicalSummary: 'Adjusted retry backoff: linear -> exponential',
-			repo: 'relay',
-			branch: 'main',
-			issue: '#308',
-			agent: 'cursor',
-			progress: 18,
-			started: '4m ago',
-			expanded: false,
-			logs: [],
-			git: { add: 6, remove: 2 }
-		},
-		{
-			id: 'task-1010',
-			status: 'queued',
-			statusLabel: 'QUE',
-			title: 'Tighten error boundaries',
-			technicalSummary: 'Updated error boundaries: per-page -> per-section',
-			repo: 'core',
-			branch: 'main',
-			issue: '#312',
-			agent: 'aider',
-			progress: 0,
-			started: '-',
-			expanded: false,
-			logs: [],
-			git: { add: 0, remove: 0 }
-		}
-	];
-
-	const loadAgents = async () => {
+	const loadAgents = async (force = false) => {
 		try {
-			const response = await fetch('http://localhost:3000/api/agents');
+			const response = await fetch(force ? '/api/agents/scan' : '/api/agents', {
+				method: force ? 'POST' : 'GET'
+			});
 			if (!response.ok) return;
 			const data = await response.json();
 			agentConfig = data as AgentConfig[];
@@ -200,10 +32,13 @@
 	};
 
 	const loadTasks = async () => {
+		isLoadingTasks = true;
+		tasksError = '';
 		try {
-			const response = await fetch('http://localhost:3000/api/tasks');
+			const response = await fetch('/api/tasks');
 			if (!response.ok) {
-				tasks = mockTasks;
+				tasksError = 'Failed to load tasks.';
+				tasks = [];
 				return;
 			}
 			const data = await response.json() as Array<{
@@ -219,10 +54,13 @@
 				createdAt: string;
 				startedAt?: string;
 				completedAt?: string;
-				logs: Array<{ level: string; message: string; timestamp: string }>;
+				issueUrl?: string;
+				prUrl?: string;
+				prNumber?: number;
+				logs: Array<{ level: string; message: string; time: string }>;
 			}>;
 			if (!data.length) {
-				tasks = mockTasks;
+				tasks = [];
 				return;
 			}
 			tasks = data.map((task) => ({
@@ -230,15 +68,19 @@
 				status: task.status as Task['status'],
 				statusLabel: getStatusLabel(task.status),
 				title: task.issueTitle,
+				repoOwner: task.repoOwner,
 				repo: task.repoName,
 				branch: task.branch ?? 'main',
 				issue: `#${task.issueNumber}`,
+				issueUrl: task.issueUrl,
 				agent: task.agent,
 				progress: task.progress,
 				started: getRelativeTime(task.startedAt || task.createdAt),
 				expanded: false,
+				prUrl: task.prUrl,
+				prNumber: task.prNumber,
 				logs: task.logs.map((log) => ({
-					time: new Date(log.timestamp).toLocaleTimeString('en-US', {
+					time: new Date(log.time).toLocaleTimeString('en-US', {
 						hour12: false,
 						hour: '2-digit',
 						minute: '2-digit'
@@ -249,7 +91,10 @@
 			}));
 		} catch (error) {
 			console.error('Failed to load tasks:', error);
-			tasks = mockTasks;
+			tasksError = 'Failed to load tasks.';
+			tasks = [];
+		} finally {
+			isLoadingTasks = false;
 		}
 	};
 
@@ -275,18 +120,16 @@
 
 	const handleCommandSubmit = async (payload: ParsedCommand) => {
 		try {
-			const response = await fetch('http://localhost:3000/api/tasks', {
+			const response = await fetch('/api/tasks', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					repoOwner: 'jackgolding',
+					repoOwner: payload.repoOwner,
 					repoName: payload.repoName,
-					issueNumber: 1,
-					issueTitle: payload.prompt,
-					issueBody: '',
+					issueNumber: payload.issueNumber,
+					prompt: payload.prompt,
 					agent: payload.agent,
-					priority: 3,
-					createdBy: 'you'
+					priority: payload.priority
 				})
 			});
 			if (!response.ok) throw new Error('Failed to create task');
@@ -335,7 +178,7 @@
 	};
 
 	onMount(() => {
-		loadAgents();
+		loadAgents(true);
 		loadTasks();
 
 		window.addEventListener('task-update', handleTaskUpdate as EventListener);
@@ -374,7 +217,7 @@
 
 	const handleStop = async (id: string) => {
 		try {
-			const response = await fetch(`http://localhost:3000/api/tasks/${id}/stop`, {
+			const response = await fetch(`/api/tasks/${encodeURIComponent(id)}/stop`, {
 				method: 'PUT'
 			});
 			if (!response.ok) throw new Error('Failed to stop task');
@@ -386,7 +229,7 @@
 
 	const handleRestart = async (id: string) => {
 		try {
-			const response = await fetch(`http://localhost:3000/api/tasks/${id}/retry`, {
+			const response = await fetch(`/api/tasks/${encodeURIComponent(id)}/retry`, {
 				method: 'PUT'
 			});
 			if (!response.ok) throw new Error('Failed to restart task');
@@ -466,15 +309,84 @@
 					</div>
 				</section>
 
-				<section class="px-2">
-					<TaskFeed
-						tasks={filteredTasks}
-						onToggleExpanded={toggleExpanded}
-						onStop={handleStop}
-						onRestart={handleRestart}
-						highlightStatus={highlightStatus}
-					/>
-				</section>
+				{#if isLoadingTasks}
+					<div class="rounded-2xl border border-border/60 bg-card/70 p-10 text-center text-sm text-muted-foreground">
+						Loading tasks...
+					</div>
+				{:else if tasks.length === 0}
+					<Card.Root class="relative overflow-hidden border border-border/60 bg-card/70 shadow-[0_20px_45px_-30px_rgba(8,8,8,0.65)]">
+						<div class="pointer-events-none absolute inset-0">
+							<div class="absolute -top-24 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-primary/20 blur-3xl"></div>
+							<div class="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(251,146,60,0.12),transparent_55%)]"></div>
+						</div>
+						<Card.Content class="relative mx-auto flex max-w-2xl flex-col items-center gap-6 p-10 text-center">
+							<div class="flex flex-wrap items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+								<span class="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-primary">
+									<Sparkle size={14} weight="bold" />
+									First run
+								</span>
+								<span class="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1 text-muted-foreground">
+									<RocketLaunch size={12} weight="bold" />
+									Cloud native
+								</span>
+							</div>
+							<div class="space-y-2">
+								<h2 class="text-2xl font-semibold text-foreground">Dispatch Your First Porter Task</h2>
+								<p class="text-sm text-muted-foreground">Pick a repo and issue, then Porter ships a PR.</p>
+							</div>
+							<div class="grid gap-4 text-left text-sm text-muted-foreground sm:grid-cols-3">
+								<div class="flex items-start gap-3 rounded-xl border border-border/60 bg-background/80 p-4 shadow-[0_6px_18px_-16px_rgba(15,15,15,0.6)]">
+									<span class="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-muted/60 text-primary">
+										<GitBranch size={16} weight="bold" />
+									</span>
+									<div>
+										<p class="text-sm font-semibold text-foreground">Repo + issue linked</p>
+										<p class="text-xs text-muted-foreground">Porter pulls context + permissions.</p>
+									</div>
+								</div>
+								<div class="flex items-start gap-3 rounded-xl border border-border/60 bg-background/80 p-4 shadow-[0_6px_18px_-16px_rgba(15,15,15,0.6)]">
+									<span class="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-muted/60 text-primary">
+										<RocketLaunch size={16} weight="bold" />
+									</span>
+									<div>
+										<p class="text-sm font-semibold text-foreground">Agent executes in cloud</p>
+										<p class="text-xs text-muted-foreground">Live logs stream into the timeline.</p>
+									</div>
+								</div>
+								<div class="flex items-start gap-3 rounded-xl border border-border/60 bg-background/80 p-4 shadow-[0_6px_18px_-16px_rgba(15,15,15,0.6)]">
+									<span class="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-muted/60 text-primary">
+										<Sparkle size={16} weight="bold" />
+									</span>
+									<div>
+										<p class="text-sm font-semibold text-foreground">PR ready to review</p>
+										<p class="text-xs text-muted-foreground">Review, merge, and track results.</p>
+									</div>
+								</div>
+							</div>
+							{#if tasksError}
+								<div class="inline-flex items-center gap-2 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-destructive">
+									{tasksError}
+								</div>
+							{/if}
+							<div class="flex flex-wrap items-center justify-center gap-3">
+								<Button size="lg" class="gap-2" onclick={() => (showDispatch = true)}>
+									Run first task
+									<span class="text-xs opacity-70">⌘K</span>
+								</Button>
+							</div>
+						</Card.Content>
+					</Card.Root>
+				{:else}
+					<section class="px-2">
+						<TaskFeed
+							tasks={filteredTasks}
+							onToggleExpanded={toggleExpanded}
+							onStop={handleStop}
+							onRestart={handleRestart}
+							highlightStatus={highlightStatus}
+						/>
+					</section>
+				{/if}
 			{/if}
 		</div>
 	</div>

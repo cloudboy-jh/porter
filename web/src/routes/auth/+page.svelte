@@ -24,11 +24,11 @@
 		<Card.Root class="border border-border/60 bg-card/70 shadow-[0_20px_40px_-28px_rgba(15,15,15,0.5)]">
 			<Card.Content class="grid gap-8 p-8 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
 				<div class="space-y-4">
-					<p class="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Sign in</p>
+					<p class="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Sign in / Sign up</p>
 					<h1 class="text-2xl font-semibold text-foreground">Connect Porter to GitHub</h1>
 					<p class="text-sm text-muted-foreground">
-						Authorize Porter to resolve issues, open PRs, and keep your backlog moving with
-						continuous agent execution.
+						Use GitHub to sign in or create your Porter workspace. We will sync your profile and
+						configure repos + agents automatically after authorization.
 					</p>
 					<ul class="space-y-2 text-sm text-muted-foreground">
 						<li class="flex items-center gap-2">
@@ -51,6 +51,9 @@
 						</Button>
 						<Button variant="secondary" size="lg">Preview workflow</Button>
 					</div>
+					<p class="text-xs text-muted-foreground">
+						If the GitHub App is not installed, we will redirect you to install it.
+					</p>
 				</div>
 				<div class="space-y-4 rounded-2xl border border-border/60 bg-background/70 p-6">
 					<div class="flex items-center gap-3 text-sm font-medium">

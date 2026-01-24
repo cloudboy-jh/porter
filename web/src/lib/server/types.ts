@@ -21,7 +21,9 @@ export interface Task {
 	startedAt?: string;
 	completedAt?: string;
 	createdBy: string;
+	issueUrl?: string;
 	prNumber?: number;
+	prUrl?: string;
 	errorMessage?: string;
 	logs: TaskLog[];
 }
@@ -49,5 +51,16 @@ export interface PorterConfig {
 		maxRetries: number;
 		taskTimeout: number;
 		pollInterval: number;
+	};
+	onboarding?: {
+		completed: boolean;
+		selectedRepos: Array<{
+			id: number;
+			fullName: string;
+			owner: string;
+			name: string;
+			private: boolean;
+		}>;
+		enabledAgents: string[];
 	};
 }

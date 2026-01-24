@@ -1,10 +1,13 @@
 import { redirect } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
+import { env as privateEnv } from '$env/dynamic/private';
+import { env as publicEnv } from '$env/dynamic/public';
 import {
 	clearOAuthState,
 	getOAuthState,
 	setSession
 } from '$lib/server/auth';
+import { getConfig, updateConfig } from '$lib/server/store';
+import { listInstallationRepos } from '$lib/server/github';
 import type { RequestHandler } from './$types';
 
 const fetchJson = async <T>(url: string, options: RequestInit): Promise<T> => {
@@ -25,8 +28,8 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		throw redirect(302, '/auth?error=oauth_state');
 	}
 
-	const clientId = env.GITHUB_CLIENT_ID;
-	const clientSecret = env.GITHUB_CLIENT_SECRET;
+	const clientId = privateEnv.GITHUB_CLIENT_ID;
+	const clientSecret = privateEnv.GITHUB_CLIENT_SECRET;
 
 	if (!clientId || !clientSecret) {
 		throw redirect(302, '/auth?error=missing_client');
@@ -63,28 +66,86 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		}
 	);
 
-	const installations = await fetchJson<{ total_count: number }>(
-		'https://api.github.com/user/installations',
-		{
-			headers: {
-				Authorization: `Bearer ${accessToken}`,
-				Accept: 'application/vnd.github+json'
+	let primaryEmail: string | null = null;
+	try {
+		const emails = await fetchJson<Array<{ email: string; primary: boolean; verified: boolean }>>(
+			'https://api.github.com/user/emails',
+			{
+				headers: {
+					Authorization: `Bearer ${accessToken}`,
+					Accept: 'application/vnd.github+json'
+				}
 			}
-		}
-	);
+		);
+		primaryEmail =
+			emails.find((email) => email.primary && email.verified)?.email ??
+			emails.find((email) => email.verified)?.email ??
+			emails[0]?.email ??
+			null;
+	} catch (error) {
+		console.error('GitHub email fetch failed:', error);
+	}
 
-	const hasInstallation = installations.total_count > 0;
+	let hasInstallation = false;
+	try {
+		const installations = await fetchJson<{ total_count: number }>(
+			'https://api.github.com/user/installations',
+			{
+				headers: {
+					Authorization: `Bearer ${accessToken}`,
+					Accept: 'application/vnd.github+json'
+				}
+			}
+		);
+		hasInstallation = installations.total_count > 0;
+	} catch (error) {
+		console.error('GitHub installation fetch failed:', error);
+	}
 
 	setSession(cookies, {
 		user: {
 			id: user.id,
 			login: user.login,
 			name: user.name,
-			avatarUrl: user.avatar_url
+			avatarUrl: user.avatar_url,
+			email: primaryEmail
 		},
 		token: accessToken,
 		hasInstallation
 	});
 
-	throw redirect(302, '/onboarding');
+	if (!hasInstallation) {
+		const appInstallUrl =
+			publicEnv.PUBLIC_GITHUB_APP_INSTALL_URL ??
+			'https://github.com/apps/porter/installations/new';
+		throw redirect(302, appInstallUrl);
+	}
+
+	try {
+		const config = await getConfig();
+		if (!config.onboarding?.completed) {
+			const { repositories } = await listInstallationRepos(accessToken);
+			const selectedRepos = repositories.map((repo) => ({
+				id: repo.id,
+				fullName: repo.fullName,
+				owner: repo.owner,
+				name: repo.name,
+				private: repo.private
+			}));
+			await updateConfig({
+				...config,
+				onboarding: {
+					completed: true,
+					selectedRepos,
+					enabledAgents: config.onboarding?.enabledAgents?.length
+						? config.onboarding.enabledAgents
+						: ['opencode', 'claude']
+				}
+			});
+		}
+	} catch (error) {
+		console.error('Auth callback config update failed:', error);
+	}
+
+	throw redirect(302, '/');
 };

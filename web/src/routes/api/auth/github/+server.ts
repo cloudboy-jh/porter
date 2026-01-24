@@ -20,7 +20,7 @@ export const GET: RequestHandler = ({ url, cookies }) => {
 		client_id: clientId,
 		redirect_uri: redirectUri,
 		state,
-		scope: 'read:user repo'
+		scope: 'read:user user:email read:org repo'
 	});
 
 	throw redirect(302, `https://github.com/login/oauth/authorize?${params.toString()}`);

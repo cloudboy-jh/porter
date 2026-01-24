@@ -25,6 +25,8 @@
 	import type { PageData } from './$types';
 	import type { Task } from '$lib/server/types';
 
+	type TaskWithLinks = Task & { issueUrl?: string; prUrl?: string; branch?: string };
+
 	const agentDomains: Record<string, string> = {
 		opencode: 'opencode.ai',
 		claude: 'claude.ai',
@@ -38,6 +40,8 @@
 		`https://www.google.com/s2/favicons?domain=${agentDomains[agent] ?? 'github.com'}&sz=64`;
 
 	const statusStyles: Record<string, string> = {
+		queued: 'border border-border/60 bg-muted/70 text-muted-foreground',
+		running: 'border border-primary/30 bg-primary/10 text-primary',
 		success: 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-600',
 		failed: 'border border-destructive/30 bg-destructive/10 text-destructive'
 	};
@@ -65,13 +69,13 @@
 	};
 
 	let { data } = $props<{ data: PageData }>();
-	let historyTasks = $state<Task[]>([]);
+	let historyTasks = $state<TaskWithLinks[]>([]);
 	let totalTasks = $state(0);
 	let isLoading = $state(false);
 	let expandedTasks = $state<Record<string, boolean>>({});
 	const isConnected = $derived(Boolean(data?.session));
 
-	let activeStatus = $state<'all' | 'success' | 'failed'>('all');
+	let activeStatus = $state<'all' | 'queued' | 'running' | 'success' | 'failed'>('all');
 	let selectedAgent = $state('all');
 	let selectedRepo = $state('all');
 	let selectedBranch = $state<string | null>(null);
@@ -345,20 +349,14 @@
 	]);
 
 	const availableBranches: string[] = $derived(
-		Array.from(new Set(['main', 'develop', 'release', 'staging']))
+		Array.from(new Set(historyTasks.map((task) => task.branch).filter(Boolean) as string[]))
 	);
 
 	const availableIssues: string[] = $derived(
 		Array.from(new Set(historyTasks.map((task) => `#${task.issueNumber}`)))
 	);
-	const repoOptions = $derived(
-		availableRepos.filter((r) => r !== 'all').length
-			? availableRepos.filter((r) => r !== 'all')
-			: ['porter/app', 'atlas/release', 'core/main']
-	);
-	const issueOptions = $derived(
-		availableIssues.length ? availableIssues : ['#412', '#77', '#201']
-	);
+	const repoOptions = $derived(availableRepos.filter((r) => r !== 'all'));
+	const issueOptions = $derived(availableIssues);
 
 	const statusLabel = $derived(activeStatus === 'all' ? 'Status' : activeStatus);
 	const agentLabel = $derived(selectedAgent === 'all' ? 'Agent' : selectedAgent);
@@ -366,16 +364,26 @@
 	const repoLabel = $derived(selectedRepo === 'all' ? 'Repository' : selectedRepo ?? 'Repository');
 	const branchLabel = $derived(selectedBranch ?? 'Branch');
 	const issueLabel = $derived(selectedIssue ?? 'Issue');
-	const statusIcon = $derived(activeStatus === 'failed' ? WarningCircle : CheckCircle);
+	const statusIcon = $derived(
+		activeStatus === 'failed'
+			? WarningCircle
+			: activeStatus === 'running'
+				? Robot
+				: activeStatus === 'queued'
+					? Clock
+					: CheckCircle
+	);
 	const filtersVisible = $derived(true);
 
 	const filterTone = 'text-primary';
 
-	const statusOptions = ['all', 'success', 'failed'];
+	const statusOptions = ['all', 'queued', 'running', 'success', 'failed'];
 
 	const getStatusTone = (value: string) => {
 		if (value === 'success') return 'text-emerald-600';
 		if (value === 'failed') return 'text-destructive';
+		if (value === 'running') return 'text-primary';
+		if (value === 'queued') return 'text-muted-foreground';
 		return 'text-muted-foreground';
 	};
 
@@ -560,7 +568,13 @@
 						>
 							<Card.Content class="grid min-h-[72px] grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 px-2 py-3">
 								<Badge class={`text-[0.6rem] font-semibold uppercase tracking-[0.2em] ${statusStyles[task.status]}`}>
-									{task.status === 'success' ? 'DONE' : 'FAIL'}
+									{task.status === 'success'
+										? 'DONE'
+										: task.status === 'failed'
+											? 'FAIL'
+											: task.status === 'running'
+												? 'RUN'
+												: 'QUE'}
 								</Badge>
 								<div>
 									<div class="font-medium text-foreground">{task.issueTitle}</div>
@@ -646,7 +660,25 @@
 											<ArrowCounterClockwise size={14} weight="bold" />
 											Retry
 										</Button>
-										<Button variant="secondary" size="sm" disabled={!task.prNumber}>
+										<Button
+											variant="secondary"
+											size="sm"
+											href={task.issueUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+											disabled={!task.issueUrl}
+										>
+											<ArrowUpRight size={14} weight="bold" />
+											View Issue
+										</Button>
+										<Button
+											variant="secondary"
+											size="sm"
+											href={task.prUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+											disabled={!task.prUrl}
+										>
 											<ArrowUpRight size={14} weight="bold" />
 											View PR
 										</Button>

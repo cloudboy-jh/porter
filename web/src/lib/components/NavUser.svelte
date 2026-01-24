@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { CaretUpDown, Gear, GitBranch, SignOut, User } from 'phosphor-svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Avatar, AvatarFallback, AvatarImage } from '$lib/components/ui/avatar/index.js';
@@ -7,16 +8,34 @@
 
 	let { compact = false, iconOnly = false }: { compact?: boolean; iconOnly?: boolean } = $props();
 
-	const user = {
-		name: 'Jack Horton',
-		handle: '@cloudboy-jh',
-		avatar: 'https://github.com/johnhorton.png'
+	const session = $derived($page.data?.session ?? null);
+	const user = $derived({
+		name: session?.user.name ?? session?.user.login ?? 'GitHub user',
+		handle: session?.user.login ? `@${session.user.login}` : 'Not connected',
+		avatar: session?.user.avatarUrl ?? ''
+	});
+
+	const github = $derived({
+		connected: Boolean(session),
+		handle: session?.user.login ? `@${session.user.login}` : 'Not connected',
+		updated: session ? 'Just now' : '—'
+	});
+
+	const handleSignOut = async () => {
+		try {
+			await fetch('/api/auth/logout', { method: 'POST' });
+		} catch (error) {
+			console.error('Sign out failed:', error);
+		}
+		await goto('/auth');
 	};
 
-	const github = {
-		connected: true,
-		handle: '@jackgolding',
-		updated: '3m ago'
+	const handleGitHubAction = async () => {
+		if (github.connected) {
+			await handleSignOut();
+			return;
+		}
+		await goto('/auth');
 	};
 </script>
 
@@ -41,7 +60,7 @@
 					{:else}
 						<Avatar class={compact ? 'size-7' : 'size-8'}>
 							<AvatarImage src={user.avatar} alt={user.name} />
-							<AvatarFallback>JH</AvatarFallback>
+							<AvatarFallback>GH</AvatarFallback>
 						</Avatar>
 					{/if}
 					<div
@@ -71,18 +90,18 @@
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Content side="top" align="start" class="w-64">
 		<DropdownMenu.Label>Account</DropdownMenu.Label>
-		<div class="px-2 pb-2">
-			<div class="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-2">
-				<Avatar class="size-8">
-					<AvatarImage src={user.avatar} alt={user.name} />
-					<AvatarFallback>JH</AvatarFallback>
-				</Avatar>
-				<div class="text-xs">
-					<div class="font-medium text-foreground">{user.name}</div>
-					<div class="text-muted-foreground">{user.handle}</div>
+			<div class="px-2 pb-2">
+				<div class="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-2">
+					<Avatar class="size-8">
+						<AvatarImage src={user.avatar} alt={user.name} />
+						<AvatarFallback>GH</AvatarFallback>
+					</Avatar>
+					<div class="text-xs">
+						<div class="font-medium text-foreground">{user.name}</div>
+						<div class="text-muted-foreground">{user.handle}</div>
+					</div>
 				</div>
 			</div>
-		</div>
 		<DropdownMenu.Separator />
 		<DropdownMenu.Label>GitHub</DropdownMenu.Label>
 		<div class="px-2 pb-2 text-xs text-muted-foreground">
@@ -91,7 +110,7 @@
 				<span>{github.updated}</span>
 			</div>
 		</div>
-		<DropdownMenu.Item>
+		<DropdownMenu.Item onclick={handleGitHubAction}>
 			<GitBranch size={16} weight="bold" />
 			{github.connected ? 'Disconnect GitHub' : 'Connect GitHub'}
 		</DropdownMenu.Item>
@@ -105,7 +124,7 @@
 			Settings
 		</DropdownMenu.Item>
 		<DropdownMenu.Separator />
-		<DropdownMenu.Item>
+		<DropdownMenu.Item onclick={handleSignOut}>
 			<SignOut size={16} weight="bold" />
 			Sign out
 		</DropdownMenu.Item>

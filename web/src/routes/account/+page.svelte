@@ -1,22 +1,30 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import { ArrowSquareOut, GithubLogo, ShieldCheck, UserCircle } from 'phosphor-svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
+	import type { PageData } from './$types';
 
-	const user = {
-		name: 'Jack Horton',
-		handle: '@cloudboy-jh',
-		email: 'jack@porter.ai',
+	let { data } = $props<{ data: PageData }>();
+	const sessionUser = data?.session?.user;
+
+	let user = $state({
+		name: sessionUser?.name ?? sessionUser?.login ?? 'GitHub user',
+		handle: sessionUser?.login ? `@${sessionUser.login}` : 'Not connected',
+		email: sessionUser?.email ?? 'Email unavailable',
 		role: 'Workspace Admin'
-	};
+	});
 
-	const github = {
-		connected: true,
-		handle: '@jackgolding',
-		lastSync: '3m ago'
-	};
+	let github = $state({
+		connected: Boolean(sessionUser),
+		handle: sessionUser?.login ? `@${sessionUser.login}` : 'Not connected',
+		lastSync: 'Just now',
+		orgCount: 0,
+		repoCount: 0,
+		installationCount: 0
+	});
 
 	const workspace = {
 		name: 'Porter Labs',
@@ -29,6 +37,37 @@
 		location: 'San Francisco, CA',
 		sessions: '3 active sessions'
 	};
+
+	onMount(async () => {
+		if (!sessionUser) return;
+		try {
+			const response = await fetch('/api/github/summary');
+			if (!response.ok) return;
+			const payload = (await response.json()) as {
+				user: { login: string; name: string | null; avatarUrl: string; email?: string | null };
+				organizations: Array<{ login: string }>;
+				repositories: Array<{ id: number }>;
+				installations: Array<{ id: number }>;
+			};
+			user = {
+				...user,
+				name: payload.user.name ?? payload.user.login,
+				handle: `@${payload.user.login}`,
+				email: payload.user.email ?? user.email
+			};
+			github = {
+				...github,
+				connected: true,
+				handle: `@${payload.user.login}`,
+				lastSync: 'Just now',
+				orgCount: payload.organizations.length,
+				repoCount: payload.repositories.length,
+				installationCount: payload.installations.length
+			};
+		} catch {
+			console.error('Failed to load GitHub summary');
+		}
+	});
 </script>
 
 <div class="space-y-6">
@@ -111,10 +150,13 @@
 					<p class="mt-2 text-xs text-muted-foreground">Last synced {github.lastSync}</p>
 				</div>
 				<div class="grid gap-3">
-					<div class="rounded-lg border border-border/60 bg-background/70 p-3">
-						<p class="text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground">Scopes</p>
-						<p class="text-sm">Issues, PRs, Repository contents</p>
-					</div>
+				<div class="rounded-lg border border-border/60 bg-background/70 p-3">
+					<p class="text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground">Scopes</p>
+					<p class="text-sm">Issues, PRs, Repository contents, Organizations</p>
+					<p class="mt-1 text-xs text-muted-foreground">
+						{github.repoCount} repos • {github.orgCount} orgs • {github.installationCount} installs
+					</p>
+				</div>
 					<div class="rounded-lg border border-border/60 bg-background/70 p-3">
 						<p class="text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground">Audit</p>
 						<p class="text-sm">Last authorization review 2 days ago</p>

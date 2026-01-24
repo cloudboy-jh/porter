@@ -13,8 +13,8 @@
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
-	import { Separator } from '$lib/components/ui/separator/index.js';
 	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import type { AgentConfig, ParsedCommand, GitHubIssue } from '$lib/types/agent';
 	import { COMMAND_TEMPLATES } from '$lib/constants/command-templates';
 	import { getRecentCommands, addRecentCommand, formatTimeAgo } from '$lib/utils/command-storage';
@@ -40,10 +40,14 @@
 	let loadingIssue = $state(false);
 	let showAdvanced = $state(false);
 	let showExtras = $state(false);
+	let repositories = $state<Array<{ id: number; fullName: string; description: string | null }>>([]);
+	let repoLoading = $state(false);
+	let repoError = $state('');
 
 	// Derived
 	const enabledAgents = $derived(agents.filter(a => a.enabled));
 	const recentCommands = $derived(getRecentCommands());
+	const repositoryLabel = $derived(repository || 'Select repository');
 	
 	const getAgentIcon = (domain?: string) =>
 		domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : '';
@@ -63,12 +67,13 @@
 		}
 	};
 
+	const hasIssueNumber = $derived(/^\d+$/.test(issueNumber));
+	const hasPrompt = $derived(customPrompt.trim().length > 0);
 	const isValid = $derived(
-		selectedAgent && 
-		repository && 
-		issueNumber && 
+		selectedAgent &&
+		repository &&
 		/^[\w.-]+\/[\w.-]+$/.test(repository) &&
-		/^\d+$/.test(issueNumber)
+		(hasIssueNumber || hasPrompt)
 	);
 
 	// Reset form
@@ -84,6 +89,33 @@
 		showExtras = false;
 	};
 
+	const loadRepositories = async () => {
+		repoLoading = true;
+		repoError = '';
+		try {
+			const response = await fetch('/api/github/repositories');
+			if (!response.ok) {
+				repoError = 'Repositories unavailable.';
+				repositories = [];
+				return;
+			}
+			const payload = (await response.json()) as {
+				repositories: Array<{ id: number; fullName: string; description: string | null }>;
+			};
+			repositories = payload.repositories ?? [];
+		} catch (err) {
+			console.error('Failed to load repositories:', err);
+			repoError = 'Repositories unavailable.';
+			repositories = [];
+		} finally {
+			repoLoading = false;
+		}
+	};
+
+	onMount(() => {
+		loadRepositories();
+	});
+
 	// Fetch issue preview
 	const fetchIssuePreview = async () => {
 		if (!repository || !issueNumber) return;
@@ -95,22 +127,15 @@
 		error = '';
 
 		try {
-			// Mock GitHub API call - replace with real API later
-			await new Promise(resolve => setTimeout(resolve, 500));
-			
-			// Mock data
-			issuePreview = {
-				number: parseInt(issueNumber),
-				title: `Sample Issue #${issueNumber}`,
-				body: 'This is a mock issue description. Replace with real GitHub API call.',
-				state: 'open',
-				labels: [
-					{ name: 'bug', color: 'ef4444' },
-					{ name: 'high-priority', color: 'f59e0b' }
-				],
-				html_url: `https://github.com/${repository}/issues/${issueNumber}`
-			};
+			const response = await fetch(`/api/github/issues/${match[1]}/${match[2]}/${issueNumber}`);
+			if (!response.ok) {
+				error = 'Issue preview is unavailable.';
+				issuePreview = null;
+				return;
+			}
+			issuePreview = (await response.json()) as GitHubIssue;
 		} catch (err) {
+			console.error('Issue preview failed:', err);
 			error = 'Failed to fetch issue details';
 			issuePreview = null;
 		} finally {
@@ -120,7 +145,7 @@
 
 	// Watch for issue changes
 	$effect(() => {
-		if (repository && issueNumber && /^\d+$/.test(issueNumber)) {
+		if (repository && hasIssueNumber) {
 			fetchIssuePreview();
 		} else {
 			issuePreview = null;
@@ -130,7 +155,9 @@
 	// Handle submit
 	const handleSubmit = () => {
 		if (!isValid) {
-			error = 'Please fill in all required fields';
+			error = hasIssueNumber || hasPrompt
+				? 'Please fill in all required fields'
+				: 'Add an issue number or a prompt to create a new issue';
 			return;
 		}
 
@@ -139,19 +166,21 @@
 			agent: selectedAgent,
 			repoOwner: owner,
 			repoName: repo,
-			issueNumber: parseInt(issueNumber),
+			issueNumber: hasIssueNumber ? parseInt(issueNumber) : 0,
 			priority,
 			prompt: customPrompt
 		};
 
 		// Save to recent commands
-		addRecentCommand({
-			agent: selectedAgent,
-			repository,
-			issue: parseInt(issueNumber),
-			issueTitle: issuePreview?.title,
-			priority
-		});
+		if (hasIssueNumber) {
+			addRecentCommand({
+				agent: selectedAgent,
+				repository,
+				issue: parseInt(issueNumber),
+				issueTitle: issuePreview?.title,
+				priority
+			});
+		}
 
 		onsubmit?.(payload);
 		open = false;
@@ -194,16 +223,26 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-		<Dialog.Header>
-			<Dialog.Title>Dispatch Task</Dialog.Title>
-			<Dialog.Description>
-				Select an agent and issue to dispatch a new task
+	<Dialog.Content class="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+		<Dialog.Header class="space-y-2">
+			<div class="flex items-start justify-between gap-4">
+				<div>
+					<p class="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+						Dispatch
+					</p>
+					<Dialog.Title class="text-2xl font-semibold text-foreground">Run a Porter task</Dialog.Title>
+				</div>
+				<Badge variant="secondary" class="text-[0.65rem] uppercase tracking-[0.22em]">
+					New task
+				</Badge>
+			</div>
+			<Dialog.Description class="text-sm text-muted-foreground">
+				Select an agent, repository, and issue to dispatch a new task.
 			</Dialog.Description>
 		</Dialog.Header>
 
 		<div class="space-y-6 py-4">
-			<section class="space-y-3">
+			<section class="space-y-4 rounded-2xl border border-border/60 bg-background/70 p-5">
 				<div class="flex items-center justify-between gap-4">
 					<div>
 						<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -267,36 +306,73 @@
 				{/if}
 			</section>
 
-			<Separator />
-
-			<section class="grid gap-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+			<section class="grid gap-4 rounded-2xl border border-border/60 bg-background/70 p-5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
 				<div class="space-y-2">
-					<label for="repository" class="text-sm font-medium">Repository</label>
-					<div class="relative">
-						<GitBranch size={16} class="absolute left-3 top-3 text-muted-foreground" />
-						<Input
-							id="repository"
-							type="text"
-							placeholder="owner/repo"
-							bind:value={repository}
-							class="pl-9"
-						/>
-					</div>
-					<p class="text-xs text-muted-foreground">Format: owner/repository</p>
+					<label class="text-sm font-medium">Repository</label>
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger class="w-full">
+							<div
+								class={
+									`flex h-10 w-full items-center justify-between rounded-lg border border-input bg-background/90 px-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition ${repository ? 'text-foreground' : 'text-muted-foreground'}`
+								}
+							>
+								<div class="flex items-center gap-2">
+									<GitBranch size={16} class="text-muted-foreground" />
+									<span>{repositoryLabel}</span>
+								</div>
+								<CaretDown size={14} class="text-muted-foreground" />
+							</div>
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content class="w-80 p-2">
+							{#if repoLoading}
+								<div class="px-2 py-2 text-xs text-muted-foreground">Loading repositories...</div>
+							{:else if repoError}
+								<div class="px-2 py-2 text-xs text-destructive">{repoError}</div>
+							{:else if repositories.length === 0}
+								<div class="px-2 py-2 text-xs text-muted-foreground">No repositories available.</div>
+							{:else}
+								<div class="max-h-64 overflow-y-auto">
+									{#each repositories as repo}
+										<DropdownMenu.Item onclick={() => (repository = repo.fullName)}>
+											<div class="flex flex-col">
+												<span class="text-sm font-medium text-foreground">{repo.fullName}</span>
+												{#if repo.description}
+													<span class="text-xs text-muted-foreground line-clamp-1">{repo.description}</span>
+												{/if}
+											</div>
+										</DropdownMenu.Item>
+									{/each}
+								</div>
+							{/if}
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+					<p class="text-xs text-muted-foreground">Select a repository to target.</p>
 				</div>
 				<div class="space-y-2">
-					<label for="issue" class="text-sm font-medium">Issue Number</label>
+					<label for="issue" class="text-sm font-medium">Issue Number (Optional)</label>
 					<Input
 						id="issue"
 						type="text"
 						placeholder="123"
 						bind:value={issueNumber}
 					/>
-					<p class="text-xs text-muted-foreground">GitHub issue ID</p>
+					<p class="text-xs text-muted-foreground">Leave empty to create a new issue from your prompt.</p>
 				</div>
 			</section>
 
-			<section class="space-y-2">
+			<section class="space-y-2 rounded-2xl border border-border/60 bg-background/70 p-5">
+				<label for="prompt" class="text-sm font-medium">Issue Prompt</label>
+				<textarea
+					id="prompt"
+					bind:value={customPrompt}
+					placeholder="Describe the task Porter should run..."
+					rows="3"
+					class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+				></textarea>
+				<p class="text-xs text-muted-foreground">Required when no issue number is provided.</p>
+			</section>
+
+			<section class="space-y-3 rounded-2xl border border-border/60 bg-background/70 p-5">
 				<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
 					Issue Preview
 				</p>
@@ -343,7 +419,7 @@
 				{/if}
 			</section>
 
-			<section class="rounded-lg border border-border/60 bg-muted/30 p-3">
+			<section class="rounded-2xl border border-border/60 bg-muted/30 p-4">
 				<button
 					type="button"
 					onclick={() => showAdvanced = !showAdvanced}
@@ -381,21 +457,11 @@
 								</label>
 							</RadioGroup.Root>
 						</div>
-						<div class="space-y-2">
-							<label for="prompt" class="text-sm font-medium">Custom Prompt (Optional)</label>
-							<textarea
-								id="prompt"
-								bind:value={customPrompt}
-								placeholder="Additional instructions for the agent..."
-								rows="3"
-								class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-							></textarea>
-						</div>
 					</div>
 				{/if}
 			</section>
 
-			<section class="rounded-lg border border-border/60 bg-muted/30 p-3">
+			<section class="rounded-2xl border border-border/60 bg-muted/30 p-4">
 				<button
 					type="button"
 					onclick={() => showExtras = !showExtras}
@@ -475,7 +541,7 @@
 
 			<!-- Error Message -->
 			{#if error}
-				<div class="rounded-md bg-destructive/15 px-3 py-2 text-sm text-destructive">
+				<div class="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
 					{error}
 				</div>
 			{/if}
@@ -487,7 +553,7 @@
 			</Button>
 			<Button onclick={handleSubmit} disabled={!isValid}>
 				<Check size={14} />
-				Dispatch Task
+				Run task
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

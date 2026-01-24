@@ -64,7 +64,8 @@
 		onrefresh?.();
 	};
 
-	const getStatusColor = (status: string) => {
+	const getStatusColor = (status: string, installed?: boolean) => {
+		if (installed === false) return 'text-destructive bg-destructive/15';
 		switch (status) {
 			case 'idle':
 				return 'text-emerald-600 bg-emerald-500/15';
@@ -80,6 +81,8 @@
 	};
 
 	const contentClass = framed ? 'space-y-3' : 'space-y-4';
+	const isInstalled = (agent: AgentConfig & { installed?: boolean }) => agent.installed !== false;
+	const getAgentPath = (agent: AgentConfig & { path?: string }) => agent.path ?? 'configured path';
 	const isQuick = mode === 'quick';
 </script>
 
@@ -413,13 +416,15 @@
 								<div>
 									<div class="flex items-center gap-2">
 										<h4 class="font-medium capitalize">{agent.name}</h4>
-										<Badge variant="outline" class={getStatusColor(agent.status)}>
-											{agent.status}
-										</Badge>
-									</div>
-									{#if agent.version}
-										<p class="mt-0.5 text-xs text-muted-foreground">Version {agent.version}</p>
-									{/if}
+									<Badge variant="outline" class={getStatusColor(agent.status, isInstalled(agent) ? undefined : false)}>
+										{isInstalled(agent) ? agent.status : 'not installed'}
+									</Badge>
+								</div>
+								{#if agent.version}
+									<p class="mt-0.5 text-xs text-muted-foreground">Version {agent.version}</p>
+								{:else if !isInstalled(agent)}
+									<p class="mt-0.5 text-xs text-destructive">Not installed at {getAgentPath(agent)}</p>
+								{/if}
 								</div>
 							</div>
 							<div class="flex items-center gap-2">

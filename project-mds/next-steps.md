@@ -14,28 +14,21 @@
 
 ### Phase 2: Onboarding + Auth
 - [x] Auth landing UI shell (no sidebar)
-- [x] Single-page onboarding wizard shell (no sidebar)
 - [x] GitHub OAuth flow + session handling
 - [x] GitHub App install detection
 - [x] Repo list from GitHub App installations
-- [ ] Persist onboarding configuration
+- [x] Persist onboarding configuration
+- [x] Collapse onboarding into /auth with auto-configured repos/agents
 
 ### Phase 3: Core API + Task Model
 - In progress (basic task API used in UI)
+- [ ] Agent install + setup UI
+- [ ] Install command registry per agent (single source of truth)
+- [ ] Install CTA + rescan flow in Settings + Dashboard
 
 ### Phase 4+: Modal Execution
 - Not started
 
-## Tomorrow (target ~1 hour)
-
-### UI fixes
-- Professionalize all buttons, font classes, and details across pages/components.
-- Tighten timeline node + line visuals (clean, intentional, minimal effects).
-- Refine failed/running/queued states for clarity.
-
-### Phase alignment
-- Keep iterating Phase 1 polish before starting tests.
-- Identify any missing Phase 1 UI items (task detail view, empty states).
 
 ## Notes
 
@@ -49,9 +42,10 @@
 - URL persistence for all filters including git filters
 - Clear button resets all filters
 - Removed `repo:` from filter chips (now handled by git buttons)
-- Auth + onboarding pages now full-width, no sidebar shell.
+- Auth pages now full-width, no sidebar shell.
 - Sign-in page uses Porter logo and fuller product copy.
 - Onboarding header added, app install required to unlock repo/agent steps.
+- Onboarding removed; /auth now handles auto-config and redirects to app install.
 - Webhook signature verification added for GitHub events.
 - `.env.example` and setup guide updated for OAuth + webhooks.
 - History smart search, table header cleanup, and export placement polish.

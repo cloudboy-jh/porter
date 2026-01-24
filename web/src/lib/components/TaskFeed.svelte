@@ -13,7 +13,9 @@
 	import GitDiffBadge from '$lib/components/GitDiffBadge.svelte';
 	import type { Task } from '$lib/types/task';
 
-	export let tasks: Task[] = [];
+	type TaskWithLinks = Task & { repoOwner?: string; issueUrl?: string };
+
+	export let tasks: TaskWithLinks[] = [];
 	export let onToggleExpanded: (id: string) => void = () => undefined;
 	export let onStop: (id: string) => void = () => undefined;
 	export let onRestart: (id: string) => void = () => undefined;
@@ -32,6 +34,11 @@
 		`https://www.google.com/s2/favicons?domain=${agentDomains[agent] ?? 'github.com'}&sz=64`;
 
 	const getIssueNumber = (issue: string) => (issue.startsWith('#') ? issue.slice(1) : issue);
+	const getIssueUrl = (task: TaskWithLinks) =>
+		task.issueUrl ??
+		(task.repoOwner
+			? `https://github.com/${task.repoOwner}/${task.repo}/issues/${getIssueNumber(task.issue)}`
+			: `https://github.com/${task.repo}/issues/${getIssueNumber(task.issue)}`);
 
 	const handleRowKey = (event: KeyboardEvent, id: string) => {
 		if (event.key === 'Enter' || event.key === ' ') {
@@ -95,7 +102,7 @@
 		}
 	};
 
-	const isHighlighted = (task: Task) =>
+	const isHighlighted = (task: TaskWithLinks) =>
 		task.status === 'running' || (highlightStatus && task.status === highlightStatus);
 </script>
 
@@ -131,7 +138,9 @@
 							>
 								<Card.Content class="space-y-3 p-5">
 									<div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-										<span class="font-medium text-foreground/80">{task.repo}</span>
+									<span class="font-medium text-foreground/80">
+										{task.repoOwner ? `${task.repoOwner}/${task.repo}` : task.repo}
+									</span>
 										<span class="text-muted-foreground/60">&bull;</span>
 										<span class="flex items-center gap-2 capitalize">
 											<img class="h-4 w-4 rounded-sm" src={getAgentIcon(task.agent)} alt="" />
@@ -170,14 +179,14 @@
 											<span class="text-muted-foreground/60">&bull;</span>
 											<span>{task.commitHash ?? 'commit -'}</span>
 											<span class="text-muted-foreground/60">&bull;</span>
-											<a
-												class="text-primary hover:text-primary/80"
-												href={`https://github.com/jackgolding/${task.repo}/issues/${getIssueNumber(task.issue)}`}
-												target="_blank"
-												rel="noreferrer"
-											>
-												{task.issue}
-											</a>
+										<a
+											class="text-primary hover:text-primary/80"
+											href={getIssueUrl(task)}
+											target="_blank"
+											rel="noreferrer"
+										>
+											{task.issue}
+										</a>
 											<span class="text-muted-foreground/60">&bull;</span>
 											<span>{task.started}</span>
 										</div>
@@ -219,8 +228,8 @@
 									<div>
 										<p class="text-xs uppercase text-muted-foreground">Repository</p>
 										<p class="flex items-center gap-2 text-sm font-medium">
-									<Folder size={14} weight="bold" class="text-muted-foreground" />
-											jackgolding/{task.repo}
+											<Folder size={14} weight="bold" class="text-muted-foreground" />
+											{task.repoOwner ? `${task.repoOwner}/${task.repo}` : task.repo}
 										</p>
 									</div>
 									<div>
@@ -282,21 +291,19 @@
 									<ArrowCounterClockwise size={14} weight="bold" />
 										Restart
 									</Button>
-						<Button
-							variant="secondary"
-							size="sm"
-							class="gap-2"
-							onclick={() => {
-								window.open(
-									`https://github.com/jackgolding/${task.repo}/issues/${task.issue.slice(1)}`,
-									'_blank'
-								);
-							}}
-						>
-							<GithubLogo size={14} weight="bold" />
-									<ArrowUpRight size={14} weight="bold" />
-							View in GitHub
-						</Button>
+										<Button
+											variant="secondary"
+											size="sm"
+											class="gap-2"
+											href={getIssueUrl(task)}
+											target="_blank"
+											rel="noreferrer"
+											disabled={!getIssueUrl(task)}
+										>
+											<GithubLogo size={14} weight="bold" />
+											<ArrowUpRight size={14} weight="bold" />
+											View in GitHub
+										</Button>
 								</div>
 							</Card.Content>
 						</Card.Root>

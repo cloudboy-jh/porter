@@ -26,9 +26,15 @@
 		console.log('Saving agent config:', config);
 	};
 
-	const handleAgentRefresh = () => {
-		// TODO: Refresh from backend
-		console.log('Refreshing agents');
+	const handleAgentRefresh = async () => {
+		try {
+			const response = await fetch('/api/agents/scan', { method: 'POST' });
+			if (!response.ok) return;
+			const data = await response.json();
+			agents = data as AgentConfig[];
+		} catch (error) {
+			console.error('Refreshing agents failed:', error);
+		}
 	};
 </script>
 

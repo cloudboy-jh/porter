@@ -15,9 +15,11 @@
 	const enabledAgents = $derived(agentConfig.filter((agent) => agent.enabled).length);
 	const totalAgents = $derived(agentConfig.length);
 
-	const loadAgents = async () => {
+	const loadAgents = async (force = false) => {
 		try {
-			const response = await fetch('/api/agents');
+			const response = await fetch(force ? '/api/agents/scan' : '/api/agents', {
+				method: force ? 'POST' : 'GET'
+			});
 			if (!response.ok) return;
 			const data = await response.json();
 			agentConfig = data as AgentConfig[];
@@ -26,10 +28,10 @@
 		}
 	};
 
-	const github = $state({
-		connected: true,
-		handle: '@jackgolding',
-		lastSync: '3m ago'
+	const github = $derived({
+		connected: Boolean(data?.session),
+		handle: data?.session?.user?.login ? `@${data.session.user.login}` : 'Not connected',
+		lastSync: data?.session ? 'Just now' : '—'
 	});
 
 	const handleAgentSave = (config: AgentConfig[]) => {
@@ -46,7 +48,7 @@
 		'text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground';
 
 	onMount(() => {
-		loadAgents();
+		loadAgents(true);
 	});
 </script>
 

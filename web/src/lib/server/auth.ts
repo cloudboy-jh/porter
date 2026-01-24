@@ -8,6 +8,7 @@ export type Session = {
 		login: string;
 		name: string | null;
 		avatarUrl: string;
+		email?: string | null;
 	};
 	token: string;
 	hasInstallation: boolean;

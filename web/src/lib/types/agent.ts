@@ -6,6 +6,8 @@ export type AgentConfig = {
 	priority: 'low' | 'normal' | 'high';
 	customPrompt?: string;
 	status: AgentStatus;
+	installed?: boolean;
+	path?: string;
 	icon?: string;
 	domain?: string;
 	version?: string;

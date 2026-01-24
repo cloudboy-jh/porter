@@ -10,6 +10,8 @@
 	For full settings, navigate to /settings page
 -->
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { GithubLogo, Moon, Sun } from 'phosphor-svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -18,6 +20,7 @@
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
+	import type { AgentConfig } from '$lib/types/agent';
 
 	let { open = $bindable(false) } = $props();
 
@@ -54,11 +57,11 @@
 		}
 	});
 
-	// GitHub connection
-	const github = $state({
-		connected: true,
-		handle: '@jackgolding',
-		lastSync: '3m ago'
+	const session = $derived($page.data?.session ?? null);
+	const github = $derived({
+		connected: Boolean(session),
+		handle: session?.user?.login ? `@${session.user.login}` : 'Not connected',
+		lastSync: session ? 'Just now' : '—'
 	});
 
 	// Agent quick toggles
@@ -74,19 +77,38 @@
 	const getAgentIcon = (name: string) =>
 		`https://www.google.com/s2/favicons?domain=${agentDomains[name] ?? 'github.com'}&sz=64`;
 
-	let agents = $state([
-		{ name: 'opencode', enabled: true },
-		{ name: 'claude', enabled: true },
-		{ name: 'cursor', enabled: true },
-		{ name: 'windsurf', enabled: false },
-		{ name: 'cline', enabled: false },
-		{ name: 'aider', enabled: false }
-	]);
+	let agents = $state<AgentConfig[]>([]);
 
 	const toggleAgent = (name: string) => {
 		agents = agents.map((agent) =>
 			agent.name === name ? { ...agent, enabled: !agent.enabled } : agent
 		);
+	};
+
+	const handleGitHubAction = async () => {
+		if (github.connected) {
+			try {
+				await fetch('/api/auth/logout', { method: 'POST' });
+			} catch (error) {
+				console.error('Disconnect failed:', error);
+			}
+			await goto('/auth');
+			return;
+		}
+		await goto('/auth');
+	};
+
+	const loadAgents = async (force = false) => {
+		try {
+			const response = await fetch(force ? '/api/agents/scan' : '/api/agents', {
+				method: force ? 'POST' : 'GET'
+			});
+			if (!response.ok) return;
+			const data = await response.json();
+			agents = data as AgentConfig[];
+		} catch (error) {
+			console.error('Failed to load agents:', error);
+		}
 	};
 
 	// Keyboard shortcut handler
@@ -100,6 +122,10 @@
 	onMount(() => {
 		window.addEventListener('keydown', handleKeydown);
 		return () => window.removeEventListener('keydown', handleKeydown);
+	});
+
+	onMount(() => {
+		loadAgents(true);
 	});
 </script>
 
@@ -147,7 +173,7 @@
 							<p class="text-sm text-muted-foreground">Not connected</p>
 						{/if}
 					</div>
-					<Button variant="ghost" size="sm">
+					<Button variant="ghost" size="sm" onclick={handleGitHubAction}>
 						{github.connected ? 'Disconnect' : 'Connect'}
 					</Button>
 				</div>
@@ -159,12 +185,15 @@
 			<div class="space-y-3">
 				<Label>Agents</Label>
 				<div class="grid gap-2">
-					{#each agents as agent}
-						<div 
-							class="flex items-center justify-between rounded-lg border p-2.5 transition-colors {agent.enabled 
-								? 'border-emerald-500/40 bg-emerald-500/10' 
-								: 'border-border bg-muted/30'}"
-						>
+					{#if agents.length === 0}
+						<p class="text-xs text-muted-foreground">No agents available.</p>
+					{:else}
+						{#each agents as agent}
+							<div 
+								class="flex items-center justify-between rounded-lg border p-2.5 transition-colors {agent.enabled 
+									? 'border-emerald-500/40 bg-emerald-500/10' 
+									: 'border-border bg-muted/30'}"
+							>
 							<div class="flex items-center gap-2.5">
 								<img 
 									src={getAgentIcon(agent.name)} 
@@ -194,7 +223,8 @@
 								{agent.enabled ? 'Enabled' : 'Disabled'}
 							</Button>
 						</div>
-					{/each}
+						{/each}
+					{/if}
 				</div>
 				<p class="text-xs text-muted-foreground">
 					For advanced agent configuration, visit <a href="/settings" class="underline">Settings</a>

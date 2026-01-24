@@ -4,6 +4,7 @@ export type Task = {
 	statusLabel: string;
 	title: string;
 	technicalSummary?: string;
+	repoOwner?: string;
 	repo: string;
 	branch?: string;
 	issue: string;
@@ -14,6 +15,7 @@ export type Task = {
 	logs: Array<{ time: string; level: string; message: string }>;
 	prUrl?: string;
 	prNumber?: number;
+	issueUrl?: string;
 	commitHash?: string;
 	git?: { add: number; remove: number };
 };

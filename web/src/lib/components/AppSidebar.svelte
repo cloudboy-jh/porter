@@ -19,14 +19,7 @@
 		{ label: 'Settings', href: '/settings', icon: Gear, action: null as (() => void) | null, shortcut: null as string | null }
 	] as const;
 
-	const agents = [
-		{ name: 'opencode', count: 2, domain: 'opencode.ai' },
-		{ name: 'claude', count: 1, domain: 'claude.ai' },
-		{ name: 'cursor', count: 1, domain: 'cursor.com' },
-		{ name: 'windsurf', count: 0, domain: 'windsurf.com' },
-		{ name: 'cline', count: 0, domain: 'github.com/cline' },
-		{ name: 'aider', count: 0, domain: 'aider.chat' }
-	];
+	const agents: Array<{ name: string; count: number; domain: string }> = [];
 
 	const activeAgents = $derived(agents.filter((agent) => agent.count > 0));
 	const collapsedAgents = $derived((activeAgents.length ? activeAgents : agents).slice(0, 2));
@@ -34,23 +27,12 @@
 	const getAgentIcon = (domain: string) =>
 		`https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
-	const stats = [
-		{ label: 'Runs Today', value: '12', detail: 'Tasks launched' },
-		{ label: 'Success Rate', value: '87%', detail: 'Last 7 days' },
-		{ label: 'Avg Runtime', value: '8m', detail: 'Median duration' },
-		{ label: 'Active Agents', value: '4', detail: 'Online now' }
-	];
+	const stats: Array<{ label: string; value: string; detail: string }> = [];
 
 	let selectedAgent = $state<{ name: string; count: number; domain: string } | null>(null);
 	let agentsOpen = $state(true);
 
-	// Mock task data - replace with actual task data later
-	const getAgentTasks = (agentName: string) => {
-		return [
-			{ id: 1, title: 'Add user auth system', status: 'running', repo: 'porter', issue: '#42' },
-			{ id: 2, title: 'Refactor core API layer', status: 'failed', repo: 'core', issue: '#301' }
-		].filter(() => Math.random() > 0.5); // Mock filter
-	};
+	const getAgentTasks = (_agentName: string) => [] as Array<{ id: number; title: string; status: string; repo: string; issue: string }>;
 </script>
 
 <Sidebar.Root variant="inset" collapsible="icon">
@@ -113,7 +95,11 @@
 				<CaretDown size={14} weight="bold" />
 				<span class="sr-only">Toggle agents</span>
 			</Sidebar.GroupAction>
-			{#if agentsOpen}
+			{#if agents.length === 0}
+				<Sidebar.GroupContent>
+					<p class="text-xs text-sidebar-foreground/60">No agent activity yet.</p>
+				</Sidebar.GroupContent>
+			{:else if agentsOpen}
 				<Sidebar.GroupContent>
 					<div class="grid gap-2">
 						{#each agents as agent}
@@ -173,19 +159,23 @@
 				Stats
 			</Sidebar.GroupLabel>
 			<Sidebar.GroupContent>
-				<div class="grid grid-cols-2 gap-2">
-					{#each stats as stat}
-						<div class="rounded-lg border border-sidebar-border/60 bg-sidebar-accent/70 p-2">
-							<div class="text-sm font-semibold text-sidebar-foreground">{stat.value}</div>
-							<div class="text-[0.65rem] uppercase tracking-[0.18em] text-sidebar-foreground/60">
-								{stat.label}
+				{#if stats.length === 0}
+					<p class="text-xs text-sidebar-foreground/60">No stats yet.</p>
+				{:else}
+					<div class="grid grid-cols-2 gap-2">
+						{#each stats as stat}
+							<div class="rounded-lg border border-sidebar-border/60 bg-sidebar-accent/70 p-2">
+								<div class="text-sm font-semibold text-sidebar-foreground">{stat.value}</div>
+								<div class="text-[0.65rem] uppercase tracking-[0.18em] text-sidebar-foreground/60">
+									{stat.label}
+								</div>
+								<div class="mt-1 text-[0.6rem] text-sidebar-foreground/55">
+									{stat.detail}
+								</div>
 							</div>
-							<div class="mt-1 text-[0.6rem] text-sidebar-foreground/55">
-								{stat.detail}
-							</div>
-						</div>
-					{/each}
-				</div>
+						{/each}
+					</div>
+				{/if}
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
 	</Sidebar.Content>
@@ -214,28 +204,32 @@
 		</Dialog.Header>
 		<div class="space-y-2">
 			{#if selectedAgent}
-				{#each getAgentTasks(selectedAgent.name) as task}
-					<div class="rounded-lg border border-border bg-muted/40 p-3">
-						<div class="flex items-start justify-between gap-2">
-							<div>
-								<p class="font-medium">{task.title}</p>
-								<p class="text-xs text-muted-foreground">
-									{task.repo} • Issue {task.issue}
-								</p>
+				{#if getAgentTasks(selectedAgent.name).length === 0}
+					<p class="text-sm text-muted-foreground">No tasks yet.</p>
+				{:else}
+					{#each getAgentTasks(selectedAgent.name) as task}
+						<div class="rounded-lg border border-border bg-muted/40 p-3">
+							<div class="flex items-start justify-between gap-2">
+								<div>
+									<p class="font-medium">{task.title}</p>
+									<p class="text-xs text-muted-foreground">
+										{task.repo} • Issue {task.issue}
+									</p>
+								</div>
+								<Badge
+									variant="outline"
+									class={
+										task.status === 'running'
+											? 'border-primary/40 bg-primary/10 text-primary'
+											: 'border-destructive/40 bg-destructive/10 text-destructive'
+									}
+								>
+									{task.status}
+								</Badge>
 							</div>
-							<Badge
-								variant="outline"
-								class={
-									task.status === 'running'
-										? 'border-primary/40 bg-primary/10 text-primary'
-										: 'border-destructive/40 bg-destructive/10 text-destructive'
-								}
-							>
-								{task.status}
-							</Badge>
 						</div>
-					</div>
-				{/each}
+					{/each}
+				{/if}
 			{/if}
 		</div>
 	</Dialog.Content>

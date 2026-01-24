@@ -17,8 +17,11 @@
 
 ## Typography
 
-- **UI font:** Inter
-- **Mono font:** JetBrains Mono
+- **UI font (primary):** Inter
+- **Mono font (metrics + code):** JetBrains Mono
+- **Usage:**
+  - Inter for headings, labels, and UI body copy
+  - JetBrains Mono for metrics, IDs, logs, and system-like micro labels
 
 ## Iconography
 

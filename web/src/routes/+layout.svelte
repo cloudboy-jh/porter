@@ -53,17 +53,10 @@
 			],
 			subtitle: 'Authorize GitHub to connect your workspace.'
 		},
-		'/onboarding': {
-			title: 'Onboarding',
-			breadcrumb: [
-				{ label: 'porter', href: '/' },
-				{ label: 'onboarding' }
-			],
-			subtitle: 'Set up GitHub, repos, and agents.'
-		}
+		
 	};
 
-	const shelllessRoutes = new Set(['/auth', '/onboarding']);
+	const shelllessRoutes = new Set(['/auth']);
 
 	let sidebarOpen = $state(false);
 	let { children, data } = $props();
