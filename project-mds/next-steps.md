@@ -19,18 +19,24 @@
 - [x] Repo list from GitHub App installations
 - [x] Persist onboarding configuration
 - [x] Collapse onboarding into /auth with auto-configured repos/agents
+- [ ] Unified settings page for Modal + API keys
+- [ ] Gist creation/management for credential storage
+- [ ] Validate Modal credentials before proceeding
 
 ### Phase 3: Core API + Task Model
 - In progress (basic task API used in UI)
-- [ ] Agent enablement + credential setup UI (cloud-only)
-- [ ] Agent registry (cloud runtime metadata + required keys)
+- [ ] Agent enablement + credential setup UI (Anthropic required)
 - [ ] Runtime readiness CTA + refresh flow in Settings + Dashboard
+- [ ] Config API reads/writes to user's Gist
+- [ ] Credential validation endpoints
 
 ### Phase 4+: Modal Execution
 - Not started
+- [ ] Modal function receives credentials as parameter (no Modal secrets)
+- [ ] Porter triggers Modal using user's Modal token
 
 
 ## Notes
 
 - Cloud-native only: remove any local/daemon wording going forward.
-- Pricing framework drafted: Porter-managed compute tiers with BYOC as a future option.
+- BYOC-only: users bring Modal + model API keys via a single user-owned Gist.

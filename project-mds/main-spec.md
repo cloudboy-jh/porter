@@ -11,6 +11,8 @@
 
 Porter is a cloud-native AI agent orchestrator for GitHub Issues. It brings the elegant `@mention` workflow (popularized by GitHub Copilot) to any AI coding agent - Opencode, Claude Code, Amp, and more.
 
+**BYOC-only model:** Porter does not manage compute. Users connect their own Modal account and API keys, stored in a user-owned GitHub Gist.
+
 **Core Value Proposition:**
 - Comment `@porter <agent>` on any GitHub issue
 - Porter runs the agent in the cloud (Modal containers)
@@ -42,19 +44,19 @@ Developers using Claude Code, Cursor, Amp, or other agents are stuck with manual
 Porter makes the `@mention` workflow universal:
 
 ```
-Comment: @porter opencode
-   ↓
-Porter webhook receives it
-   ↓
-Enriches prompt with repo context
-   ↓
-Runs agent in cloud container (Modal)
-   ↓
-Agent makes changes and opens PR
-   ↓
-Porter updates issue with PR link
-   ↓
-You review the PR
+GitHub Issue (@porter comment)
+       ↓
+Porter receives webhook
+       ↓
+Porter reads user's Gist (Modal creds + API keys)
+       ↓
+Porter triggers Modal using USER's Modal account
+       ↓
+Modal container runs with USER's API keys
+       ↓
+Agent creates PR
+       ↓
+Porter comments on issue with PR link
 ```
 
 **Works with any agent. Works 24/7. Zero local setup required.**
@@ -93,9 +95,9 @@ You review the PR
 
 ### Core Principles
 
-1. **Cloud-Native Execution**
-   - All agents run in ephemeral Modal containers
-   - Works 24/7, independent of user's machine
+1. **BYOC Execution**
+   - Users bring their own Modal account
+   - Porter orchestrates; users pay for compute and model APIs
    - Isolated, reproducible environments
 
 2. **GitHub as Source of Truth**
@@ -112,6 +114,26 @@ You review the PR
    - Single SvelteKit service (frontend + backend)
    - No microservices complexity
    - Easy to develop and deploy
+
+---
+
+## User Model (BYOC-Only at Launch)
+
+**What users provide:**
+- GitHub account (OAuth)
+- Modal account (required): token ID + token secret
+- LLM API keys (Anthropic required, OpenAI optional)
+
+**What Porter provides:**
+- Orchestration layer (webhook -> Modal -> PR)
+- GitHub App integration
+- Dashboard UI
+- Unified settings/config management
+
+**Credential storage:**
+- All credentials stored in a single user-owned private GitHub Gist
+- Porter reads from Gist at runtime and injects env vars into Modal containers
+- Users own their data and can revoke by deleting the Gist or rotating keys
 
 ---
 
@@ -244,7 +266,7 @@ porter/
    ↓
 6. Porter enriches prompt (WRAP format)
    ↓
-7. Porter triggers Modal function
+7. Porter reads user's Gist and triggers Modal using user's Modal account
    ↓
 8. Modal spins up container with agent
    ↓
@@ -358,9 +380,6 @@ app = modal.App("porter")
     timeout=600,  # 10 minutes max
     memory=2048,  # 2GB RAM
     cpu=2.0,      # 2 CPU cores
-    secrets=[
-        modal.Secret.from_name("porter-github-token"),
-    ]
 )
 def execute_agent_task(
     task_id: str,
@@ -370,11 +389,15 @@ def execute_agent_task(
     agent_name: str,
     enriched_prompt: str,
     callback_url: str,
-    github_token: str,
-    credentials: dict[str, str],
+    credentials: dict,
 ):
     """
     Execute an AI coding agent task in isolated container.
+
+    Credentials dict contains:
+    - github_token: For cloning and PR creation
+    - anthropic_api_key: For LLM inference
+    - openai_api_key: Optional, for OpenAI-based agents
 
     Steps:
     1. Load provider credentials from Gist (passed in)
@@ -387,13 +410,10 @@ def execute_agent_task(
     Returns: Task execution result
     """
     # Set environment
-    os.environ["GITHUB_TOKEN"] = github_token
-    if credentials.get("anthropic"):
-        os.environ["ANTHROPIC_API_KEY"] = credentials["anthropic"]
-    if credentials.get("openai"):
-        os.environ["OPENAI_API_KEY"] = credentials["openai"]
-    if credentials.get("amp"):
-        os.environ["AMP_API_KEY"] = credentials["amp"]
+    os.environ["GITHUB_TOKEN"] = credentials["github_token"]
+    os.environ["ANTHROPIC_API_KEY"] = credentials["anthropic_api_key"]
+    if credentials.get("openai_api_key"):
+        os.environ["OPENAI_API_KEY"] = credentials["openai_api_key"]
 
     # Clone repository
     clone_dir = f"/tmp/{repo_name}"
@@ -445,6 +465,8 @@ def execute_agent_task(
 
 ### Resource Limits
 
+Limits are enforced by the user's Modal account.
+
 | Resource | Limit | Rationale |
 |----------|-------|-----------|
 | Timeout | 10 minutes | Most tasks complete in 2-5 minutes |
@@ -460,27 +482,17 @@ def execute_agent_task(
 - Compute: ~$0.01/minute
 - Average task (3 min): ~$0.03
 
-**Free tier covers:** ~300 tasks/month at Modal's current free credits
+**Most individual users will stay within Modal's free tier** (~1000 tasks/month at $30 credits).
 
-### Pricing Framework (Porter-Managed Compute)
+### Pricing
 
-**Principles:**
-- Porter manages Modal infrastructure and billing for MVP.
-- Users bring model API keys; compute pricing is bundled into Porter plans.
+Porter is free and open source. You bring your own compute and model APIs:
 
-**Draft Tiers (MVP):**
-- **Free:** 25 tasks/month, 10 min max runtime, best-effort queue
-- **Pro:** 300 tasks/month, higher concurrency, priority queue
-- **Team:** 1,500 tasks/month, shared org quotas, priority queue
-
-**Overage:**
-- Additional tasks billed per task (e.g., $0.10-$0.25) or per minute (e.g., $0.03/min).
-
-### BYOC (Future Option)
-
-- Users connect their own Modal account.
-- Porter orchestrates tasks; compute billing is handled by the user.
-- Pricing shifts to a lower subscription for orchestration only.
+| Service | Purpose | Cost |
+|---------|---------|------|
+| Modal | Container execution | ~$0.03/task (free tier: $30/month credits) |
+| Anthropic | LLM inference | Per-token pricing |
+| OpenAI | LLM inference (optional) | Per-token pricing |
 
 ---
 
@@ -611,6 +623,10 @@ type AgentStatus = "available" | "unavailable" | "deprecated"
 ```typescript
 interface Config {
   version: string                   // "2.0.0"
+  modal: {
+    tokenId: string                 // User's Modal token ID
+    tokenSecret: string             // User's Modal token secret
+  }
   agents: {
     [name: string]: {
       enabled: boolean
@@ -619,9 +635,8 @@ interface Config {
     }
   }
   credentials: {
-    anthropic?: string              // Stored in user-owned Gist
-    openai?: string                 // Stored in user-owned Gist
-    amp?: string                    // Stored in user-owned Gist
+    anthropic: string               // Required - stored in user-owned Gist
+    openai?: string                 // Optional - stored in user-owned Gist
   }
   repositories: {
     [repo: string]: {
@@ -675,8 +690,19 @@ interface Config {
 3. **Settings** (`/settings`)
    - GitHub connection
    - Agent configuration
-   - API keys (for Modal agents)
-   - Usage & billing
+   - Unified Modal + API keys
+   - Credential validation
+
+### Onboarding Flow
+
+1. Sign in with GitHub OAuth
+2. Install Porter GitHub App (grants repo access)
+3. Settings page - single unified form:
+   a. Connect Modal (token ID + token secret)
+   b. Add Anthropic API key (required)
+   c. Add OpenAI API key (optional)
+4. Select repositories to enable
+5. Done - user can now comment @porter on any issue
 
 ---
 
@@ -701,10 +727,11 @@ Porter uses a GitHub App for authentication and webhooks.
 - `issues.closed` - Cancel related tasks
 - `pull_request.merged` - Mark task complete
 
-### Credential Storage (Cloud-Only)
+### Credential Storage (User-Owned Gist)
 
-Porter stores provider API keys in a private GitHub Gist owned by the user.
+Porter stores all credentials in a single private GitHub Gist owned by the user.
 
+- Credentials include Modal token ID/secret and LLM API keys.
 - Keys are never stored locally.
 - Porter reads credentials from the user’s Gist to run agents in Modal containers.
 - Users can revoke access by rotating keys or deleting the Gist.
@@ -958,14 +985,15 @@ vercel deploy
 wrangler pages deploy
 ```
 
-**Environment Variables:**
+**Environment Variables (Cloudflare Pages):**
 ```
 GITHUB_APP_ID=123456
 GITHUB_APP_PRIVATE_KEY=...
 GITHUB_WEBHOOK_SECRET=...
-MODAL_TOKEN_ID=...
-MODAL_TOKEN_SECRET=...
+PUBLIC_APP_URL=https://<domain>
 ```
+
+No Modal credentials are stored in Porter environment variables.
 
 ### Modal Functions
 
@@ -980,23 +1008,16 @@ modal serve app.py
 modal deploy app.py
 ```
 
-**Modal Secrets:**
-```bash
-modal secret create porter-github-token GITHUB_TOKEN=ghp_...
-```
-
-Provider keys are stored in the user’s GitHub Gist and injected at runtime.
+Modal secrets are not used. Provider keys are stored in the user’s GitHub Gist and injected at runtime.
 
 ---
 
 ## Open Questions
 
-1. **Pricing Model:** Porter-managed compute tiers, overage pricing, and BYOC option?
-2. **Multi-repo:** Support multiple repos per task?
-3. **Team Features:** Shared queues? Org-level settings?
-4. **Rate Limiting:** How to prevent abuse on free tier?
-5. **Credential Handling:** Encryption, audit, and rotation workflows?
-6. **Agent Versions:** How to handle agent updates?
+1. **Multi-repo:** Support multiple repos per task?
+2. **Team Features:** Shared queues? Org-level settings?
+3. **Rate Limiting:** How to prevent abuse on free tier?
+4. **Agent Versions:** How to handle agent updates?
 
 ---
 
