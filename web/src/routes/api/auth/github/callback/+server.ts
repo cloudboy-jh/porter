@@ -139,7 +139,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 					selectedRepos,
 					enabledAgents: config.onboarding?.enabledAgents?.length
 						? config.onboarding.enabledAgents
-						: ['opencode', 'claude']
+					: ['opencode', 'claude-code']
 				}
 			});
 		}

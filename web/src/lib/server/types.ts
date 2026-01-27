@@ -43,10 +43,15 @@ export interface PorterConfig {
 		string,
 		{
 			enabled: boolean;
-			path?: string;
-			args?: string[];
+			priority?: 'low' | 'normal' | 'high';
+			customPrompt?: string;
 		}
 	>;
+	credentials?: {
+		anthropic?: string;
+		openai?: string;
+		amp?: string;
+	};
 	settings: {
 		maxRetries: number;
 		taskTimeout: number;

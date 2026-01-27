@@ -1,15 +1,9 @@
 import { randomUUID } from 'crypto';
 import { randomUUID } from 'crypto';
-import { access } from 'fs/promises';
-import { homedir } from 'os';
-import { resolve } from 'path';
-import { promisify } from 'util';
-import { execFile } from 'child_process';
 import { loadConfigFromGist, saveConfigToGist } from './gist';
 import type { PorterConfig, Task, TaskLog, TaskStatus } from './types';
 import type { AgentConfig } from '$lib/types/agent';
-
-const execFileAsync = promisify(execFile);
+import { AGENT_REGISTRY } from '$lib/constants/agent-registry';
 
 let tasks: Task[] = [];
 
@@ -19,13 +13,18 @@ let config: PorterConfig = {
 	agents: {
 		opencode: {
 			enabled: true,
-			path: '~/.local/bin/opencode'
+			priority: 'normal'
 		},
-		claude: {
+		'claude-code': {
 			enabled: true,
-			path: '~/.claude/claude'
+			priority: 'normal'
+		},
+		amp: {
+			enabled: false,
+			priority: 'normal'
 		}
 	},
+	credentials: {},
 	settings: {
 		maxRetries: 3,
 		taskTimeout: 90,
@@ -34,24 +33,43 @@ let config: PorterConfig = {
 	onboarding: {
 		completed: false,
 		selectedRepos: [],
-		enabledAgents: ['opencode', 'claude']
+		enabledAgents: ['opencode', 'claude-code']
 	}
 };
 
 let configLoaded = false;
 
-const agentDomains: Record<string, string> = {
-	opencode: 'opencode.ai',
-	claude: 'claude.ai',
-	cursor: 'cursor.com',
-	windsurf: 'windsurf.com',
-	cline: 'github.com/cline',
-	aider: 'aider.chat'
+const normalizeCredential = (value?: string) => {
+	if (!value) return undefined;
+	const trimmed = value.trim();
+	return trimmed.length ? trimmed : undefined;
 };
 
-let agentCache: AgentConfig[] = [];
-let lastAgentScan = 0;
-const AGENT_SCAN_TTL = 30_000;
+const normalizeCredentials = (credentials?: PorterConfig['credentials']) => {
+	const normalized: PorterConfig['credentials'] = {};
+	const entries: Array<keyof NonNullable<PorterConfig['credentials']>> = ['anthropic', 'openai', 'amp'];
+	for (const key of entries) {
+		const value = normalizeCredential(credentials?.[key]);
+		if (value) {
+			normalized[key] = value;
+		}
+	}
+	return normalized;
+};
+
+const normalizeAgentConfig = (agents: PorterConfig['agents']) => {
+	const next = { ...agents };
+	if (next.claude && !next['claude-code']) {
+		next['claude-code'] = next.claude;
+		delete next.claude;
+	}
+	for (const entry of AGENT_REGISTRY) {
+		if (!next[entry.id]) {
+			next[entry.id] = { enabled: false, priority: 'normal' };
+		}
+	}
+	return next;
+};
 
 export const listTasks = (status?: TaskStatus): Task[] => {
 	if (!status) {
@@ -105,85 +123,49 @@ export const appendTaskLog = (id: string, log: TaskLog): Task | null => {
 	return updated;
 };
 
-const expandPath = (value?: string) => {
-	if (!value) return '';
-	if (value.startsWith('~/')) {
-		return resolve(homedir(), value.slice(2));
-	}
-	return value.startsWith('/') ? value : resolve(value);
+const buildAgentConfig = (entry: (typeof AGENT_REGISTRY)[number], activeConfig: PorterConfig) => {
+	const configEntry = activeConfig.agents?.[entry.id] ?? { enabled: false, priority: 'normal' };
+	const enabled = Boolean(configEntry.enabled);
+	const credentials = activeConfig.credentials ?? {};
+	const hasCredentials = entry.requiredKeys.every((key) => Boolean(credentials?.[key]));
+	const ready = enabled && hasCredentials;
+	let status: AgentConfig['status'] = 'disabled';
+	if (!enabled) status = 'disabled';
+	if (enabled && !hasCredentials) status = 'error';
+	if (ready) status = 'idle';
+
+	return {
+		name: entry.id,
+		displayName: entry.displayName,
+		provider: entry.provider,
+		requiredKeys: entry.requiredKeys,
+		description: entry.description,
+		docsUrl: entry.docsUrl,
+		enabled,
+		priority: configEntry.priority ?? 'normal',
+		customPrompt: configEntry.customPrompt,
+		status,
+		installed: ready,
+		readyState: !enabled ? 'disabled' : hasCredentials ? 'ready' : 'missing_credentials',
+		domain: entry.docsUrl
+			? new URL(entry.docsUrl).hostname.replace('www.', '')
+			: undefined,
+		version: undefined,
+		lastUsed: undefined,
+		taskCount: undefined,
+		successRate: undefined
+	} satisfies AgentConfig;
 };
 
-const runVersionCommand = async (binaryPath: string) => {
-	const candidates = [['--version'], ['-v'], ['version']];
-	for (const args of candidates) {
-		try {
-			const { stdout, stderr } = await execFileAsync(binaryPath, args, { timeout: 5000 });
-			const output = `${stdout ?? ''}${stderr ?? ''}`.trim();
-			if (output) {
-				return output.split('\n')[0].trim();
-			}
-		} catch {
-			// try next
-		}
-	}
-	return undefined;
-};
-
-const scanAgents = async (force = false): Promise<AgentConfig[]> => {
-	const now = Date.now();
-	if (!force && agentCache.length && now - lastAgentScan < AGENT_SCAN_TTL) {
-		return agentCache;
-	}
-
+export const listAgents = async (): Promise<AgentConfig[]> => {
 	const activeConfig = await getConfig();
-	const entries = Object.entries(activeConfig.agents ?? {});
-	const results = await Promise.all(
-		entries.map(async ([name, configEntry]) => {
-			const pathValue = expandPath(configEntry.path);
-			let installed = false;
-			try {
-				if (pathValue) {
-					await access(pathValue);
-					installed = true;
-				}
-			} catch {
-				installed = false;
-			}
-
-			const version = installed ? await runVersionCommand(pathValue) : undefined;
-			const enabled = Boolean(configEntry.enabled);
-			let status: AgentConfig['status'] = 'disabled';
-			if (enabled && installed) status = 'idle';
-			if (enabled && !installed) status = 'error';
-			if (!enabled) status = 'disabled';
-
-			return {
-				name,
-				enabled,
-				priority: configEntry.enabled ? 'normal' : 'low',
-				status,
-				installed,
-				path: pathValue || undefined,
-				domain: agentDomains[name] ?? 'github.com',
-				version,
-				lastUsed: undefined,
-				taskCount: undefined,
-				successRate: undefined
-			} satisfies AgentConfig;
-		})
-	);
-
-	agentCache = results;
-	lastAgentScan = now;
-	return results;
+	return AGENT_REGISTRY.map((entry) => buildAgentConfig(entry, activeConfig));
 };
 
-export const listAgents = async (): Promise<AgentConfig[]> => scanAgents();
-
-export const scanAgentsNow = async (): Promise<AgentConfig[]> => scanAgents(true);
+export const scanAgentsNow = async (): Promise<AgentConfig[]> => listAgents();
 
 export const getAgentStatus = async (name: string): Promise<AgentConfig | null> => {
-	const agents = await scanAgents();
+	const agents = await listAgents();
 	return agents.find((agent) => agent.name === name) ?? null;
 };
 
@@ -191,15 +173,57 @@ export const getConfig = async (): Promise<PorterConfig> => {
 	if (!configLoaded) {
 		const gistConfig = await loadConfigFromGist();
 		if (gistConfig) {
-			config = gistConfig;
+			config = {
+				...config,
+				...gistConfig,
+				agents: normalizeAgentConfig(gistConfig.agents ?? config.agents),
+				credentials: normalizeCredentials(gistConfig.credentials)
+			};
 		}
+		config = {
+			...config,
+			agents: normalizeAgentConfig(config.agents ?? {}),
+			credentials: normalizeCredentials(config.credentials)
+		};
 		configLoaded = true;
 	}
 	return config;
 };
 
 export const updateConfig = async (next: PorterConfig): Promise<PorterConfig> => {
-	config = next;
-	await saveConfigToGist(next);
+	const normalized = {
+		...next,
+		agents: normalizeAgentConfig(next.agents ?? {}),
+		credentials: normalizeCredentials(next.credentials)
+	};
+	config = normalized;
+	await saveConfigToGist(normalized);
 	return config;
+};
+
+export const updateAgentSettings = async (agents: AgentConfig[]): Promise<AgentConfig[]> => {
+	const activeConfig = await getConfig();
+	const nextAgents = { ...activeConfig.agents };
+	for (const agent of agents) {
+		nextAgents[agent.name] = {
+			enabled: agent.enabled,
+			priority: agent.priority,
+			customPrompt: agent.customPrompt
+		};
+	}
+	await updateConfig({
+		...activeConfig,
+		agents: nextAgents
+	});
+	return listAgents();
+};
+
+export const updateCredentials = async (credentials: PorterConfig['credentials']) => {
+	const activeConfig = await getConfig();
+	const nextCredentials = { ...activeConfig.credentials, ...credentials };
+	await updateConfig({
+		...activeConfig,
+		credentials: nextCredentials
+	});
+	return getConfig();
 };

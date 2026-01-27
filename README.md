@@ -1,6 +1,8 @@
 # Porter
 
-![Porter](web/src/logos/porter-refine-main.png)
+<p align="center">
+  <img src="./web/src/logos/porter-refine-main.png" alt="Porter" />
+</p>
 
 Universal agent orchestrator for GitHub Issues. Porter brings the @mention workflow to any coding agent by running tasks in Modal containers and returning PRs automatically.
 

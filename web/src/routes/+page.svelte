@@ -10,14 +10,20 @@
 	import type { AgentConfig, ParsedCommand } from '$lib/types/agent';
 	import type { Task } from '$lib/types/task';
 
+	type AgentDisplay = AgentConfig & { readyState?: 'ready' | 'missing_credentials' | 'disabled' };
+
 	let showAgentSettings = $state(false);
 	let { data } = $props<{ data: PageData }>();
 	let showDispatch = $state(false);
-	let agentConfig = $state<AgentConfig[]>([]);
+	let agentConfig = $state<AgentDisplay[]>([]);
 	let tasks = $state<Task[]>([]);
 	let isLoadingTasks = $state(false);
 	let tasksError = $state('');
 	const isConnected = $derived(Boolean(data?.session));
+	const readyAgents = $derived(
+		agentConfig.filter((agent) => (agent.readyState ? agent.readyState === 'ready' : agent.enabled))
+	);
+	const hasReadyAgents = $derived(readyAgents.length > 0);
 	const loadAgents = async (force = false) => {
 		try {
 			const response = await fetch(force ? '/api/agents/scan' : '/api/agents', {
@@ -273,6 +279,21 @@
 					</div>
 				</div>
 			{:else}
+				{#if !hasReadyAgents}
+					<div class="rounded-2xl border border-border/60 bg-card/70 p-6">
+						<div class="flex flex-wrap items-center justify-between gap-4">
+							<div>
+								<p class="text-sm font-semibold text-foreground">Complete agent setup</p>
+								<p class="mt-1 text-xs text-muted-foreground">
+									Add provider keys to unlock cloud agents for task dispatch.
+								</p>
+							</div>
+							<Button variant="secondary" href="/settings">
+								Open Settings
+							</Button>
+						</div>
+					</div>
+				{/if}
 				<section class="flex flex-wrap items-center justify-between gap-3">
 					<div class="flex flex-wrap gap-2 rounded-xl border border-border/60 bg-muted/40 p-1">
 						<Button

@@ -2,10 +2,16 @@ import { json } from '@sveltejs/kit';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { env } from '$env/dynamic/private';
 
-import { createTask } from '$lib/server/store';
-import type { TaskStatus } from '$lib/server/types';
+import {
+	addIssueComment,
+	buildPorterComment,
+	buildPorterLabels,
+	updateIssueLabels,
+	type PorterTaskMetadata
+} from '$lib/server/github';
+import { listAgents } from '$lib/server/store';
 
-const commandPattern = /@porter\s+(\S+)/i;
+const commandPattern = /@porter(?:\s+([^\s]+))?(.*)/i;
 
 const secret = env.WEBHOOK_SECRET;
 
@@ -39,20 +45,62 @@ export const POST = async ({ request }: { request: Request }) => {
 	if (!match) {
 		return json({ status: 'ignored' }, { status: 202 });
 	}
-	const agent = match[1];
+	const token = env.GITHUB_TOKEN;
+	if (!token) {
+		return json({ status: 'missing_token' }, { status: 500 });
+	}
+
+	const requestedAgent = match[1]?.trim();
+	const flagText = match[2] ?? '';
+	const priorityMatch = flagText.match(/--priority=(low|normal|high)/i);
+	const priority = (priorityMatch?.[1] ?? 'normal') as PorterTaskMetadata['priority'];
+	const agent = requestedAgent || 'opencode';
 	const issue = payload.issue ?? {};
 	const repo = payload.repository ?? {};
-	const task = createTask({
-		status: 'queued' as TaskStatus,
-		repoOwner: repo.owner?.login ?? 'unknown',
-		repoName: repo.name ?? 'unknown',
-		issueNumber: issue.number ?? 0,
-		issueTitle: issue.title ?? 'Untitled issue',
-		issueBody: issue.body ?? '',
+
+	const repoOwner = repo.owner?.login ?? 'unknown';
+	const repoName = repo.name ?? 'unknown';
+	const issueNumber = issue.number ?? 0;
+	const agents = await listAgents();
+	const agentInfo = agents.find((entry) => entry.name === agent);
+	const isReady = agentInfo?.readyState === 'ready';
+	const status: PorterTaskMetadata['status'] = isReady ? 'queued' : 'failed';
+	const summary = isReady
+		? 'Task queued'
+		: agentInfo
+			? `Task blocked: missing ${agentInfo.provider ?? 'provider'} credentials.`
+			: 'Task blocked: unknown agent.';
+
+	const metadata: PorterTaskMetadata = {
+		taskId: `${repoOwner}/${repoName}#${issueNumber}`,
 		agent,
-		priority: 3,
+		priority,
+		status,
 		progress: 0,
-		createdBy: payload.sender?.login ?? 'unknown'
+		createdAt: new Date().toISOString(),
+		summary
+	};
+
+	const existingLabels = (issue.labels ?? []).map((label: { name?: string }) => label?.name ?? '');
+	const porterLabels = buildPorterLabels(status, agent, priority);
+	const cleanedLabels = existingLabels.filter((label) => {
+		const lower = label.toLowerCase();
+		if (lower === 'porter:task') return false;
+		if (lower.startsWith('porter:agent:')) return false;
+		if (lower.startsWith('porter:priority:')) return false;
+		if (lower.startsWith('porter:queued')) return false;
+		if (lower.startsWith('porter:running')) return false;
+		if (lower.startsWith('porter:success')) return false;
+		if (lower.startsWith('porter:failed')) return false;
+		return true;
 	});
-	return json({ status: 'accepted', taskId: task.id }, { status: 202 });
+	const labels = Array.from(new Set([...cleanedLabels, ...porterLabels]));
+	await updateIssueLabels(token, repoOwner, repoName, issueNumber, labels);
+	const comment = buildPorterComment(summary, {
+		...metadata,
+		updatedAt: new Date().toISOString()
+	});
+	await addIssueComment(token, repoOwner, repoName, issueNumber, comment);
+
+	return json({ status: 'accepted', taskId: metadata.taskId }, { status: 202 });
 };

@@ -3,13 +3,13 @@
 **Version:** 2.0.0
 **Status:** Active Development
 **Architecture:** Cloud-Native (SvelteKit + Modal)
-**Last Updated:** January 20, 2026
+**Last Updated:** January 24, 2026
 
 ---
 
 ## Overview
 
-Porter is a cloud-native AI agent orchestrator for GitHub Issues. It brings the elegant `@mention` workflow (popularized by GitHub Copilot) to any AI coding agent - Opencode, Claude Code, Aider, and more.
+Porter is a cloud-native AI agent orchestrator for GitHub Issues. It brings the elegant `@mention` workflow (popularized by GitHub Copilot) to any AI coding agent - Opencode, Claude Code, Amp, and more.
 
 **Core Value Proposition:**
 - Comment `@porter <agent>` on any GitHub issue
@@ -29,7 +29,7 @@ GitHub's `@copilot` workflow is brilliant:
 
 **But it only works with Copilot.**
 
-Developers using Claude Code, Cursor, Aider, or other agents are stuck with manual workflows:
+Developers using Claude Code, Cursor, Amp, or other agents are stuck with manual workflows:
 - Manually clone the repo
 - Manually run the agent
 - Manually create the PR
@@ -86,7 +86,7 @@ You review the PR
 ┌─────────────────────────────────────────────────────────┐
 │                MODAL (Execution Layer)                   │
 │  • Ephemeral Containers                                 │
-│  • Agent Execution (opencode, claude-code, aider)       │
+│  • Agent Execution (opencode, claude-code, amp)         │
 │  • Git Operations (clone, commit, PR)                   │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -100,7 +100,7 @@ You review the PR
 
 2. **GitHub as Source of Truth**
    - All state lives in GitHub (issues, PRs, branches)
-   - Config stored in GitHub Gists
+   - Config + credentials stored in a user-owned GitHub Gist
    - No database required
 
 3. **Agent Agnostic**
@@ -141,7 +141,7 @@ You review the PR
 |-----------|-----------|---------|
 | Hosting | Vercel / Cloudflare Pages | Frontend + API serverless functions |
 | Auth | GitHub OAuth | User authentication |
-| Config Storage | GitHub Gists | User configuration |
+| Config Storage | GitHub Gists | User configuration + credentials |
 | State Storage | GitHub Issues/PRs | Task state and history |
 | Webhooks | GitHub Apps | Event notifications |
 
@@ -151,7 +151,7 @@ You review the PR
 |-------|-----------------|----------|--------|
 | Opencode | Multi-language | Anthropic (Claude) | Default ✓ |
 | Claude Code | Multi-language | Anthropic (Claude) | Primary ✓ |
-| Aider | Multi-language | OpenAI/Anthropic | Secondary ✓ |
+| Amp | Multi-language | Anthropic | Secondary ✓ |
 | Cursor | Multi-language | Anthropic/OpenAI | Future |
 
 ---
@@ -209,7 +209,7 @@ porter/
 │   ├── agents/
 │   │   ├── opencode.py                  # Opencode executor
 │   │   ├── claude_code.py               # Claude Code executor
-│   │   └── aider.py                     # Aider executor
+│   │   └── amp.py                       # Amp executor
 │   └── utils/
 │       ├── git.py                       # Git operations
 │       └── github.py                    # PR creation
@@ -333,7 +333,7 @@ porter_image = (
     # Python tools
     .pip_install(
         "opencode-cli",
-        "aider-chat",
+        "amp-cli",
     )
     # Node.js (for some agents)
     .run_commands(
@@ -360,8 +360,6 @@ app = modal.App("porter")
     cpu=2.0,      # 2 CPU cores
     secrets=[
         modal.Secret.from_name("porter-github-token"),
-        modal.Secret.from_name("anthropic-api-key"),
-        modal.Secret.from_name("openai-api-key"),
     ]
 )
 def execute_agent_task(
@@ -373,21 +371,29 @@ def execute_agent_task(
     enriched_prompt: str,
     callback_url: str,
     github_token: str,
+    credentials: dict[str, str],
 ):
     """
     Execute an AI coding agent task in isolated container.
 
     Steps:
-    1. Clone repository
-    2. Run specified agent with enriched prompt
-    3. Agent makes changes and commits
-    4. Agent creates PR via GitHub API
-    5. Report results back to Porter via callback
+    1. Load provider credentials from Gist (passed in)
+    2. Clone repository
+    3. Run specified agent with enriched prompt
+    4. Agent makes changes and commits
+    5. Agent creates PR via GitHub API
+    6. Report results back to Porter via callback
 
     Returns: Task execution result
     """
     # Set environment
     os.environ["GITHUB_TOKEN"] = github_token
+    if credentials.get("anthropic"):
+        os.environ["ANTHROPIC_API_KEY"] = credentials["anthropic"]
+    if credentials.get("openai"):
+        os.environ["OPENAI_API_KEY"] = credentials["openai"]
+    if credentials.get("amp"):
+        os.environ["AMP_API_KEY"] = credentials["amp"]
 
     # Clone repository
     clone_dir = f"/tmp/{repo_name}"
@@ -410,9 +416,9 @@ def execute_agent_task(
             capture_output=True,
             text=True
         )
-    elif agent_name == "aider":
+    elif agent_name == "amp":
         result = subprocess.run(
-            ["aider", "--yes", "--message", enriched_prompt],
+            ["amp", "--prompt", enriched_prompt],
             capture_output=True,
             text=True
         )
@@ -455,6 +461,26 @@ def execute_agent_task(
 - Average task (3 min): ~$0.03
 
 **Free tier covers:** ~300 tasks/month at Modal's current free credits
+
+### Pricing Framework (Porter-Managed Compute)
+
+**Principles:**
+- Porter manages Modal infrastructure and billing for MVP.
+- Users bring model API keys; compute pricing is bundled into Porter plans.
+
+**Draft Tiers (MVP):**
+- **Free:** 25 tasks/month, 10 min max runtime, best-effort queue
+- **Pro:** 300 tasks/month, higher concurrency, priority queue
+- **Team:** 1,500 tasks/month, shared org quotas, priority queue
+
+**Overage:**
+- Additional tasks billed per task (e.g., $0.10-$0.25) or per minute (e.g., $0.03/min).
+
+### BYOC (Future Option)
+
+- Users connect their own Modal account.
+- Porter orchestrates tasks; compute billing is handled by the user.
+- Pricing shifts to a lower subscription for orchestration only.
 
 ---
 
@@ -543,7 +569,7 @@ interface Task {
   issueNumber: number               // GitHub issue number
   issueTitle: string
   issueBody: string
-  agent: string                     // "opencode" | "claude-code" | "aider"
+  agent: string                     // "opencode" | "claude-code" | "amp"
   priority: number                  // 1-5 (5 highest)
   progress: number                  // 0-100
   createdAt: Date
@@ -591,6 +617,11 @@ interface Config {
       priority: number              // Default priority for this agent
       customPrompt?: string         // Append to enriched prompt
     }
+  }
+  credentials: {
+    anthropic?: string              // Stored in user-owned Gist
+    openai?: string                 // Stored in user-owned Gist
+    amp?: string                    // Stored in user-owned Gist
   }
   repositories: {
     [repo: string]: {
@@ -670,20 +701,42 @@ Porter uses a GitHub App for authentication and webhooks.
 - `issues.closed` - Cancel related tasks
 - `pull_request.merged` - Mark task complete
 
+### Credential Storage (Cloud-Only)
+
+Porter stores provider API keys in a private GitHub Gist owned by the user.
+
+- Keys are never stored locally.
+- Porter reads credentials from the user’s Gist to run agents in Modal containers.
+- Users can revoke access by rotating keys or deleting the Gist.
+
 ### Command Syntax
+
+**Grammar:**
+```
+@porter <agent> [flags]
+```
+
+**Flags:**
+- `--priority=low|normal|high`
+- `--no-tests`
+- `--model=<name>`
+- `--branch=<name>`
+
+If `<agent>` is omitted, Porter uses the repo default agent from config.
+If multiple commands are present in a comment, each line is parsed and queued separately.
 
 **Basic:**
 ```
 @porter opencode
 @porter claude-code
-@porter aider
+@porter amp
 ```
 
 **With options:**
 ```
 @porter opencode --priority=high
 @porter claude-code --no-tests
-@porter aider --model=gpt-4
+@porter amp --model=sonnet
 ```
 
 **Control commands:**
@@ -697,19 +750,37 @@ Porter uses a GitHub App for authentication and webhooks.
 
 Porter comments on issues to provide status updates:
 
+**When task is queued:**
+```
+🤖 Porter
+
+✓ Task queued
+Agent: opencode
+Status: https://porter.dev/tasks/abc123
+```
+
 **When task starts:**
 ```
 🤖 Porter
 
-Task started with opencode
-Status: https://porter.dev/tasks/abc123
+▶️ Task started
+Agent: opencode
+Branch: porter/issue-123-opencode
+```
+
+**During execution (optional):**
+```
+🤖 Porter
+
+… Running (45%)
+Latest step: tests
 ```
 
 **When task completes:**
 ```
 🤖 Porter
 
-✓ Task complete!
+✓ Task complete
 Pull Request: #124
 Review: https://github.com/user/repo/pull/124
 ```
@@ -720,8 +791,17 @@ Review: https://github.com/user/repo/pull/124
 
 ✗ Task failed
 Error: Agent timeout after 10 minutes
-[Retry Task]
+Retry: @porter retry
 ```
+
+### Task Dispatch + Dashboard Feed
+
+Porter treats GitHub as the source of truth for tasks.
+
+- A valid `@porter` command creates a task and posts a queued comment.
+- Status updates are reflected in issue comments and PR metadata.
+- The dashboard feed reads from GitHub (issues, comments, PRs) and mirrors tasks in the UI.
+- For local development, an in-memory task store can be used as a mock data layer.
 
 ---
 
@@ -770,11 +850,13 @@ Porter uses a layered testing approach aligned with UI-first iteration:
 
 - [ ] Task CRUD API routes
 - [ ] Task state storage and retrieval
-- [ ] Config storage in Gists
+- [ ] Config storage in Gists (agents + credentials)
+- [ ] Agent registry (cloud-only) + enablement state
+- [ ] Runtime readiness UI (Modal status)
 - [ ] WebSocket status updates
 - [ ] Webhook skeleton with signature validation
 
-**Deliverable:** Task API and config storage working locally
+**Deliverable:** Task API and cloud config storage working
 
 ---
 
@@ -795,7 +877,7 @@ Porter uses a layered testing approach aligned with UI-first iteration:
 
 - [ ] GitHub App setup + webhook handlers
 - [ ] Claude Code adapter (Modal)
-- [ ] Aider adapter (Modal)
+- [ ] Amp adapter (Modal)
 - [ ] Agent auto-detection and configuration
 - [ ] Priority queue
 - [ ] Error handling and retry logic
@@ -827,7 +909,6 @@ Porter uses a layered testing approach aligned with UI-first iteration:
 - [ ] Multiple cloud providers (Fly.io alternative)
 - [ ] Team management features
 - [ ] Usage tracking and billing
-- [ ] Local execution option (if requested)
 
 ---
 
@@ -841,7 +922,7 @@ Porter uses a layered testing approach aligned with UI-first iteration:
 - [ ] Task history visible in dashboard
 
 ### Beta Success
-- [ ] 3+ agents supported (Opencode, Claude Code, Aider)
+- [ ] 3+ agents supported (Opencode, Claude Code, Amp)
 - [ ] 100+ tasks processed successfully
 - [ ] <30s task pickup latency (webhook → container start)
 - [ ] 95%+ success rate for valid tasks
@@ -902,19 +983,19 @@ modal deploy app.py
 **Modal Secrets:**
 ```bash
 modal secret create porter-github-token GITHUB_TOKEN=ghp_...
-modal secret create anthropic-api-key ANTHROPIC_API_KEY=sk-...
-modal secret create openai-api-key OPENAI_API_KEY=sk-...
 ```
+
+Provider keys are stored in the user’s GitHub Gist and injected at runtime.
 
 ---
 
 ## Open Questions
 
-1. **Pricing Model:** Free tier limits? Per-task vs subscription?
+1. **Pricing Model:** Porter-managed compute tiers, overage pricing, and BYOC option?
 2. **Multi-repo:** Support multiple repos per task?
 3. **Team Features:** Shared queues? Org-level settings?
 4. **Rate Limiting:** How to prevent abuse on free tier?
-5. **Local Execution:** Add in v2.0 only if users request it?
+5. **Credential Handling:** Encryption, audit, and rotation workflows?
 6. **Agent Versions:** How to handle agent updates?
 
 ---

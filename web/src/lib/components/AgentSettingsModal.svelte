@@ -20,10 +20,20 @@
 		agents?: AgentConfig[];
 	} = $props();
 
-	const handleAgentSave = (config: AgentConfig[]) => {
+	const handleAgentSave = async (config: AgentConfig[]) => {
 		agents = config;
-		// TODO: Save to backend
-		console.log('Saving agent config:', config);
+		try {
+			const response = await fetch('/api/agents', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(config)
+			});
+			if (!response.ok) return;
+			const data = await response.json();
+			agents = data as AgentConfig[];
+		} catch (error) {
+			console.error('Saving agent config failed:', error);
+		}
 	};
 
 	const handleAgentRefresh = async () => {

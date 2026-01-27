@@ -1,12 +1,19 @@
 export type AgentStatus = 'idle' | 'active' | 'error' | 'disabled';
+export type AgentReadyState = 'ready' | 'missing_credentials' | 'disabled';
 
 export type AgentConfig = {
 	name: string;
+	displayName?: string;
+	provider?: string;
+	requiredKeys?: string[];
+	description?: string;
+	docsUrl?: string;
 	enabled: boolean;
 	priority: 'low' | 'normal' | 'high';
 	customPrompt?: string;
 	status: AgentStatus;
 	installed?: boolean;
+	readyState?: AgentReadyState;
 	path?: string;
 	icon?: string;
 	domain?: string;

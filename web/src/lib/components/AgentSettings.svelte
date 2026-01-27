@@ -17,16 +17,23 @@
 	import type { AgentConfig } from '$lib/types/agent';
 	import { Clock, Target, TrendUp } from 'phosphor-svelte';
 
+	type AgentDisplay = AgentConfig & {
+		readyState?: 'ready' | 'missing_credentials' | 'disabled';
+		displayName?: string;
+		provider?: string;
+		requiredKeys?: string[];
+	};
+
 	let {
-		agents = $bindable([] as AgentConfig[]),
+		agents = $bindable([] as AgentDisplay[]),
 		onrefresh,
 		onsave,
 		framed = true,
 		mode = 'full'
 	}: {
-		agents?: AgentConfig[];
+		agents?: AgentDisplay[];
 		onrefresh?: () => void;
-		onsave?: (config: AgentConfig[]) => void;
+		onsave?: (config: AgentDisplay[]) => void;
 		framed?: boolean;
 		mode?: 'full' | 'quick';
 	} = $props();
@@ -40,7 +47,7 @@
 		);
 	};
 
-	const updatePriority = (name: string, priority: AgentConfig['priority']) => {
+	const updatePriority = (name: string, priority: AgentDisplay['priority']) => {
 		agents = agents.map((agent) => (agent.name === name ? { ...agent, priority } : agent));
 	};
 
@@ -81,8 +88,10 @@
 	};
 
 	const contentClass = framed ? 'space-y-3' : 'space-y-4';
-	const isInstalled = (agent: AgentConfig & { installed?: boolean }) => agent.installed !== false;
-	const getAgentPath = (agent: AgentConfig & { path?: string }) => agent.path ?? 'configured path';
+	const isReady = (agent: AgentDisplay) => agent.readyState === 'ready';
+	const needsCredentials = (agent: AgentDisplay) => agent.readyState === 'missing_credentials';
+	const getAgentLabel = (agent: AgentDisplay) => agent.displayName ?? agent.name;
+	const getProviderLabel = (agent: AgentDisplay) => agent.provider ?? 'Provider';
 	const isQuick = mode === 'quick';
 </script>
 
@@ -105,16 +114,15 @@
 									<img
 										class="h-9 w-9 rounded-xl border border-border/60 bg-background/80"
 										src={getAgentIcon(agent.domain)}
-										alt={agent.name}
+										alt={getAgentLabel(agent)}
 									/>
 								{/if}
 								<div>
 									<p class="text-[0.6rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
 										Agent
 									</p>
-									<h4 class="text-sm font-semibold capitalize text-foreground">
-										{agent.name}
-									</h4>
+									<h4 class="text-sm font-semibold capitalize text-foreground">{getAgentLabel(agent)}</h4>
+									<p class="text-xs text-muted-foreground">{getProviderLabel(agent)} provider</p>
 								</div>
 							</div>
 							<Button
@@ -127,6 +135,12 @@
 							</Button>
 						</div>
 
+						{#if agent.enabled && needsCredentials(agent)}
+							<div class="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+								Missing credentials for {getProviderLabel(agent)}. Add keys in
+								<a href="/settings" class="ml-1 font-semibold underline">Settings</a>.
+							</div>
+						{/if}
 						<div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
 							<div class="space-y-2">
 								<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -239,18 +253,25 @@
 										<img
 											class="h-10 w-10 rounded-lg border border-border"
 											src={getAgentIcon(agent.domain)}
-											alt={agent.name}
+										alt={getAgentLabel(agent)}
 										/>
 									{/if}
 									<div>
 										<div class="flex items-center gap-2">
-											<h4 class="font-medium capitalize">{agent.name}</h4>
-											<Badge variant="outline" class={getStatusColor(agent.status)}>
-												{agent.status}
+											<h4 class="font-medium capitalize">{getAgentLabel(agent)}</h4>
+											<Badge
+												variant="outline"
+												class={getStatusColor(agent.status, isReady(agent) ? undefined : false)}
+											>
+												{needsCredentials(agent) ? 'missing keys' : agent.status}
 											</Badge>
 										</div>
 										{#if agent.version}
 											<p class="mt-0.5 text-xs text-muted-foreground">Version {agent.version}</p>
+										{:else if needsCredentials(agent)}
+											<p class="mt-0.5 text-xs text-destructive">
+												Add {getProviderLabel(agent)} credentials to run this agent.
+											</p>
 										{/if}
 									</div>
 								</div>
@@ -410,21 +431,26 @@
 									<img
 										class="h-10 w-10 rounded-lg border border-border"
 										src={getAgentIcon(agent.domain)}
-										alt={agent.name}
+										alt={getAgentLabel(agent)}
 									/>
 								{/if}
 								<div>
 									<div class="flex items-center gap-2">
-										<h4 class="font-medium capitalize">{agent.name}</h4>
-									<Badge variant="outline" class={getStatusColor(agent.status, isInstalled(agent) ? undefined : false)}>
-										{isInstalled(agent) ? agent.status : 'not installed'}
-									</Badge>
-								</div>
-								{#if agent.version}
-									<p class="mt-0.5 text-xs text-muted-foreground">Version {agent.version}</p>
-								{:else if !isInstalled(agent)}
-									<p class="mt-0.5 text-xs text-destructive">Not installed at {getAgentPath(agent)}</p>
-								{/if}
+										<h4 class="font-medium capitalize">{getAgentLabel(agent)}</h4>
+										<Badge
+											variant="outline"
+											class={getStatusColor(agent.status, isReady(agent) ? undefined : false)}
+										>
+											{needsCredentials(agent) ? 'missing keys' : agent.status}
+										</Badge>
+									</div>
+									{#if agent.version}
+										<p class="mt-0.5 text-xs text-muted-foreground">Version {agent.version}</p>
+									{:else if needsCredentials(agent)}
+										<p class="mt-0.5 text-xs text-destructive">
+											Add {getProviderLabel(agent)} credentials to run this agent.
+										</p>
+									{/if}
 								</div>
 							</div>
 							<div class="flex items-center gap-2">

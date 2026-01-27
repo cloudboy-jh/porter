@@ -22,9 +22,9 @@
 
 ### Phase 3: Core API + Task Model
 - In progress (basic task API used in UI)
-- [ ] Agent install + setup UI
-- [ ] Install command registry per agent (single source of truth)
-- [ ] Install CTA + rescan flow in Settings + Dashboard
+- [ ] Agent enablement + credential setup UI (cloud-only)
+- [ ] Agent registry (cloud runtime metadata + required keys)
+- [ ] Runtime readiness CTA + refresh flow in Settings + Dashboard
 
 ### Phase 4+: Modal Execution
 - Not started
@@ -33,21 +33,4 @@
 ## Notes
 
 - Cloud-native only: remove any local/daemon wording going forward.
-
-## Summary (Latest)
-
-- Git filter buttons added: Repository, Branch, Issue with dropdown type-ahead
-- Colored circles around git icons (Porter orange)
-- `|` separator between filter chips and git buttons
-- URL persistence for all filters including git filters
-- Clear button resets all filters
-- Removed `repo:` from filter chips (now handled by git buttons)
-- Auth pages now full-width, no sidebar shell.
-- Sign-in page uses Porter logo and fuller product copy.
-- Onboarding header added, app install required to unlock repo/agent steps.
-- Onboarding removed; /auth now handles auto-config and redirects to app install.
-- Webhook signature verification added for GitHub events.
-- `.env.example` and setup guide updated for OAuth + webhooks.
-- History smart search, table header cleanup, and export placement polish.
-- Agent configuration quick mode styling for dashboard modal.
-- Continued UI refinements across cards, inputs, and status cues.
+- Pricing framework drafted: Porter-managed compute tiers with BYOC as a future option.

@@ -67,11 +67,8 @@
 	// Agent quick toggles
 	const agentDomains: Record<string, string> = {
 		opencode: 'opencode.ai',
-		claude: 'claude.ai',
-		cursor: 'cursor.com',
-		windsurf: 'windsurf.com',
-		cline: 'github.com/cline',
-		aider: 'aider.chat'
+		'claude-code': 'claude.ai',
+		amp: 'anthropic.com'
 	};
 
 	const getAgentIcon = (name: string) =>

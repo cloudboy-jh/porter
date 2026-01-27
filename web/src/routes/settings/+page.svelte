@@ -4,15 +4,27 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
+	import { Input } from '$lib/components/ui/input/index.js';
 	import AgentSettings from '$lib/components/AgentSettings.svelte';
 	import type { PageData } from './$types';
 	import type { AgentConfig } from '$lib/types/agent';
 
+	type AgentDisplay = AgentConfig & { readyState?: 'ready' | 'missing_credentials' | 'disabled' };
+	type Credentials = { anthropic?: string; openai?: string; amp?: string };
+
 	let { data } = $props<{ data: PageData }>();
-	let agentConfig = $state<AgentConfig[]>([]);
+	let agentConfig = $state<AgentDisplay[]>([]);
+	let credentials = $state<Credentials>({});
+	let credentialStatus = $state('');
+	let credentialSaving = $state(false);
+	let revealCredential = $state<Record<string, boolean>>({});
 	const isConnected = $derived(Boolean(data?.session));
 
 	const enabledAgents = $derived(agentConfig.filter((agent) => agent.enabled).length);
+	const readyAgents = $derived(
+		agentConfig.filter((agent) => (agent.readyState ? agent.readyState === 'ready' : agent.enabled))
+	);
+	const readyAgentCount = $derived(readyAgents.length);
 	const totalAgents = $derived(agentConfig.length);
 
 	const loadAgents = async (force = false) => {
@@ -34,22 +46,111 @@
 		lastSync: data?.session ? 'Just now' : '—'
 	});
 
-	const handleAgentSave = (config: AgentConfig[]) => {
+	const handleAgentSave = (config: AgentDisplay[]) => {
 		agentConfig = config;
-		// TODO: Save to backend
-		console.log('Saving agent config:', config);
+		saveAgentConfig(config);
 	};
 
 	const handleAgentRefresh = () => {
 		loadAgents();
 	};
 
+	const refreshRuntime = () => {
+		loadAgents(true);
+		loadConfig();
+	};
+
+	const credentialProviders = [
+		{
+			key: 'anthropic' as const,
+			label: 'Anthropic',
+			note: 'Used by Opencode and Claude Code.'
+		},
+		{
+			key: 'amp' as const,
+			label: 'Amp',
+			note: 'Required to run Amp tasks.'
+		},
+		{
+			key: 'openai' as const,
+			label: 'OpenAI',
+			note: 'Optional, reserved for future agents.'
+		}
+	];
+
 	const headerLabelClass =
 		'text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground';
 
 	onMount(() => {
 		loadAgents(true);
+		if (isConnected) {
+			loadConfig();
+		}
 	});
+
+	const loadConfig = async () => {
+		try {
+			const response = await fetch('/api/config');
+			if (!response.ok) return;
+			const data = (await response.json()) as { credentials?: Credentials };
+			credentials = data.credentials ?? {};
+		} catch {
+			// ignore
+		}
+	};
+
+	const saveAgentConfig = async (config: AgentDisplay[]) => {
+		try {
+			const response = await fetch('/api/agents', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(config)
+			});
+			if (!response.ok) return;
+			const data = await response.json();
+			agentConfig = data as AgentConfig[];
+		} catch (error) {
+			console.error('Saving agent config failed:', error);
+		}
+	};
+
+	const toggleReveal = (key: string) => {
+		revealCredential = { ...revealCredential, [key]: !revealCredential[key] };
+	};
+
+	const rotateCredential = (key: string) => {
+		credentials = { ...credentials, [key]: '' };
+		revealCredential = { ...revealCredential, [key]: true };
+	};
+
+	const updateCredential = (key: string, value: string) => {
+		credentials = { ...credentials, [key]: value };
+	};
+
+	const saveCredentials = async () => {
+		credentialSaving = true;
+		credentialStatus = '';
+		try {
+			const response = await fetch('/api/config/credentials', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(credentials)
+			});
+			if (!response.ok) {
+				credentialStatus = 'Failed to save credentials.';
+				return;
+			}
+			const data = (await response.json()) as Credentials;
+			credentials = data ?? {};
+			credentialStatus = 'Credentials updated.';
+			loadAgents(true);
+		} catch (error) {
+			console.error('Saving credentials failed:', error);
+			credentialStatus = 'Failed to save credentials.';
+		} finally {
+			credentialSaving = false;
+		}
+	};
 </script>
 
 
@@ -110,6 +211,67 @@
 					<Card.Header class="pb-3">
 						<div class="flex items-start gap-4">
 							<div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-muted/70 text-muted-foreground">
+								<Robot size={18} weight="bold" />
+							</div>
+							<div class="space-y-1">
+								<p class={headerLabelClass}>Credentials</p>
+								<h2 class="text-lg font-semibold text-foreground">Provider Keys</h2>
+							</div>
+						</div>
+					</Card.Header>
+					<Card.Content class="space-y-4 pt-0">
+						<p class="text-xs text-muted-foreground">
+							Keys are stored in a private GitHub Gist owned by you. Porter reads them to run cloud tasks. Reveal to
+							confirm, rotate to replace, or remove by clearing the field.
+						</p>
+						{#each credentialProviders as provider}
+							<div class="rounded-lg border border-border/60 bg-background/80 p-4">
+								<div class="flex items-start justify-between gap-3">
+									<div>
+										<p class="text-sm font-medium text-foreground">{provider.label} API key</p>
+										<p class="mt-1 text-xs text-muted-foreground">{provider.note}</p>
+									</div>
+									<Badge variant={credentials?.[provider.key] ? 'secondary' : 'outline'} class="text-xs">
+										{credentials?.[provider.key] ? 'Stored' : 'Missing'}
+									</Badge>
+								</div>
+								<div class="mt-3 flex flex-wrap gap-2">
+									<Input
+										value={credentials?.[provider.key] ?? ''}
+										type={revealCredential[provider.key] ? 'text' : 'password'}
+										placeholder={`Enter ${provider.label} key`}
+										class="min-w-[220px] flex-1"
+										oninput={(event) =>
+											updateCredential(provider.key, (event.target as HTMLInputElement).value)
+										}
+									/>
+									<Button variant="secondary" size="sm" type="button" onclick={() => toggleReveal(provider.key)}>
+										{revealCredential[provider.key] ? 'Hide' : 'Reveal'}
+									</Button>
+									<Button variant="outline" size="sm" type="button" onclick={() => rotateCredential(provider.key)}>
+										Rotate
+									</Button>
+								</div>
+							</div>
+						{/each}
+						{#if credentialStatus}
+							<div class="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+								{credentialStatus}
+							</div>
+						{/if}
+					</Card.Content>
+					<Card.Footer class="flex items-center justify-end">
+						<Button type="button" onclick={saveCredentials} disabled={credentialSaving}>
+							{credentialSaving ? 'Saving...' : 'Save Credentials'}
+						</Button>
+					</Card.Footer>
+				</Card.Root>
+			</section>
+			<section class="space-y-4">
+				<Card.Root class="border border-border/60 bg-card/70 shadow-lg backdrop-blur">
+					<Card.Header class="pb-3">
+						<div class="flex items-start gap-4">
+							<div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-muted/70 text-muted-foreground">
 									<Stack size={18} weight="bold" />
 							</div>
 							<div class="space-y-1">
@@ -149,39 +311,44 @@
 									<Robot size={14} weight="bold" class="text-muted-foreground" />
 									Agents
 								</div>
-								<Badge variant="outline" class="text-xs">
-									{enabledAgents}/{totalAgents}
-								</Badge>
-							</div>
-							<p class="mt-2 text-xs text-muted-foreground">Enabled and ready.</p>
-						</div>
+						<Badge variant="outline" class="text-xs">
+							{readyAgentCount}/{totalAgents}
+						</Badge>
+					</div>
+					<p class="mt-2 text-xs text-muted-foreground">Ready to run tasks.</p>
+				</div>
 					</Card.Content>
 				</Card.Root>
 			</section>
 
 			<section class="space-y-4">
 				<Card.Root>
-					<Card.Header class="pb-3">
+				<Card.Header class="pb-3">
+					<div class="flex items-start justify-between gap-4">
 						<div class="flex items-start gap-4">
 							<div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-muted/70 text-muted-foreground">
-									<Stack size={18} weight="bold" />
+								<Stack size={18} weight="bold" />
 							</div>
 							<div class="space-y-1">
 								<p class={headerLabelClass}>Runtime</p>
 								<h2 class="text-lg font-semibold text-foreground">Execution Environment</h2>
 							</div>
 						</div>
-					</Card.Header>
+						<Button variant="ghost" size="sm" type="button" onclick={refreshRuntime}>
+							Refresh status
+						</Button>
+					</div>
+				</Card.Header>
 				<Card.Content class="space-y-4 pt-0">
 					<div class="rounded-lg border border-border/60 bg-background/80 p-4">
 						<div class="flex items-start justify-between gap-4">
 							<div class="space-y-1">
-								<p class="text-sm font-medium text-foreground">Cloud execution</p>
+								<p class="text-sm font-medium text-foreground">Modal runtime ready</p>
 								<p class="text-xs text-muted-foreground">
 									Fresh containers for each task with isolated git context and ephemeral storage.
 								</p>
 							</div>
-							<Badge variant="secondary" class="text-xs">Active</Badge>
+							<Badge variant="secondary" class="text-xs">Ready</Badge>
 						</div>
 						<div class="mt-4 grid gap-3 sm:grid-cols-3">
 							<div class="rounded-md border border-border/60 bg-background/70 p-3">

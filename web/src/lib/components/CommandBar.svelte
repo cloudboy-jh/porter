@@ -19,13 +19,18 @@
 	import { COMMAND_TEMPLATES } from '$lib/constants/command-templates';
 	import { getRecentCommands, addRecentCommand, formatTimeAgo } from '$lib/utils/command-storage';
 
-	let { 
-		open = $bindable(false), 
-		agents = [] as AgentConfig[],
+	type AgentDisplay = AgentConfig & {
+		readyState?: 'ready' | 'missing_credentials' | 'disabled';
+		displayName?: string;
+	};
+
+	let {
+		open = $bindable(false),
+		agents = [] as AgentDisplay[],
 		onsubmit
 	}: {
 		open?: boolean;
-		agents?: AgentConfig[];
+		agents?: AgentDisplay[];
 		onsubmit?: (payload: ParsedCommand) => void;
 	} = $props();
 
@@ -45,7 +50,10 @@
 	let repoError = $state('');
 
 	// Derived
-	const enabledAgents = $derived(agents.filter(a => a.enabled));
+	const readyAgents = $derived(
+		agents.filter((agent) => (agent.readyState ? agent.readyState === 'ready' : agent.enabled))
+	);
+	const hasReadyAgents = $derived(readyAgents.length > 0);
 	const recentCommands = $derived(getRecentCommands());
 	const repositoryLabel = $derived(repository || 'Select repository');
 	
@@ -250,13 +258,13 @@
 						</p>
 						<p class="text-sm font-semibold text-foreground">Choose who runs the task</p>
 					</div>
-					<Badge variant="outline" class="text-[0.65rem] uppercase tracking-[0.18em]">
-						{enabledAgents.length} enabled
-					</Badge>
-				</div>
-				<div class="grid gap-2 sm:grid-cols-2">
-					{#each enabledAgents as agent}
-						<button
+				<Badge variant="outline" class="text-[0.65rem] uppercase tracking-[0.18em]">
+					{readyAgents.length} ready
+				</Badge>
+			</div>
+			<div class="grid gap-2 sm:grid-cols-2">
+				{#each readyAgents as agent}
+					<button
 							type="button"
 							onclick={() => selectedAgent = agent.name}
 							class="flex items-center gap-3 rounded-lg border border-border/70 bg-background/60 p-3 text-left transition hover:border-primary/40 hover:bg-muted/40 {selectedAgent === agent.name ? 'border-primary/60 bg-primary/10 shadow-[0_6px_18px_rgba(15,23,42,0.08)]' : ''}"
@@ -270,7 +278,9 @@
 							{/if}
 							<div class="flex-1">
 								<div class="flex items-center justify-between gap-2">
-									<p class="text-sm font-semibold capitalize">{agent.name}</p>
+							<p class="text-sm font-semibold capitalize">
+								{agent.displayName ?? agent.name}
+							</p>
 									{#if agent.status}
 										<span class="flex items-center gap-1 text-[0.55rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
 											<span class={`h-1.5 w-1.5 rounded-full ${getStatusTone(agent.status)}`}></span>
@@ -301,10 +311,13 @@
 						</button>
 					{/each}
 				</div>
-				{#if enabledAgents.length === 0}
-					<p class="text-xs text-muted-foreground">No agents enabled. Enable agents in settings.</p>
-				{/if}
-			</section>
+			{#if !hasReadyAgents}
+				<p class="text-xs text-muted-foreground">
+					No agents are ready to run. Add credentials and enable agents in
+					<a href="/settings" class="ml-1 font-semibold underline">Settings</a>.
+				</p>
+			{/if}
+		</section>
 
 			<section class="grid gap-4 rounded-2xl border border-border/60 bg-background/70 p-5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
 				<div class="space-y-2">
