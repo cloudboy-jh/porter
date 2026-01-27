@@ -29,6 +29,10 @@
 			const response = await fetch(force ? '/api/agents/scan' : '/api/agents', {
 				method: force ? 'POST' : 'GET'
 			});
+			if (response.status === 401) {
+				window.location.href = '/auth';
+				return;
+			}
 			if (!response.ok) return;
 			const data = await response.json();
 			agentConfig = data as AgentConfig[];
@@ -42,6 +46,10 @@
 		tasksError = '';
 		try {
 			const response = await fetch('/api/tasks');
+			if (response.status === 401) {
+				window.location.href = '/auth';
+				return;
+			}
 			if (!response.ok) {
 				tasksError = 'Failed to load tasks.';
 				tasks = [];
@@ -138,6 +146,10 @@
 					priority: payload.priority
 				})
 			});
+			if (response.status === 401) {
+				window.location.href = '/auth';
+				return;
+			}
 			if (!response.ok) throw new Error('Failed to create task');
 			await loadTasks();
 		} catch (error) {
@@ -226,6 +238,10 @@
 			const response = await fetch(`/api/tasks/${encodeURIComponent(id)}/stop`, {
 				method: 'PUT'
 			});
+			if (response.status === 401) {
+				window.location.href = '/auth';
+				return;
+			}
 			if (!response.ok) throw new Error('Failed to stop task');
 			await loadTasks();
 		} catch (error) {
@@ -238,6 +254,10 @@
 			const response = await fetch(`/api/tasks/${encodeURIComponent(id)}/retry`, {
 				method: 'PUT'
 			});
+			if (response.status === 401) {
+				window.location.href = '/auth';
+				return;
+			}
 			if (!response.ok) throw new Error('Failed to restart task');
 			await loadTasks();
 		} catch (error) {

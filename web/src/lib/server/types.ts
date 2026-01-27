@@ -39,6 +39,10 @@ export interface AgentStatus {
 export interface PorterConfig {
 	version: string;
 	executionMode: 'cloud' | 'priority';
+	modal?: {
+		tokenId?: string;
+		tokenSecret?: string;
+	};
 	agents: Record<
 		string,
 		{

@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto';
-import { randomUUID } from 'crypto';
 import { loadConfigFromGist, saveConfigToGist } from './gist';
 import type { PorterConfig, Task, TaskLog, TaskStatus } from './types';
 import type { AgentConfig } from '$lib/types/agent';
@@ -7,9 +6,13 @@ import { AGENT_REGISTRY } from '$lib/constants/agent-registry';
 
 let tasks: Task[] = [];
 
-let config: PorterConfig = {
+const baseConfig: PorterConfig = {
 	version: '1.0.0',
 	executionMode: 'cloud',
+	modal: {
+		tokenId: '',
+		tokenSecret: ''
+	},
 	agents: {
 		opencode: {
 			enabled: true,
@@ -37,7 +40,8 @@ let config: PorterConfig = {
 	}
 };
 
-let configLoaded = false;
+const configCache = new Map<string, PorterConfig>();
+const configLoaded = new Set<string>();
 
 const normalizeCredential = (value?: string) => {
 	if (!value) return undefined;
@@ -55,6 +59,14 @@ const normalizeCredentials = (credentials?: PorterConfig['credentials']) => {
 		}
 	}
 	return normalized;
+};
+
+const normalizeModal = (modal?: PorterConfig['modal']) => {
+	if (!modal) return { tokenId: '', tokenSecret: '' };
+	return {
+		tokenId: normalizeCredential(modal.tokenId) ?? '',
+		tokenSecret: normalizeCredential(modal.tokenSecret) ?? ''
+	};
 };
 
 const normalizeAgentConfig = (agents: PorterConfig['agents']) => {
@@ -157,52 +169,49 @@ const buildAgentConfig = (entry: (typeof AGENT_REGISTRY)[number], activeConfig: 
 	} satisfies AgentConfig;
 };
 
-export const listAgents = async (): Promise<AgentConfig[]> => {
-	const activeConfig = await getConfig();
+export const listAgents = async (token: string): Promise<AgentConfig[]> => {
+	const activeConfig = await getConfig(token);
 	return AGENT_REGISTRY.map((entry) => buildAgentConfig(entry, activeConfig));
 };
 
-export const scanAgentsNow = async (): Promise<AgentConfig[]> => listAgents();
+export const scanAgentsNow = async (token: string): Promise<AgentConfig[]> => listAgents(token);
 
-export const getAgentStatus = async (name: string): Promise<AgentConfig | null> => {
-	const agents = await listAgents();
+export const getAgentStatus = async (token: string, name: string): Promise<AgentConfig | null> => {
+	const agents = await listAgents(token);
 	return agents.find((agent) => agent.name === name) ?? null;
 };
 
-export const getConfig = async (): Promise<PorterConfig> => {
-	if (!configLoaded) {
-		const gistConfig = await loadConfigFromGist();
-		if (gistConfig) {
-			config = {
-				...config,
-				...gistConfig,
-				agents: normalizeAgentConfig(gistConfig.agents ?? config.agents),
-				credentials: normalizeCredentials(gistConfig.credentials)
-			};
-		}
-		config = {
-			...config,
-			agents: normalizeAgentConfig(config.agents ?? {}),
-			credentials: normalizeCredentials(config.credentials)
+export const getConfig = async (token: string): Promise<PorterConfig> => {
+	if (!configLoaded.has(token)) {
+		const gistConfig = await loadConfigFromGist(token, baseConfig);
+		const merged = {
+			...baseConfig,
+			...(gistConfig ?? {}),
+			agents: normalizeAgentConfig(gistConfig?.agents ?? baseConfig.agents),
+			credentials: normalizeCredentials(gistConfig?.credentials),
+			modal: normalizeModal(gistConfig?.modal)
 		};
-		configLoaded = true;
+		configCache.set(token, merged);
+		configLoaded.add(token);
 	}
-	return config;
+	return configCache.get(token) ?? baseConfig;
 };
 
-export const updateConfig = async (next: PorterConfig): Promise<PorterConfig> => {
+export const updateConfig = async (token: string, next: PorterConfig): Promise<PorterConfig> => {
 	const normalized = {
 		...next,
 		agents: normalizeAgentConfig(next.agents ?? {}),
-		credentials: normalizeCredentials(next.credentials)
+		credentials: normalizeCredentials(next.credentials),
+		modal: normalizeModal(next.modal)
 	};
-	config = normalized;
-	await saveConfigToGist(normalized);
-	return config;
+	configCache.set(token, normalized);
+	configLoaded.add(token);
+	await saveConfigToGist(token, normalized);
+	return normalized;
 };
 
-export const updateAgentSettings = async (agents: AgentConfig[]): Promise<AgentConfig[]> => {
-	const activeConfig = await getConfig();
+export const updateAgentSettings = async (token: string, agents: AgentConfig[]): Promise<AgentConfig[]> => {
+	const activeConfig = await getConfig(token);
 	const nextAgents = { ...activeConfig.agents };
 	for (const agent of agents) {
 		nextAgents[agent.name] = {
@@ -211,19 +220,32 @@ export const updateAgentSettings = async (agents: AgentConfig[]): Promise<AgentC
 			customPrompt: agent.customPrompt
 		};
 	}
-	await updateConfig({
+	await updateConfig(token, {
 		...activeConfig,
 		agents: nextAgents
 	});
-	return listAgents();
+	return listAgents(token);
 };
 
-export const updateCredentials = async (credentials: PorterConfig['credentials']) => {
-	const activeConfig = await getConfig();
+export const updateCredentials = async (token: string, credentials: PorterConfig['credentials']) => {
+	const activeConfig = await getConfig(token);
 	const nextCredentials = { ...activeConfig.credentials, ...credentials };
-	await updateConfig({
+	await updateConfig(token, {
 		...activeConfig,
 		credentials: nextCredentials
 	});
-	return getConfig();
+	return getConfig(token);
+};
+
+export const updateModalCredentials = async (
+	token: string,
+	modal: PorterConfig['modal']
+): Promise<PorterConfig> => {
+	const activeConfig = await getConfig(token);
+	const nextModal = { ...activeConfig.modal, ...modal };
+	await updateConfig(token, {
+		...activeConfig,
+		modal: nextModal
+	});
+	return getConfig(token);
 };

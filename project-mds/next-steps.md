@@ -19,16 +19,16 @@
 - [x] Repo list from GitHub App installations
 - [x] Persist onboarding configuration
 - [x] Collapse onboarding into /auth with auto-configured repos/agents
-- [ ] Unified settings page for Modal + API keys
-- [ ] Gist creation/management for credential storage
+- [x] Unified settings page for Modal + API keys
+- [x] Gist creation/management for credential storage
 - [ ] Validate Modal credentials before proceeding
 
 ### Phase 3: Core API + Task Model
 - In progress (basic task API used in UI)
-- [ ] Agent enablement + credential setup UI (Anthropic required)
+- [x] Agent enablement + credential setup UI (Anthropic required)
 - [ ] Runtime readiness CTA + refresh flow in Settings + Dashboard
-- [ ] Config API reads/writes to user's Gist
-- [ ] Credential validation endpoints
+- [x] Config API reads/writes to user's Gist
+- [x] Credential validation endpoints
 
 ### Phase 4+: Modal Execution
 - Not started

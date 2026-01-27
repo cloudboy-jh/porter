@@ -122,7 +122,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	}
 
 	try {
-		const config = await getConfig();
+		const config = await getConfig(accessToken);
 		if (!config.onboarding?.completed) {
 			const { repositories } = await listInstallationRepos(accessToken);
 			const selectedRepos = repositories.map((repo) => ({
@@ -132,14 +132,14 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 				name: repo.name,
 				private: repo.private
 			}));
-			await updateConfig({
+			await updateConfig(accessToken, {
 				...config,
 				onboarding: {
 					completed: true,
 					selectedRepos,
 					enabledAgents: config.onboarding?.enabledAgents?.length
 						? config.onboarding.enabledAgents
-					: ['opencode', 'claude-code']
+						: ['opencode', 'claude-code']
 				}
 			});
 		}

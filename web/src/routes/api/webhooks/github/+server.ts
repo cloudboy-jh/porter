@@ -61,7 +61,7 @@ export const POST = async ({ request }: { request: Request }) => {
 	const repoOwner = repo.owner?.login ?? 'unknown';
 	const repoName = repo.name ?? 'unknown';
 	const issueNumber = issue.number ?? 0;
-	const agents = await listAgents();
+	const agents = await listAgents(token);
 	const agentInfo = agents.find((entry) => entry.name === agent);
 	const isReady = agentInfo?.readyState === 'ready';
 	const status: PorterTaskMetadata['status'] = isReady ? 'queued' : 'failed';

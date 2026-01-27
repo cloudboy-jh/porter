@@ -1,5 +1,20 @@
 const GITHUB_API = 'https://api.github.com';
 
+export class GitHubRequestError extends Error {
+	status: number;
+	body?: string;
+
+	constructor(status: number, message: string, body?: string) {
+		super(message);
+		this.name = 'GitHubRequestError';
+		this.status = status;
+		this.body = body;
+	}
+}
+
+export const isGitHubAuthError = (error: unknown) =>
+	error instanceof GitHubRequestError && error.status === 401;
+
 export type PorterTaskStatus = 'queued' | 'running' | 'success' | 'failed';
 
 export type PorterTaskMetadata = {
@@ -36,7 +51,8 @@ export const fetchGitHub = async <T>(path: string, token: string, init?: Request
 		}
 	});
 	if (!response.ok) {
-		throw new Error(`GitHub request failed: ${response.status}`);
+		const body = await response.text();
+		throw new GitHubRequestError(response.status, `GitHub request failed: ${response.status}`, body);
 	}
 	return (await response.json()) as T;
 };

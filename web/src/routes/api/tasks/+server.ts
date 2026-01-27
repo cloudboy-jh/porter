@@ -9,6 +9,7 @@ import {
 	deriveIssueTitle,
 	fetchIssue,
 	getLatestPorterMetadata,
+	isGitHubAuthError,
 	listInstallationRepos,
 	listIssueComments,
 	listIssuesWithLabel,
@@ -16,40 +17,54 @@ import {
 } from '$lib/server/github';
 import type { PorterTaskMetadata } from '$lib/server/github';
 import type { TaskStatus } from '$lib/server/types';
+import { clearSession } from '$lib/server/auth';
+import type { RequestHandler } from './$types';
 
-export const GET = async ({ url, locals }: { url: URL; locals: App.Locals }) => {
+export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 	const session = locals.session;
 	if (!session) {
 		return json({ error: 'unauthorized' }, { status: 401 });
 	}
 
-	const status = url.searchParams.get('status') as TaskStatus | null;
-	const { repositories } = await listInstallationRepos(session.token);
-	const tasks = await Promise.all(
-		repositories.map(async (repo) => {
-			try {
-				const issues = await listIssuesWithLabel(session.token, repo.owner, repo.name, 'open');
-				const mapped = await Promise.all(
-					issues.map(async (issue) => {
-						const comments = await listIssueComments(session.token, repo.owner, repo.name, issue.number);
-						const metadata = getLatestPorterMetadata(comments);
-						return buildTaskFromIssue(issue, repo.owner, repo.name, metadata);
-					})
-				);
-				return mapped;
-			} catch (error) {
-				console.error('Failed to load tasks for repo:', repo.fullName, error);
-				return [];
-			}
-		})
-	);
+	try {
+		const status = url.searchParams.get('status') as TaskStatus | null;
+		const { repositories } = await listInstallationRepos(session.token);
+		const tasks = await Promise.all(
+			repositories.map(async (repo) => {
+				try {
+					const issues = await listIssuesWithLabel(session.token, repo.owner, repo.name, 'open');
+					const mapped = await Promise.all(
+						issues.map(async (issue) => {
+							const comments = await listIssueComments(session.token, repo.owner, repo.name, issue.number);
+							const metadata = getLatestPorterMetadata(comments);
+							return buildTaskFromIssue(issue, repo.owner, repo.name, metadata);
+						})
+					);
+					return mapped;
+				} catch (error) {
+					if (isGitHubAuthError(error)) {
+						throw error;
+					}
+					console.error('Failed to load tasks for repo:', repo.fullName, error);
+					return [];
+				}
+			})
+		);
 
-	const flattened = tasks.flat();
-	const filtered = status ? flattened.filter((task) => task.status === status) : flattened;
-	return json(filtered);
+		const flattened = tasks.flat();
+		const filtered = status ? flattened.filter((task) => task.status === status) : flattened;
+		return json(filtered);
+	} catch (error) {
+		if (isGitHubAuthError(error)) {
+			clearSession(cookies);
+			return json({ error: 'unauthorized', action: 'reauth' }, { status: 401 });
+		}
+		console.error('Failed to load tasks:', error);
+		return json({ error: 'failed' }, { status: 500 });
+	}
 };
 
-export const POST = async ({ request, locals }: { request: Request; locals: App.Locals }) => {
+export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 	const session = locals.session;
 	if (!session) {
 		return json({ error: 'unauthorized' }, { status: 401 });
@@ -64,47 +79,56 @@ export const POST = async ({ request, locals }: { request: Request; locals: App.
 	const prompt = (payload.prompt as string | undefined) ?? '';
 	const issueBody = (payload.issueBody as string | undefined) ?? prompt;
 
-	if (!repoOwner || !repoName) {
-		return json({ error: 'repoOwner and repoName are required' }, { status: 400 });
+	try {
+		if (!repoOwner || !repoName) {
+			return json({ error: 'repoOwner and repoName are required' }, { status: 400 });
+		}
+
+		if (!issueNumber && !prompt) {
+			return json({ error: 'issueNumber or prompt is required' }, { status: 400 });
+		}
+
+		let issue = null;
+		if (issueNumber) {
+			issue = await fetchIssue(session.token, repoOwner, repoName, issueNumber);
+		} else {
+			const derivedTitle = deriveIssueTitle(prompt);
+			issue = await createIssue(session.token, repoOwner, repoName, derivedTitle, issueBody);
+		}
+
+		const normalizedPriority =
+			priority === 'low' || priority === 'high' || priority === 'normal'
+				? priority
+				: priority === 1
+					? 'low'
+					: priority === 3
+						? 'high'
+						: 'normal';
+
+		const metadata: PorterTaskMetadata = {
+			taskId: `${repoOwner}/${repoName}#${issue.number}`,
+			agent,
+			priority: normalizedPriority,
+			status: 'queued',
+			progress: 0,
+			createdAt: new Date().toISOString(),
+			summary: 'Task queued'
+		};
+
+		await updateLabelsAndComment(session.token, repoOwner, repoName, issue.number, metadata);
+
+		const comments = await listIssueComments(session.token, repoOwner, repoName, issue.number);
+		const latestMetadata = getLatestPorterMetadata(comments);
+		const task = buildTaskFromIssue(issue, repoOwner, repoName, latestMetadata);
+		return json(task, { status: 201 });
+	} catch (error) {
+		if (isGitHubAuthError(error)) {
+			clearSession(cookies);
+			return json({ error: 'unauthorized', action: 'reauth' }, { status: 401 });
+		}
+		console.error('Failed to create task:', error);
+		return json({ error: 'failed' }, { status: 500 });
 	}
-
-	if (!issueNumber && !prompt) {
-		return json({ error: 'issueNumber or prompt is required' }, { status: 400 });
-	}
-
-	let issue = null;
-	if (issueNumber) {
-		issue = await fetchIssue(session.token, repoOwner, repoName, issueNumber);
-	} else {
-		const derivedTitle = deriveIssueTitle(prompt);
-		issue = await createIssue(session.token, repoOwner, repoName, derivedTitle, issueBody);
-	}
-
-	const normalizedPriority =
-		priority === 'low' || priority === 'high' || priority === 'normal'
-			? priority
-			: priority === 1
-				? 'low'
-				: priority === 3
-					? 'high'
-					: 'normal';
-
-	const metadata: PorterTaskMetadata = {
-		taskId: `${repoOwner}/${repoName}#${issue.number}`,
-		agent,
-		priority: normalizedPriority,
-		status: 'queued',
-		progress: 0,
-		createdAt: new Date().toISOString(),
-		summary: 'Task queued'
-	};
-
-	await updateLabelsAndComment(session.token, repoOwner, repoName, issue.number, metadata);
-
-	const comments = await listIssueComments(session.token, repoOwner, repoName, issue.number);
-	const latestMetadata = getLatestPorterMetadata(comments);
-	const task = buildTaskFromIssue(issue, repoOwner, repoName, latestMetadata);
-	return json(task, { status: 201 });
 };
 
 const updateLabelsAndComment = async (

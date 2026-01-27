@@ -3,12 +3,15 @@ import { json } from '@sveltejs/kit';
 import {
 	buildTaskFromIssue,
 	getLatestPorterMetadata,
+	isGitHubAuthError,
 	listInstallationRepos,
 	listIssueComments,
 	listIssuesWithLabel
 } from '$lib/server/github';
+import { clearSession } from '$lib/server/auth';
+import type { RequestHandler } from './$types';
 
-export const GET = async ({ url, locals }: { url: URL; locals: App.Locals }) => {
+export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 	const session = locals.session;
 	if (!session) {
 		return json({ error: 'unauthorized' }, { status: 401 });
@@ -24,31 +27,44 @@ export const GET = async ({ url, locals }: { url: URL; locals: App.Locals }) => 
 	const limit = parseInt(url.searchParams.get('limit') ?? '50', 10);
 	const offset = parseInt(url.searchParams.get('offset') ?? '0', 10);
 
-	const { repositories } = await listInstallationRepos(session.token);
-	const tasks = await Promise.all(
-		repositories.map(async (repo) => {
-			try {
-				const [openIssues, closedIssues] = await Promise.all([
-					listIssuesWithLabel(session.token, repo.owner, repo.name, 'open'),
-					listIssuesWithLabel(session.token, repo.owner, repo.name, 'closed')
-				]);
-				const issues = [...openIssues, ...closedIssues];
-				const mapped = await Promise.all(
-					issues.map(async (issue) => {
-						const comments = await listIssueComments(session.token, repo.owner, repo.name, issue.number);
-						const metadata = getLatestPorterMetadata(comments);
-						return buildTaskFromIssue(issue, repo.owner, repo.name, metadata);
-					})
-				);
-				return mapped;
-			} catch (error) {
-				console.error('Failed to load history for repo:', repo.fullName, error);
-				return [];
-			}
-		})
-	);
+	let filteredTasks: ReturnType<typeof buildTaskFromIssue>[] = [];
+	try {
+		const { repositories } = await listInstallationRepos(session.token);
+		const tasks = await Promise.all(
+			repositories.map(async (repo) => {
+				try {
+					const [openIssues, closedIssues] = await Promise.all([
+						listIssuesWithLabel(session.token, repo.owner, repo.name, 'open'),
+						listIssuesWithLabel(session.token, repo.owner, repo.name, 'closed')
+					]);
+					const issues = [...openIssues, ...closedIssues];
+					const mapped = await Promise.all(
+						issues.map(async (issue) => {
+							const comments = await listIssueComments(session.token, repo.owner, repo.name, issue.number);
+							const metadata = getLatestPorterMetadata(comments);
+							return buildTaskFromIssue(issue, repo.owner, repo.name, metadata);
+						})
+					);
+					return mapped;
+				} catch (error) {
+					if (isGitHubAuthError(error)) {
+						throw error;
+					}
+					console.error('Failed to load history for repo:', repo.fullName, error);
+					return [];
+				}
+			})
+		);
 
-	let filteredTasks = tasks.flat();
+		filteredTasks = tasks.flat();
+	} catch (error) {
+		if (isGitHubAuthError(error)) {
+			clearSession(cookies);
+			return json({ error: 'unauthorized', action: 'reauth' }, { status: 401 });
+		}
+		console.error('Failed to load task history:', error);
+		return json({ error: 'failed' }, { status: 500 });
+	}
 
 	// Apply filters
 	if (status && (status === 'success' || status === 'failed')) {

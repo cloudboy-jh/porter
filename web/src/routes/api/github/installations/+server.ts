@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
-import { fetchGitHub } from '$lib/server/github';
+import { clearSession } from '$lib/server/auth';
+import { fetchGitHub, isGitHubAuthError } from '$lib/server/github';
 import type { RequestHandler } from './$types';
 
 type GitHubInstallation = {
@@ -11,31 +12,39 @@ type GitHubInstallation = {
 	created_at?: string;
 };
 
-export const GET: RequestHandler = async ({ locals }) => {
+export const GET: RequestHandler = async ({ locals, cookies }) => {
 	const session = locals.session;
 	if (!session) {
 		return json({ error: 'unauthorized' }, { status: 401 });
 	}
-
-	const installations = await fetchGitHub<{ total_count: number; installations: GitHubInstallation[] }>(
-		'/user/installations',
-		session.token
-	);
-	return json({
-		total: installations.total_count,
-		installations: installations.installations.map((installation) => ({
-			id: installation.id,
-			appId: installation.app_id,
-			appSlug: installation.app_slug,
-			targetType: installation.target_type,
-			createdAt: installation.created_at,
-			account: installation.account
-				? {
-					id: installation.account.id ?? null,
-					login: installation.account.login ?? null,
-					avatarUrl: installation.account.avatar_url ?? null
-				}
-				: null
-		}))
-	});
+	try {
+		const installations = await fetchGitHub<{ total_count: number; installations: GitHubInstallation[] }>(
+			'/user/installations',
+			session.token
+		);
+		return json({
+			total: installations.total_count,
+			installations: installations.installations.map((installation) => ({
+				id: installation.id,
+				appId: installation.app_id,
+				appSlug: installation.app_slug,
+				targetType: installation.target_type,
+				createdAt: installation.created_at,
+				account: installation.account
+					? {
+						id: installation.account.id ?? null,
+						login: installation.account.login ?? null,
+						avatarUrl: installation.account.avatar_url ?? null
+					}
+					: null
+			}))
+		});
+	} catch (error) {
+		if (isGitHubAuthError(error)) {
+			clearSession(cookies);
+			return json({ error: 'unauthorized', action: 'reauth' }, { status: 401 });
+		}
+		console.error('Failed to load GitHub installations:', error);
+		return json({ error: 'failed' }, { status: 500 });
+	}
 };

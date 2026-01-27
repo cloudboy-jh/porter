@@ -102,6 +102,10 @@
 		repoError = '';
 		try {
 			const response = await fetch('/api/github/repositories');
+			if (response.status === 401) {
+				window.location.href = '/auth';
+				return;
+			}
 			if (!response.ok) {
 				repoError = 'Repositories unavailable.';
 				repositories = [];
@@ -136,6 +140,10 @@
 
 		try {
 			const response = await fetch(`/api/github/issues/${match[1]}/${match[2]}/${issueNumber}`);
+			if (response.status === 401) {
+				window.location.href = '/auth';
+				return;
+			}
 			if (!response.ok) {
 				error = 'Issue preview is unavailable.';
 				issuePreview = null;

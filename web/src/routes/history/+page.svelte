@@ -106,6 +106,10 @@
 			params.set('offset', offset.toString());
 
 			const response = await fetch(`/api/tasks/history?${params.toString()}`);
+			if (response.status === 401) {
+				window.location.href = '/auth';
+				return;
+			}
 			if (!response.ok) return;
 
 			if (typeof window !== 'undefined') {

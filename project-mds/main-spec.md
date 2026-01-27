@@ -3,63 +3,41 @@
 **Version:** 2.0.0
 **Status:** Active Development
 **Architecture:** Cloud-Native (SvelteKit + Modal)
-**Last Updated:** January 24, 2026
+**Last Updated:** January 26, 2026
 
 ---
 
 ## Overview
 
-Porter is a cloud-native AI agent orchestrator for GitHub Issues. It brings the elegant `@mention` workflow (popularized by GitHub Copilot) to any AI coding agent - Opencode, Claude Code, Amp, and more.
+Porter is a cloud-native AI agent orchestrator for GitHub Issues. It brings the @mention workflow to any CLI-based coding agent and produces PRs automatically.
 
-**BYOC-only model:** Porter does not manage compute. Users connect their own Modal account and API keys, stored in a user-owned GitHub Gist.
+**BYOC-only model:** Porter does not manage compute or model billing. Users connect their own Modal account and LLM API keys stored in a user-owned GitHub Gist.
 
-**Core Value Proposition:**
-- Comment `@porter <agent>` on any GitHub issue
-- Porter runs the agent in the cloud (Modal containers)
-- Agent opens a PR automatically
-- Works 24/7, laptop can be closed
+**Core value:** Comment `@porter <agent>` on an issue and get a PR back, without running the agent locally.
 
 ---
 
-## The Problem
+## Problem and Solution
 
-GitHub's `@copilot` workflow is brilliant:
-1. Comment `@copilot` on an issue
-2. Copilot analyzes the issue
-3. Copilot opens a PR with changes
-4. You review the PR
-
-**But it only works with Copilot.**
-
-Developers using Claude Code, Cursor, Amp, or other agents are stuck with manual workflows:
-- Manually clone the repo
-- Manually run the agent
-- Manually create the PR
-- No integration with GitHub Issues
+GitHub's @copilot workflow is great but locked to Copilot. Teams using Claude Code, Opencode, Amp, or other agents are stuck with manual cloning and PR creation. Porter makes the @mention workflow universal and cloud-executed.
 
 ---
 
-## The Solution
+## Core Principles
 
-Porter makes the `@mention` workflow universal:
+1. **BYOC Execution**
+   - Users bring Modal and LLM credentials.
+   - Porter orchestrates, users pay for compute and model usage.
 
-```
-GitHub Issue (@porter comment)
-       ↓
-Porter receives webhook
-       ↓
-Porter reads user's Gist (Modal creds + API keys)
-       ↓
-Porter triggers Modal using USER's Modal account
-       ↓
-Modal container runs with USER's API keys
-       ↓
-Agent creates PR
-       ↓
-Porter comments on issue with PR link
-```
+2. **GitHub as Source of Truth**
+   - Issues and PRs store task state.
+   - Config and credentials live in a user-owned private Gist.
 
-**Works with any agent. Works 24/7. Zero local setup required.**
+3. **Agent Agnostic**
+   - Clean adapter interface for any CLI-based agent.
+
+4. **Monolithic Simplicity**
+   - Single SvelteKit service (UI + API).
 
 ---
 
@@ -68,230 +46,93 @@ Porter comments on issue with PR link
 ### High-Level System Design
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    GITHUB                                │
-│  • Issues (task definition)                             │
-│  • PRs (task output)                                    │
-│  • Webhooks (event notifications)                       │
-│  • Gists (config storage)                               │
-└────────────┬────────────────────────────────────────────┘
-             │ webhooks
-             ▼
-┌─────────────────────────────────────────────────────────┐
-│              PORTER (SvelteKit)                          │
-│  • Web Dashboard (UI)                                   │
-│  • API Routes (webhooks, tasks, config)                 │
-│  • Server-side Logic (enrichment, orchestration)        │
-└────────────┬────────────────────────────────────────────┘
-             │ trigger execution
-             ▼
-┌─────────────────────────────────────────────────────────┐
-│                MODAL (Execution Layer)                   │
-│  • Ephemeral Containers                                 │
-│  • Agent Execution (opencode, claude-code, amp)         │
-│  • Git Operations (clone, commit, PR)                   │
-└─────────────────────────────────────────────────────────┘
+GitHub Issues/PRs/Webhooks/Gists
+           │
+           ▼
+Porter (SvelteKit UI + API)
+           │
+           ▼
+Modal (ephemeral containers running agents)
 ```
 
-### Core Principles
+### Core Flow
 
-1. **BYOC Execution**
-   - Users bring their own Modal account
-   - Porter orchestrates; users pay for compute and model APIs
-   - Isolated, reproducible environments
+```
+1. User comments: @porter <agent>
+2. GitHub webhook triggers Porter
+3. Porter validates, enriches prompt, reads user Gist
+4. Porter triggers Modal with user credentials
+5. Container runs agent, creates branch and PR
+6. Modal calls back with PR URL
+7. Porter comments on the issue with the PR
+```
 
-2. **GitHub as Source of Truth**
-   - All state lives in GitHub (issues, PRs, branches)
-   - Config + credentials stored in a user-owned GitHub Gist
-   - No database required
-
-3. **Agent Agnostic**
-   - Porter orchestrates agents, doesn't run models
-   - Clean adapter interface for new agents
-   - Supports any CLI-based coding agent
-
-4. **Monolithic Simplicity**
-   - Single SvelteKit service (frontend + backend)
-   - No microservices complexity
-   - Easy to develop and deploy
-
----
-
-## User Model (BYOC-Only at Launch)
-
-**What users provide:**
-- GitHub account (OAuth)
-- Modal account (required): token ID + token secret
-- LLM API keys (Anthropic required, OpenAI optional)
-
-**What Porter provides:**
-- Orchestration layer (webhook -> Modal -> PR)
-- GitHub App integration
-- Dashboard UI
-- Unified settings/config management
-
-**Credential storage:**
-- All credentials stored in a single user-owned private GitHub Gist
-- Porter reads from Gist at runtime and injects env vars into Modal containers
-- Users own their data and can revoke by deleting the Gist or rotating keys
+Typical execution time: 2-10 minutes depending on issue scope.
 
 ---
 
 ## Tech Stack
 
-### Frontend + Backend (Single SvelteKit Service)
+### Web App (SvelteKit)
 
-| Component | Technology | Version | Purpose |
-|-----------|-----------|---------|---------|
-| Framework | SvelteKit | Latest | Full-stack (UI + API routes) |
-| UI Library | Svelte | 5.x | Reactive UI with runes |
-| Runtime | Bun | Latest | Fast Node.js alternative |
-| Language | TypeScript | 5.x | Type-safe application code |
-| Styling | Tailwind CSS | 3.x | Utility-first styling |
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| Framework | SvelteKit | UI + API routes |
+| Runtime | Bun | Server runtime |
+| Language | TypeScript | Application code |
+| Styling | Tailwind CSS | UI styling |
 
 ### Execution Layer
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| Container Platform | Modal | Serverless container orchestration |
-| Agent Runtime | Python | Modal function execution |
-| Container OS | Debian Slim | Lightweight base image |
+| Containers | Modal | Serverless execution |
+| Agent Runtime | Python | Agent orchestration |
+| Base OS | Debian Slim | Lightweight images |
 
 ### Infrastructure
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| Hosting | Vercel / Cloudflare Pages | Frontend + API serverless functions |
+| Hosting | Vercel or Cloudflare Pages | Web + API |
 | Auth | GitHub OAuth | User authentication |
-| Config Storage | GitHub Gists | User configuration + credentials |
-| State Storage | GitHub Issues/PRs | Task state and history |
-| Webhooks | GitHub Apps | Event notifications |
+| Config Storage | GitHub Gists | User config and credentials |
+| State Storage | GitHub Issues/PRs | Task state |
+| Webhooks | GitHub App | Events |
 
 ### Supported Agents
 
-| Agent | Language Support | Provider | Status |
-|-------|-----------------|----------|--------|
-| Opencode | Multi-language | Anthropic (Claude) | Default ✓ |
-| Claude Code | Multi-language | Anthropic (Claude) | Primary ✓ |
-| Amp | Multi-language | Anthropic | Secondary ✓ |
-| Cursor | Multi-language | Anthropic/OpenAI | Future |
+| Agent | Provider | Status |
+|-------|----------|--------|
+| Opencode | Anthropic | Default |
+| Claude Code | Anthropic | Primary |
+| Amp | Anthropic | Secondary |
+| Cursor | Anthropic/OpenAI | Future |
 
 ---
 
-## Repository Structure
+## User Model and Credentials
 
-```
-porter/
-├── web/
-│   ├── src/
-│   │   ├── routes/
-│   │   │   ├── +layout.svelte
-│   │   │   ├── +page.svelte                 # Dashboard
-│   │   │   ├── tasks/
-│   │   │   │   ├── +page.svelte             # Task list
-│   │   │   │   └── [id]/+page.svelte        # Task detail
-│   │   │   ├── settings/+page.svelte        # Settings
-│   │   │   └── api/
-│   │   │       ├── webhooks/
-│   │   │       │   └── github/+server.ts    # GitHub webhook handler
-│   │   │       ├── tasks/
-│   │   │       │   ├── +server.ts           # List/create tasks
-│   │   │       │   └── [id]/+server.ts      # Task CRUD
-│   │   │       ├── agents/+server.ts        # Agent list
-│   │   │       ├── config/+server.ts        # Config management
-│   │   │       └── callbacks/
-│   │   │           ├── task-update/+server.ts    # Modal status updates
-│   │   │           └── task-complete/+server.ts  # Modal completion
-│   │   ├── lib/
-│   │   │   ├── server/                      # Server-only code
-│   │   │   │   ├── modal.ts                 # Modal API client
-│   │   │   │   ├── github.ts                # GitHub API client
-│   │   │   │   ├── tasks.ts                 # Task store/management
-│   │   │   │   ├── agents.ts                # Agent configs
-│   │   │   │   └── prompt.ts                # WRAP enrichment
-│   │   │   ├── components/                  # UI components
-│   │   │   │   ├── TaskCard.svelte
-│   │   │   │   ├── TaskTable.svelte
-│   │   │   │   ├── StatusBadge.svelte
-│   │   │   │   └── AgentIcon.svelte
-│   │   │   ├── stores/                      # Client state
-│   │   │   │   └── tasks.svelte.ts
-│   │   │   └── types.ts                     # Shared types
-│   │   └── app.css                          # Global styles
-│   ├── static/
-│   │   ├── logos/
-│   │   │   └── porter-logo.png
-│   │   └── favicon.png
-│   ├── svelte.config.js
-│   ├── vite.config.ts
-│   ├── package.json
-│   └── bun.lockb
-├── modal/
-│   ├── app.py                           # Modal app definition
-│   ├── agents/
-│   │   ├── opencode.py                  # Opencode executor
-│   │   ├── claude_code.py               # Claude Code executor
-│   │   └── amp.py                       # Amp executor
-│   └── utils/
-│       ├── git.py                       # Git operations
-│       └── github.py                    # PR creation
-├── docs/
-│   ├── MAIN-SPEC.md                     # This file
-│   ├── ARCHITECTURE.md                  # Technical architecture
-│   ├── AGENTS.md                        # Agent integration guide
-│   └── API.md                           # API documentation
-├── .github/
-│   └── workflows/
-│       ├── deploy.yml                   # CI/CD
-│       └── test.yml                     # Tests
-└── README.md
-```
+**Users provide:**
+- GitHub OAuth
+- Modal token ID and secret
+- LLM API keys (Anthropic required, OpenAI optional)
 
----
+**Porter provides:**
+- Orchestration and UI
+- GitHub App integration
+- Unified settings management
 
-## Core Flow
-
-### Standard Workflow
-
-```
-1. User creates or finds GitHub issue
-   ↓
-2. User comments: @porter opencode
-   ↓
-3. GitHub webhook fires to Porter
-   ↓
-4. Porter validates webhook signature
-   ↓
-5. Porter extracts: repo, issue, agent
-   ↓
-6. Porter enriches prompt (WRAP format)
-   ↓
-7. Porter reads user's Gist and triggers Modal using user's Modal account
-   ↓
-8. Modal spins up container with agent
-   ↓
-9. Container clones repo
-   ↓
-10. Agent analyzes issue and makes changes
-   ↓
-11. Agent commits changes to new branch
-   ↓
-12. Agent creates PR via GitHub API
-   ↓
-13. Modal calls Porter callback with PR URL
-   ↓
-14. Porter comments on issue: "✓ PR #123 created"
-   ↓
-15. User reviews and merges PR
-```
-
-**Total time: 2-10 minutes** (depends on issue complexity)
+**Credential storage:**
+- Stored in a single private GitHub Gist owned by the user
+- Read at runtime and injected into Modal containers
+- Users can revoke by rotating keys or deleting the Gist
 
 ---
 
 ## Prompt Enrichment (WRAP)
 
-Porter uses **WRAP** (Write, Refine, Assess, Pass) format to build effective prompts:
+Porter builds prompts in WRAP format:
 
 ```markdown
 ## Issue
@@ -316,48 +157,24 @@ Complete this GitHub issue by making the necessary code changes.
 Issue URL: {issue_url}
 ```
 
-### Context Sources
-
-**From Issue:**
-- Issue title and body
-- Labels (e.g., "bug", "feature")
-- Assignees and mentions
-- Linked issues/PRs
-
-**From Repository:**
-- `AGENTS.md` file (if exists) - agent-specific instructions
-- `.porter/config.json` (if exists) - repo-specific config
-- File tree (top 2 levels)
-- README.md content
-
-**From GitHub:**
-- Repository description
-- Primary language
-- Branch structure
+Context sources:
+- Issue metadata (title, body, labels, comments)
+- Repository docs (`AGENTS.md`, `.porter/config.json`, README)
+- Repository summary (top-level tree, primary language)
 
 ---
 
-## Modal Execution Architecture
+## Modal Execution
 
-### Container Image
+### Container Image (illustrative)
 
 ```python
 from modal import Image
 
 porter_image = (
     Image.debian_slim()
-    # System dependencies
-    .apt_install(
-        "git",
-        "curl",
-        "build-essential",
-    )
-    # Python tools
-    .pip_install(
-        "opencode-cli",
-        "amp-cli",
-    )
-    # Node.js (for some agents)
+    .apt_install("git", "curl", "build-essential")
+    .pip_install("opencode-cli", "amp-cli")
     .run_commands(
         "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
         "apt-get install -y nodejs",
@@ -365,134 +182,62 @@ porter_image = (
 )
 ```
 
-### Agent Execution Function
+### Execution Function (illustrative)
 
 ```python
-import modal
-import subprocess
-import os
-import requests
-
-app = modal.App("porter")
-
-@app.function(
-    image=porter_image,
-    timeout=600,  # 10 minutes max
-    memory=2048,  # 2GB RAM
-    cpu=2.0,      # 2 CPU cores
-)
-def execute_agent_task(
-    task_id: str,
-    repo_url: str,
-    repo_name: str,
-    issue_number: int,
-    agent_name: str,
-    enriched_prompt: str,
-    callback_url: str,
-    credentials: dict,
-):
-    """
-    Execute an AI coding agent task in isolated container.
-
-    Credentials dict contains:
-    - github_token: For cloning and PR creation
-    - anthropic_api_key: For LLM inference
-    - openai_api_key: Optional, for OpenAI-based agents
-
-    Steps:
-    1. Load provider credentials from Gist (passed in)
-    2. Clone repository
-    3. Run specified agent with enriched prompt
-    4. Agent makes changes and commits
-    5. Agent creates PR via GitHub API
-    6. Report results back to Porter via callback
-
-    Returns: Task execution result
-    """
-    # Set environment
+@app.function(image=porter_image, timeout=600, memory=2048, cpu=2.0)
+def execute_agent_task(task_id, repo_url, repo_name, issue_number,
+                       agent_name, enriched_prompt, callback_url, credentials):
     os.environ["GITHUB_TOKEN"] = credentials["github_token"]
     os.environ["ANTHROPIC_API_KEY"] = credentials["anthropic_api_key"]
     if credentials.get("openai_api_key"):
         os.environ["OPENAI_API_KEY"] = credentials["openai_api_key"]
 
-    # Clone repository
     clone_dir = f"/tmp/{repo_name}"
-    subprocess.run(
-        ["git", "clone", repo_url, clone_dir],
-        check=True
-    )
+    subprocess.run(["git", "clone", repo_url, clone_dir], check=True)
     os.chdir(clone_dir)
 
-    # Execute agent based on type
     if agent_name == "opencode":
-        result = subprocess.run(
-            ["opencode", "--prompt", enriched_prompt, "--create-pr"],
-            capture_output=True,
-            text=True
-        )
+        result = subprocess.run(["opencode", "--prompt", enriched_prompt, "--create-pr"],
+                                capture_output=True, text=True)
     elif agent_name == "claude-code":
-        result = subprocess.run(
-            ["claude-code", "--prompt", enriched_prompt],
-            capture_output=True,
-            text=True
-        )
+        result = subprocess.run(["claude-code", "--prompt", enriched_prompt],
+                                capture_output=True, text=True)
     elif agent_name == "amp":
-        result = subprocess.run(
-            ["amp", "--prompt", enriched_prompt],
-            capture_output=True,
-            text=True
-        )
+        result = subprocess.run(["amp", "--prompt", enriched_prompt],
+                                capture_output=True, text=True)
     else:
         raise ValueError(f"Unknown agent: {agent_name}")
 
-    # Parse output for PR URL
     pr_url = extract_pr_url(result.stdout)
-
-    # Callback to Porter with results
     requests.post(callback_url, json={
         "task_id": task_id,
         "status": "success" if result.returncode == 0 else "failed",
         "pr_url": pr_url,
         "logs": result.stdout,
-        "error": result.stderr if result.returncode != 0 else None
+        "error": result.stderr if result.returncode != 0 else None,
     })
-
-    return {
-        "pr_url": pr_url,
-        "success": result.returncode == 0
-    }
 ```
 
 ### Resource Limits
 
-Limits are enforced by the user's Modal account.
-
 | Resource | Limit | Rationale |
 |----------|-------|-----------|
-| Timeout | 10 minutes | Most tasks complete in 2-5 minutes |
-| Memory | 2GB | Sufficient for agent + repo + models |
-| CPU | 2 cores | Shared, burstable |
-| Storage | 10GB ephemeral | Fresh per task, auto-cleanup |
+| Timeout | 10 minutes | Most tasks complete quickly |
+| Memory | 2GB | Agent + repo |
+| CPU | 2 cores | Burstable |
+| Storage | 10GB ephemeral | Fresh per task |
 | Concurrency | 10 per user | Prevent abuse |
 
-### Cost Estimation
+### Cost Model
 
-**Modal Pricing (approximate):**
-- Container startup: ~$0.001
-- Compute: ~$0.01/minute
-- Average task (3 min): ~$0.03
-
-**Most individual users will stay within Modal's free tier** (~1000 tasks/month at $30 credits).
-
-### Pricing
-
-Porter is free and open source. You bring your own compute and model APIs:
+Porter is open source and free to run. Users pay for Modal and LLM usage:
 
 | Service | Purpose | Cost |
 |---------|---------|------|
-| Modal | Container execution | ~$0.03/task (free tier: $30/month credits) |
+| Modal | Container execution | ~ $0.03 per 3-minute task |
 | Anthropic | LLM inference | Per-token pricing |
-| OpenAI | LLM inference (optional) | Per-token pricing |
+| OpenAI (optional) | LLM inference | Per-token pricing |
 
 ---
 
@@ -500,467 +245,198 @@ Porter is free and open source. You bring your own compute and model APIs:
 
 ### REST Endpoints
 
-**Webhooks:**
+**Webhooks**
 ```
 POST /api/webhooks/github
-  - Receives GitHub webhook events
-  - Validates signature
-  - Triggers task execution
-  - Returns: 200 OK
 ```
 
-**Tasks:**
+**Tasks**
 ```
-GET  /api/tasks
-  - List all tasks for authenticated user
-  - Query params: status, repo, agent, limit, offset
-  - Returns: Task[]
-
-POST /api/tasks
-  - Manually create task (not from webhook)
-  - Body: { repo, issue, agent }
-  - Returns: Task
-
-GET  /api/tasks/:id
-  - Get task details
-  - Returns: Task with full logs
-
-PUT  /api/tasks/:id/retry
-  - Retry failed task
-  - Returns: Task
-
+GET    /api/tasks
+POST   /api/tasks
+GET    /api/tasks/:id
+PUT    /api/tasks/:id/retry
 DELETE /api/tasks/:id
-  - Cancel running task (if possible)
-  - Returns: 204 No Content
 ```
 
-**Agents:**
+**Agents**
 ```
 GET /api/agents
-  - List available agents
-  - Returns: Agent[]
-
 GET /api/agents/:name
-  - Get agent details and status
-  - Returns: Agent
 ```
 
-**Config:**
+**Config**
 ```
-GET  /api/config
-  - Get user config from Gist
-  - Returns: Config
-
-PUT  /api/config
-  - Update user config in Gist
-  - Body: Config
-  - Returns: Config
+GET /api/config
+PUT /api/config
 ```
 
-**Callbacks (from Modal):**
+**Callbacks (from Modal)**
 ```
 POST /api/callbacks/task-update
-  - Modal calls this during execution
-  - Body: { task_id, status, progress, logs }
-  - Returns: 200 OK
-
 POST /api/callbacks/task-complete
-  - Modal calls this when task finishes
-  - Body: { task_id, status, pr_url, error }
-  - Returns: 200 OK
 ```
 
 ### Data Models
 
-**Task:**
 ```typescript
 interface Task {
-  id: string                        // UUID
-  status: TaskStatus                // queued | running | success | failed
-  repo: string                      // "owner/repo"
-  issueNumber: number               // GitHub issue number
+  id: string
+  status: "queued" | "running" | "success" | "failed"
+  repo: string
+  issueNumber: number
   issueTitle: string
   issueBody: string
-  agent: string                     // "opencode" | "claude-code" | "amp"
-  priority: number                  // 1-5 (5 highest)
-  progress: number                  // 0-100
+  agent: string
+  priority: number
+  progress: number
   createdAt: Date
   startedAt?: Date
   completedAt?: Date
-  createdBy: string                 // GitHub username
-  prNumber?: number                 // Created PR number
-  prUrl?: string                    // Created PR URL
+  createdBy: string
+  prNumber?: number
+  prUrl?: string
   errorMessage?: string
   logs: LogEntry[]
 }
-
-type TaskStatus = "queued" | "running" | "success" | "failed"
 
 interface LogEntry {
   timestamp: Date
   level: "info" | "warning" | "error" | "success"
   message: string
 }
-```
 
-**Agent:**
-```typescript
 interface Agent {
-  name: string                      // "opencode"
-  displayName: string               // "Opencode"
+  name: string
+  displayName: string
   description: string
-  provider: string                  // "Anthropic"
-  languages: string[]               // ["python", "typescript", ...]
-  status: AgentStatus               // available | unavailable | deprecated
+  provider: string
+  languages: string[]
+  status: "available" | "unavailable" | "deprecated"
   version: string
-  icon: string                      // URL or emoji
+  icon: string
 }
 
-type AgentStatus = "available" | "unavailable" | "deprecated"
-```
-
-**Config:**
-```typescript
 interface Config {
-  version: string                   // "2.0.0"
-  modal: {
-    tokenId: string                 // User's Modal token ID
-    tokenSecret: string             // User's Modal token secret
-  }
-  agents: {
-    [name: string]: {
-      enabled: boolean
-      priority: number              // Default priority for this agent
-      customPrompt?: string         // Append to enriched prompt
-    }
-  }
-  credentials: {
-    anthropic: string               // Required - stored in user-owned Gist
-    openai?: string                 // Optional - stored in user-owned Gist
-  }
+  version: string
+  modal: { tokenId: string; tokenSecret: string }
+  agents: { [name: string]: { enabled: boolean; priority: number; customPrompt?: string } }
+  credentials: { anthropic: string; openai?: string }
   repositories: {
-    [repo: string]: {
-      defaultAgent: string
-      autoAssign: boolean          // Auto-run on new issues?
-      skipLabels: string[]         // Don't run for these labels
-    }
+    [repo: string]: { defaultAgent: string; autoAssign: boolean; skipLabels: string[] }
   }
-  notifications: {
-    email: boolean
-    webhook?: string                // POST results here
-  }
+  notifications: { email: boolean; webhook?: string }
 }
 ```
-
----
-
-## User Interface
-
-### Design System
-
-**Color Palette:**
-```css
---bg-primary: #000000;
---bg-secondary: #0a0a0a;
---bg-tertiary: #141414;
---border: #262626;
---text-primary: #fafafa;
---text-secondary: #a3a3a3;
---accent: #fb923c;              /* Porter amber */
---status-success: #22c55e;
---status-error: #ef4444;
-```
-
-**Typography:**
-- UI Font: Inter
-- Monospace: JetBrains Mono
-
-### Key Pages
-
-1. **Dashboard** (`/`)
-   - Overview stats
-   - Active tasks list
-   - Quick actions
-
-2. **Tasks** (`/tasks`)
-   - Full task list
-   - Filtering and sorting
-   - Task detail view
-
-3. **Settings** (`/settings`)
-   - GitHub connection
-   - Agent configuration
-   - Unified Modal + API keys
-   - Credential validation
-
-### Onboarding Flow
-
-1. Sign in with GitHub OAuth
-2. Install Porter GitHub App (grants repo access)
-3. Settings page - single unified form:
-   a. Connect Modal (token ID + token secret)
-   b. Add Anthropic API key (required)
-   c. Add OpenAI API key (optional)
-4. Select repositories to enable
-5. Done - user can now comment @porter on any issue
 
 ---
 
 ## GitHub Integration
 
-### GitHub App
+### GitHub App Permissions
 
-Porter uses a GitHub App for authentication and webhooks.
+- Contents: read/write
+- Issues: read/write
+- Pull Requests: read/write
+- Metadata: read
+- Members: read
 
-**Required Permissions:**
-- **Repository:**
-  - Contents: Read & Write (clone, commit, PR)
-  - Issues: Read & Write (comment, update)
-  - Pull Requests: Read & Write (create, update)
-  - Metadata: Read (repo info)
-- **Organization:**
-  - Members: Read (org membership)
+### Webhook Events
 
-**Webhook Events:**
-- `issue_comment.created` - New @porter command
-- `issues.opened` - Auto-run on new issues (if configured)
-- `issues.closed` - Cancel related tasks
-- `pull_request.merged` - Mark task complete
-
-### Credential Storage (User-Owned Gist)
-
-Porter stores all credentials in a single private GitHub Gist owned by the user.
-
-- Credentials include Modal token ID/secret and LLM API keys.
-- Keys are never stored locally.
-- Porter reads credentials from the user’s Gist to run agents in Modal containers.
-- Users can revoke access by rotating keys or deleting the Gist.
+- issue_comment.created
+- issues.opened (auto-run optional)
+- issues.closed (cancel)
+- pull_request.merged (mark complete)
 
 ### Command Syntax
 
-**Grammar:**
 ```
 @porter <agent> [flags]
 ```
 
-**Flags:**
-- `--priority=low|normal|high`
-- `--no-tests`
-- `--model=<name>`
-- `--branch=<name>`
+Flags:
+- --priority=low|normal|high
+- --no-tests
+- --model=<name>
+- --branch=<name>
 
-If `<agent>` is omitted, Porter uses the repo default agent from config.
-If multiple commands are present in a comment, each line is parsed and queued separately.
+Control commands:
+- @porter stop
+- @porter retry
+- @porter status
 
-**Basic:**
-```
-@porter opencode
-@porter claude-code
-@porter amp
-```
+---
 
-**With options:**
-```
-@porter opencode --priority=high
-@porter claude-code --no-tests
-@porter amp --model=sonnet
-```
+## User Interface
 
-**Control commands:**
-```
-@porter stop       # Stop current task
-@porter retry      # Retry failed task
-@porter status     # Get task status
-```
+### Key Pages
 
-### Bot Comments
+1. **Dashboard** (`/`): overview stats, active tasks, quick actions
+2. **Tasks** (`/tasks`): list, filtering, detail view
+3. **Settings** (`/settings`): GitHub connection, agents, Modal/LLM keys
 
-Porter comments on issues to provide status updates:
+### Onboarding Flow
 
-**When task is queued:**
-```
-🤖 Porter
-
-✓ Task queued
-Agent: opencode
-Status: https://porter.dev/tasks/abc123
-```
-
-**When task starts:**
-```
-🤖 Porter
-
-▶️ Task started
-Agent: opencode
-Branch: porter/issue-123-opencode
-```
-
-**During execution (optional):**
-```
-🤖 Porter
-
-… Running (45%)
-Latest step: tests
-```
-
-**When task completes:**
-```
-🤖 Porter
-
-✓ Task complete
-Pull Request: #124
-Review: https://github.com/user/repo/pull/124
-```
-
-**When task fails:**
-```
-🤖 Porter
-
-✗ Task failed
-Error: Agent timeout after 10 minutes
-Retry: @porter retry
-```
-
-### Task Dispatch + Dashboard Feed
-
-Porter treats GitHub as the source of truth for tasks.
-
-- A valid `@porter` command creates a task and posts a queued comment.
-- Status updates are reflected in issue comments and PR metadata.
-- The dashboard feed reads from GitHub (issues, comments, PRs) and mirrors tasks in the UI.
-- For local development, an in-memory task store can be used as a mock data layer.
+1. Sign in with GitHub OAuth
+2. Install Porter GitHub App
+3. Connect Modal and add LLM keys
+4. Select repositories
+5. Start using @porter comments
 
 ---
 
 ## Testing Strategy
 
-Porter uses a layered testing approach aligned with UI-first iteration:
-
-- **Unit tests:** Utility functions, prompt enrichment, GitHub/Modal helpers
-- **Component tests:** Svelte components with mocked stores and API responses
-- **Integration tests:** API routes and webhook handlers with mocked GitHub payloads
-- **E2E tests:** Auth, onboarding, and task lifecycle flows (Playwright)
+- Unit tests: prompt enrichment, GitHub/Modal helpers
+- Component tests: Svelte components with mocked data
+- Integration tests: API routes + webhooks
+- E2E tests: onboarding and task lifecycle (Playwright)
 
 ---
 
 ## Development Roadmap
 
-### Phase 1: UI Foundation + Testing Harness (Weeks 1-2)
-**Goal:** UI-first iteration with reliable test scaffolding
+### Phase 1: UI Foundation + Testing
+- Dashboard feed, task detail view, filtering, mock data, component tests, Playwright scaffolding
 
-- [ ] Changelog-style dashboard feed
-- [ ] Task detail view and logs
-- [ ] Filtering, actions, empty states
-- [ ] Settings and auth page shells
-- [ ] Mock data layer for UI development
-- [ ] Component tests (Vitest + Testing Library)
-- [ ] E2E test scaffolding (Playwright)
+### Phase 2: Onboarding + Auth
+- GitHub OAuth, onboarding wizard, config persistence
 
-**Deliverable:** UI flows testable end-to-end with mock data
+### Phase 3: Core API + Task Model
+- Task CRUD, Gist config storage, agent registry, webhook validation, WebSocket updates
 
----
+### Phase 4: Modal Execution
+- Modal integration, Opencode adapter, callbacks, PR creation
 
-### Phase 2: Onboarding + Auth (Day 3)
-**Goal:** First-run experience and authentication ready
+### Phase 5: GitHub App + Multi-Agent
+- App setup, Claude Code and Amp adapters, priority queue, retry handling
 
-- [ ] Sign in / sign up UI
-- [ ] GitHub OAuth flow + session handling
-- [ ] Onboarding wizard (connect GitHub, install app, choose agents, choose repos)
-- [ ] Persist user configuration
+### Phase 6: Polish + Launch Prep
+- Task history, error handling, notifications, performance, docs, launch assets
 
-**Deliverable:** New user can sign in and complete onboarding
-
----
-
-### Phase 3: Core API + Task Model (Day 3)
-**Goal:** Backend foundation for tasks and config
-
-- [ ] Task CRUD API routes
-- [ ] Task state storage and retrieval
-- [ ] Config storage in Gists (agents + credentials)
-- [ ] Agent registry (cloud-only) + enablement state
-- [ ] Runtime readiness UI (Modal status)
-- [ ] WebSocket status updates
-- [ ] Webhook skeleton with signature validation
-
-**Deliverable:** Task API and cloud config storage working
-
----
-
-### Phase 4: Modal Execution (Day 3 or 4)
-**Goal:** Cloud execution for a single agent
-
-- [ ] Modal integration (container + execution function)
-- [ ] Opencode agent adapter (Modal)
-- [ ] Task callbacks + progress updates
-- [ ] PR creation from container
-
-**Deliverable:** Working @porter flow - webhook → Modal → PR
-
----
-
-### Phase 5: GitHub App + Multi-Agent (Day 4)
-**Goal:** Production-ready workflow and multiple agents
-
-- [ ] GitHub App setup + webhook handlers
-- [ ] Claude Code adapter (Modal)
-- [ ] Amp adapter (Modal)
-- [ ] Agent auto-detection and configuration
-- [ ] Priority queue
-- [ ] Error handling and retry logic
-
-**Deliverable:** All agents working reliably through GitHub
-
----
-
-### Phase 6: Polish + Launch Prep (Weeks 2-3)
-**Goal:** Production-ready quality and launch materials
-
-- [ ] Task history view
-- [ ] Comprehensive error handling
-- [ ] Email notifications
-- [ ] Performance optimization
-- [ ] UI/UX polish
-- [ ] Documentation
-- [ ] Demo video, launch post, screenshots, beta testing
-
-**Deliverable:** Ready to launch Feb 24
-
----
-
-### Phase 7: Post-Launch (March+)
-**Future features based on feedback:**
-
-- [ ] GitLab support (v2.0)
-- [ ] Gitea support (self-hosted)
-- [ ] Multiple cloud providers (Fly.io alternative)
-- [ ] Team management features
-- [ ] Usage tracking and billing
+### Phase 7: Post-Launch
+- GitLab/Gitea support, additional providers, team features, billing
 
 ---
 
 ## Success Metrics
 
-### MVP Success
-- [ ] Successfully dispatch task from webhook
-- [ ] Agent executes in Modal container
-- [ ] PR is created and linked back to issue
-- [ ] Error handling works (timeout, failure)
-- [ ] Task history visible in dashboard
+### MVP
+- Webhook dispatch to Modal
+- Agent runs and creates PR
+- Error handling for timeouts and failures
+- Task history visible
 
-### Beta Success
-- [ ] 3+ agents supported (Opencode, Claude Code, Amp)
-- [ ] 100+ tasks processed successfully
-- [ ] <30s task pickup latency (webhook → container start)
-- [ ] 95%+ success rate for valid tasks
-- [ ] Positive user feedback (5+ testimonials)
+### Beta
+- 3+ agents supported
+- 100+ tasks completed
+- <30s webhook-to-start latency
+- 95%+ success rate on valid tasks
 
-### Launch Success (Week 1)
-- [ ] 500+ GitHub stars
-- [ ] 20+ real users
-- [ ] HN front page for 8+ hours
-- [ ] 5+ dev influencers tweeting
-- [ ] No critical bugs
+### Launch (Week 1)
+- 500+ GitHub stars
+- 20+ real users
+- No critical bugs
 
 ---
 
@@ -968,24 +444,21 @@ Porter uses a layered testing approach aligned with UI-first iteration:
 
 ### SvelteKit App
 
-**Development:**
 ```bash
 cd web
 bun install
 bun run dev
 ```
 
-**Production:**
+Production:
+
 ```bash
 bun run build
-# Deploy to Vercel
 vercel deploy
-
-# Or Cloudflare Pages
-wrangler pages deploy
 ```
 
-**Environment Variables (Cloudflare Pages):**
+Environment variables:
+
 ```
 GITHUB_APP_ID=123456
 GITHUB_APP_PRIVATE_KEY=...
@@ -993,31 +466,29 @@ GITHUB_WEBHOOK_SECRET=...
 PUBLIC_APP_URL=https://<domain>
 ```
 
-No Modal credentials are stored in Porter environment variables.
-
 ### Modal Functions
 
-**Development:**
 ```bash
 cd modal
 modal serve app.py
 ```
 
-**Production:**
+Production:
+
 ```bash
 modal deploy app.py
 ```
 
-Modal secrets are not used. Provider keys are stored in the user’s GitHub Gist and injected at runtime.
+Provider keys are always read from the user Gist at runtime.
 
 ---
 
 ## Open Questions
 
-1. **Multi-repo:** Support multiple repos per task?
-2. **Team Features:** Shared queues? Org-level settings?
-3. **Rate Limiting:** How to prevent abuse on free tier?
-4. **Agent Versions:** How to handle agent updates?
+1. Multi-repo tasks
+2. Team-level queues and org settings
+3. Rate limiting on free tier
+4. Agent versioning and upgrades
 
 ---
 
