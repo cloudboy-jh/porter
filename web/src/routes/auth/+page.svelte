@@ -1,522 +1,132 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { GithubLogo, ShieldCheck, Stack, Robot, Sparkle } from 'phosphor-svelte';
-	import { env as publicEnv } from '$env/dynamic/public';
-	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { GithubLogo, Stack } from 'phosphor-svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
-	import AgentSettings from '$lib/components/AgentSettings.svelte';
 	import type { PageData } from './$types';
-	import type { AgentConfig } from '$lib/types/agent';
 	import logo from '../../logos/porter-logo-main.png';
-
-	type Credentials = { anthropic?: string; openai?: string; amp?: string };
-	type ModalCredentials = { tokenId?: string; tokenSecret?: string };
-	type RepoSummary = {
-		id: number;
-		fullName: string;
-		owner: string;
-		name: string;
-		private: boolean;
-		description?: string | null;
-	};
-	type ConfigSnapshot = {
-		credentials?: Credentials;
-		modal?: ModalCredentials;
-		onboarding?: {
-			completed: boolean;
-			selectedRepos: Array<{
-				id: number;
-				fullName: string;
-				owner: string;
-				name: string;
-				private: boolean;
-			}>;
-			enabledAgents: string[];
-		};
-	};
 
 	let { data } = $props<{ data: PageData }>();
 	const isConnected = $derived(Boolean(data?.session));
-	const githubHandle = $derived(data?.session?.user?.login ? `@${data.session.user.login}` : 'Not connected');
-	let repositories = $state<RepoSummary[]>([]);
-	let hasInstallation = $state(false);
-	let credentials = $state<Credentials>({});
-	let modal = $state<ModalCredentials>({});
-	let selectedRepoIds = $state<number[]>([]);
-	let agentConfig = $state<AgentConfig[]>([]);
-	let configSnapshot = $state<ConfigSnapshot | null>(null);
-	let statusMessage = $state('');
-	let isSaving = $state(false);
-	let revealField = $state<Record<string, boolean>>({});
-
-	const modalReady = $derived(Boolean(modal?.tokenId?.trim()) && Boolean(modal?.tokenSecret?.trim()));
-	const anthropicReady = $derived(Boolean(credentials?.anthropic?.trim()));
-	const reposReady = $derived(selectedRepoIds.length > 0);
-	const agentsReady = $derived(agentConfig.some((agent) => agent.enabled));
-	const runtimeReady = $derived(isConnected && hasInstallation && reposReady && modalReady && anthropicReady && agentsReady);
-
-	const headerLabelClass =
-		'text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground';
-	const installUrl = publicEnv.PUBLIC_GITHUB_APP_INSTALL_URL ?? 'https://github.com/apps/porter/installations/new';
-
-	const loadState = async () => {
-		if (!isConnected) return;
-		try {
-			const [reposRes, configRes, agentsRes] = await Promise.all([
-				fetch('/api/github/repositories'),
-				fetch('/api/config'),
-				fetch('/api/agents')
-			]);
-			if (reposRes.status === 401 || configRes.status === 401 || agentsRes.status === 401) {
-				window.location.href = '/auth';
-				return;
-			}
-			if (reposRes.ok) {
-				const payload = (await reposRes.json()) as { repositories: RepoSummary[]; hasInstallation?: boolean };
-				repositories = payload.repositories ?? [];
-				hasInstallation = Boolean(payload.hasInstallation);
-				if (!selectedRepoIds.length && repositories.length) {
-					selectedRepoIds = repositories.map((repo) => repo.id);
-				}
-			}
-			if (configRes.ok) {
-				const config = (await configRes.json()) as ConfigSnapshot;
-				configSnapshot = config;
-				credentials = config.credentials ?? {};
-				modal = config.modal ?? {};
-				selectedRepoIds = config.onboarding?.selectedRepos?.map((repo) => repo.id) ?? selectedRepoIds;
-			}
-			if (agentsRes.ok) {
-				agentConfig = (await agentsRes.json()) as AgentConfig[];
-			}
-		} catch (error) {
-			console.error('Failed to load onboarding state:', error);
-		}
-	};
+	let canvasEl: HTMLCanvasElement | null = $state(null);
 
 	onMount(() => {
-		loadState();
-	});
+		const canvas = canvasEl;
+		if (!canvas) return;
+		const ctx = canvas.getContext('2d');
+		if (!ctx) return;
 
-	const toggleReveal = (key: string) => {
-		revealField = { ...revealField, [key]: !revealField[key] };
-	};
+		const updateCanvasSize = () => {
+			canvas.width = canvas.offsetWidth;
+			canvas.height = canvas.offsetHeight;
+		};
 
-	const updateCredential = (key: keyof Credentials, value: string) => {
-		credentials = { ...credentials, [key]: value };
-	};
+		updateCanvasSize();
+		window.addEventListener('resize', updateCanvasSize);
 
-	const updateModalField = (key: keyof ModalCredentials, value: string) => {
-		modal = { ...modal, [key]: value };
-	};
+		const characters = ' .:-=+*#%@'.split('');
+		let time = 0;
+		let frameId = 0;
 
-	const saveCredentials = async () => {
-		isSaving = true;
-		statusMessage = '';
-		try {
-			const response = await fetch('/api/config/credentials', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(credentials)
-			});
-			if (response.status === 401) {
-				window.location.href = '/auth';
-				return;
-			}
-			if (!response.ok) {
-				statusMessage = 'Failed to save credentials.';
-				return;
-			}
-			statusMessage = 'Credentials saved.';
-		} catch (error) {
-			console.error('Saving credentials failed:', error);
-			statusMessage = 'Failed to save credentials.';
-		} finally {
-			isSaving = false;
-		}
-	};
+		const draw = () => {
+			const cols = Math.floor(canvas.width / 14);
+			const rows = Math.floor(canvas.height / 24);
 
-	const saveModal = async () => {
-		isSaving = true;
-		statusMessage = '';
-		try {
-			const response = await fetch('/api/config/modal', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(modal)
-			});
-			if (response.status === 401) {
-				window.location.href = '/auth';
-				return;
-			}
-			if (!response.ok) {
-				statusMessage = 'Failed to save Modal credentials.';
-				return;
-			}
-			statusMessage = 'Modal credentials saved.';
-		} catch (error) {
-			console.error('Saving Modal credentials failed:', error);
-			statusMessage = 'Failed to save Modal credentials.';
-		} finally {
-			isSaving = false;
-		}
-	};
+			ctx.fillStyle = 'rgb(194, 78, 0)';
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-	const toggleRepoSelection = (id: number) => {
-		selectedRepoIds = selectedRepoIds.includes(id)
-			? selectedRepoIds.filter((repoId) => repoId !== id)
-			: [...selectedRepoIds, id];
-	};
+			ctx.fillStyle = 'rgba(255, 245, 235, 0.9)';
+			ctx.font =
+				'11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
 
-	const saveRepos = async () => {
-		if (!configSnapshot) return;
-		isSaving = true;
-		statusMessage = '';
-		try {
-			const selectedRepos = repositories
-				.filter((repo) => selectedRepoIds.includes(repo.id))
-				.map((repo) => ({
-					id: repo.id,
-					fullName: repo.fullName,
-					owner: repo.owner,
-					name: repo.name,
-					private: repo.private
-				}));
-			const nextConfig: ConfigSnapshot = {
-				...configSnapshot,
-				onboarding: {
-					completed: true,
-					selectedRepos,
-					enabledAgents: configSnapshot.onboarding?.enabledAgents ?? []
+			for (let i = 0; i < cols; i += 1) {
+				for (let j = 0; j < rows; j += 1) {
+					const x = i * 14;
+					const y = j * 24;
+					const distortionX = Math.sin(time * 0.1 + j * 0.2) * 3;
+					const distortionY = Math.cos(time * 0.1 + i * 0.2) * 2;
+					const gray = (Math.sin(x * 0.01 + distortionX) + Math.cos(y * 0.01 + distortionY) + 2) / 4;
+					const charIndex = Math.floor(gray * (characters.length - 1));
+					ctx.fillText(characters[charIndex], x, y);
 				}
-			};
-			const response = await fetch('/api/config', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(nextConfig)
-			});
-			if (response.status === 401) {
-				window.location.href = '/auth';
-				return;
 			}
-			if (!response.ok) {
-				statusMessage = 'Failed to save repositories.';
-				return;
-			}
-			statusMessage = 'Repositories saved.';
-		} catch (error) {
-			console.error('Saving repositories failed:', error);
-			statusMessage = 'Failed to save repositories.';
-		} finally {
-			isSaving = false;
-		}
-	};
 
-	const handleAgentSave = async (config: AgentConfig[]) => {
-		agentConfig = config;
-		try {
-			const response = await fetch('/api/agents', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(config)
-			});
-			if (response.status === 401) {
-				window.location.href = '/auth';
-				return;
-			}
-			if (!response.ok) {
-				statusMessage = 'Failed to save agents.';
-				return;
-			}
-			statusMessage = 'Agents updated.';
-		} catch (error) {
-			console.error('Saving agent config failed:', error);
-			statusMessage = 'Failed to save agents.';
-		}
-	};
+			time += 0.06;
+			frameId = requestAnimationFrame(draw);
+		};
+
+		draw();
+
+		return () => {
+			window.removeEventListener('resize', updateCanvasSize);
+			cancelAnimationFrame(frameId);
+		};
+	});
 </script>
 
-<div class="flex min-h-[70vh] items-center justify-center">
-	<div class="w-full max-w-4xl space-y-6">
-		<div class="flex items-center justify-between">
-			<div class="flex items-center gap-3">
-				<img src={logo} alt="Porter" class="h-10 w-10 rounded-xl border border-border/60 bg-background/70 p-1" />
-				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">Porter</p>
-					<p class="text-sm font-medium text-foreground">Cloud onboarding</p>
+<div class="grid min-h-svh bg-[radial-gradient(circle_at_top,rgba(255,140,0,0.08),transparent_45%),linear-gradient(180deg,rgba(255,248,240,0.9),rgba(247,244,240,1))] lg:grid-cols-2">
+	<div class="relative hidden lg:block">
+		<div class="absolute inset-0 bg-[#c95500]">
+			<canvas bind:this={canvasEl} class="absolute inset-0 h-full w-full" />
+			<div class="pointer-events-none absolute inset-0">
+				<div class="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,220,180,0.25),transparent_55%)]" />
+				<div class="absolute inset-0 flex items-center justify-center">
+					<div class="rounded-[28px] bg-white/80 p-[2px] shadow-[0_20px_60px_-40px_rgba(0,0,0,0.55)]">
+						<div class="rounded-[26px] border border-orange-200/70 bg-[#f7f4f0]/95 p-5 shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]">
+							<img src={logo} alt="Porter" class="h-36 w-36 rounded-2xl" />
+						</div>
+					</div>
 				</div>
 			</div>
-			<div class="hidden items-center gap-2 text-xs text-muted-foreground md:flex">
-				<Sparkle size={14} weight="bold" class="text-primary" />
-				Cloud-native setup, no local agents
+		</div>
+	</div>
+	<div class="flex flex-col gap-6 p-6 md:p-10">
+		<div class="flex justify-center md:justify-start">
+			<div class="flex items-center gap-2 text-sm font-medium text-foreground">
+				<img src={logo} alt="Porter" class="h-6 w-6 rounded-md" />
+				Porter Cloud
 			</div>
 		</div>
-
-		<section class="space-y-4">
-			<Card.Root class="border border-border/60 bg-card/70 shadow-[0_20px_40px_-28px_rgba(15,15,15,0.5)]">
-				<Card.Content class="grid gap-6 p-8 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-					<div class="space-y-4">
-						<p class={headerLabelClass}>Step 01</p>
-						<h1 class="text-2xl font-semibold text-foreground">Connect your GitHub workspace</h1>
-						<p class="text-sm text-muted-foreground">
-							Authorize Porter to read issues and create PRs. This is the only way to run cloud tasks.
-						</p>
-						<div class="flex flex-wrap items-center gap-3">
-							<Button size="lg" class="gap-2" href="/api/auth/github">
-								<GithubLogo size={18} weight="bold" />
-								{isConnected ? 'Reconnect GitHub' : 'Continue with GitHub'}
-							</Button>
-							<Badge variant={isConnected ? 'secondary' : 'outline'} class="text-xs">
-								{isConnected ? `Connected · ${githubHandle}` : 'Not connected'}
-							</Badge>
-						</div>
-					</div>
-					<div class="space-y-4 rounded-2xl border border-border/60 bg-background/70 p-6">
-						<div class="flex items-center gap-3 text-sm font-medium">
-							<span class="flex h-9 w-9 items-center justify-center rounded-xl border border-border/70 bg-muted/70">
-								<ShieldCheck size={18} weight="bold" class="text-muted-foreground" />
-							</span>
-							Permissions summary
-						</div>
-						<ul class="space-y-3 text-xs text-muted-foreground">
-							<li>Reads repository metadata and issue details</li>
-							<li>Creates branches, commits, and pull requests</li>
-							<li>Uses GitHub App webhooks for dispatch</li>
-							<li>Runs entirely in the cloud</li>
-						</ul>
-					</div>
-				</Card.Content>
-			</Card.Root>
-		</section>
-
-		<section class="space-y-4">
-			<Card.Root class="border border-border/60 bg-card/70 shadow-lg backdrop-blur">
-				<Card.Header class="pb-3">
-					<div class="flex items-start justify-between gap-4">
-						<div class="flex items-start gap-4">
-							<div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-muted/70 text-muted-foreground">
-								<GithubLogo size={18} weight="bold" />
-							</div>
-							<div class="space-y-1">
-								<p class={headerLabelClass}>Step 02</p>
-								<h2 class="text-lg font-semibold text-foreground">Install the Porter GitHub App</h2>
-								<p class="text-xs text-muted-foreground">
-									The GitHub App provides webhooks and repo access.
-								</p>
-							</div>
-						</div>
-						<Badge variant={hasInstallation ? 'secondary' : 'outline'} class="text-xs">
-							{hasInstallation ? 'Installed' : 'Not installed'}
-						</Badge>
-					</div>
-				</Card.Header>
-				<Card.Content class="flex flex-wrap items-center justify-between gap-3 pt-0">
-					<p class="text-sm text-muted-foreground">
-						Connect the app to the repositories you want Porter to watch.
+		<div class="flex flex-1 items-center justify-center">
+			<div class="w-full max-w-md space-y-8">
+				<div class="space-y-2">
+					<p class="text-[0.65rem] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+						Sign in
 					</p>
-					<Button variant={hasInstallation ? 'secondary' : 'default'} href={installUrl}>
-						{hasInstallation ? 'Manage installation' : 'Install GitHub App'}
-					</Button>
-				</Card.Content>
-			</Card.Root>
-		</section>
-
-		<section class="space-y-4">
-			<Card.Root class="border border-border/60 bg-card/70 shadow-lg backdrop-blur">
-				<Card.Header class="pb-3">
-					<div class="flex items-start gap-4">
-						<div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-muted/70 text-muted-foreground">
+					<h1 class="text-3xl font-semibold text-foreground">Connect GitHub</h1>
+					<p class="text-base text-muted-foreground">Use your GitHub account to access Porter.</p>
+				</div>
+				<div class="grid gap-5">
+					<div class="flex items-start gap-3">
+						<span class="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background text-primary">
+							<GithubLogo size={18} weight="bold" />
+						</span>
+						<div>
+							<p class="text-base font-medium text-foreground">Secure OAuth</p>
+							<p class="text-sm text-muted-foreground">GitHub identity and permissions managed by you.</p>
+						</div>
+					</div>
+					<div class="flex items-start gap-3">
+						<span class="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background text-primary">
 							<Stack size={18} weight="bold" />
-						</div>
-						<div class="space-y-1">
-							<p class={headerLabelClass}>Step 03</p>
-							<h2 class="text-lg font-semibold text-foreground">Select repositories</h2>
-							<p class="text-xs text-muted-foreground">
-								Choose which repositories Porter will monitor.
-							</p>
+						</span>
+						<div>
+							<p class="text-base font-medium text-foreground">Repo control</p>
+							<p class="text-sm text-muted-foreground">Choose repositories later from Settings.</p>
 						</div>
 					</div>
-				</Card.Header>
-				<Card.Content class="space-y-3 pt-0">
-					{#if repositories.length === 0}
-						<div class="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-							No repositories found. Install the app to continue.
-						</div>
-					{:else}
-						<div class="space-y-2">
-							{#each repositories as repo}
-								<label class="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-xs">
-									<div>
-										<p class="text-sm font-medium text-foreground">{repo.fullName}</p>
-										{#if repo.description}
-											<p class="text-xs text-muted-foreground">{repo.description}</p>
-										{/if}
-									</div>
-									<input
-										class="h-4 w-4 accent-primary"
-										type="checkbox"
-										checked={selectedRepoIds.includes(repo.id)}
-										onchange={() => toggleRepoSelection(repo.id)}
-									/>
-								</label>
-							{/each}
-						</div>
+				</div>
+				<div class="flex flex-wrap items-center gap-3">
+					<Button size="lg" class="gap-2 shadow-[0_6px_20px_-12px_rgba(200,90,0,0.6)]" href="/api/auth/github">
+						<GithubLogo size={18} weight="bold" />
+						{isConnected ? 'Reconnect GitHub' : 'Continue with GitHub'}
+					</Button>
+					{#if isConnected}
+						<Button variant="secondary" size="lg" href="/">
+							Go to dashboard
+						</Button>
 					{/if}
-				</Card.Content>
-				<Card.Footer class="flex items-center justify-end">
-					<Button type="button" onclick={saveRepos} disabled={!isConnected || isSaving}>
-						Save repositories
-					</Button>
-				</Card.Footer>
-			</Card.Root>
-		</section>
-
-		<section class="space-y-4">
-			<Card.Root class="border border-border/60 bg-card/70 shadow-lg backdrop-blur">
-				<Card.Header class="pb-3">
-					<div class="flex items-start gap-4">
-						<div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-muted/70 text-muted-foreground">
-							<Stack size={18} weight="bold" />
-						</div>
-						<div class="space-y-1">
-							<p class={headerLabelClass}>Step 04</p>
-							<h2 class="text-lg font-semibold text-foreground">Add Modal + LLM keys</h2>
-							<p class="text-xs text-muted-foreground">
-								Porter stores these in your private GitHub Gist.
-							</p>
-						</div>
-					</div>
-				</Card.Header>
-				<Card.Content class="space-y-4 pt-0">
-					<div class="rounded-lg border border-border/60 bg-background/80 p-4 space-y-3">
-						<p class="text-sm font-medium text-foreground">Modal Token ID</p>
-						<div class="flex flex-wrap gap-2">
-							<Input
-								value={modal?.tokenId ?? ''}
-								type={revealField.modalTokenId ? 'text' : 'password'}
-								placeholder="modal_..."
-								class="min-w-[220px] flex-1"
-								oninput={(event) => updateModalField('tokenId', (event.target as HTMLInputElement).value)}
-							/>
-							<Button variant="secondary" size="sm" type="button" onclick={() => toggleReveal('modalTokenId')}>
-								{revealField.modalTokenId ? 'Hide' : 'Reveal'}
-							</Button>
-						</div>
-					</div>
-					<div class="rounded-lg border border-border/60 bg-background/80 p-4 space-y-3">
-						<p class="text-sm font-medium text-foreground">Modal Token Secret</p>
-						<div class="flex flex-wrap gap-2">
-							<Input
-								value={modal?.tokenSecret ?? ''}
-								type={revealField.modalTokenSecret ? 'text' : 'password'}
-								placeholder="secret_..."
-								class="min-w-[220px] flex-1"
-								oninput={(event) => updateModalField('tokenSecret', (event.target as HTMLInputElement).value)}
-							/>
-							<Button variant="secondary" size="sm" type="button" onclick={() => toggleReveal('modalTokenSecret')}>
-								{revealField.modalTokenSecret ? 'Hide' : 'Reveal'}
-							</Button>
-						</div>
-					</div>
-					<div class="rounded-lg border border-border/60 bg-background/80 p-4 space-y-3">
-						<p class="text-sm font-medium text-foreground">Anthropic API Key</p>
-						<div class="flex flex-wrap gap-2">
-							<Input
-								value={credentials?.anthropic ?? ''}
-								type={revealField.anthropic ? 'text' : 'password'}
-								placeholder="sk-ant-..."
-								class="min-w-[220px] flex-1"
-								oninput={(event) => updateCredential('anthropic', (event.target as HTMLInputElement).value)}
-							/>
-							<Button variant="secondary" size="sm" type="button" onclick={() => toggleReveal('anthropic')}>
-								{revealField.anthropic ? 'Hide' : 'Reveal'}
-							</Button>
-						</div>
-					</div>
-					{#if statusMessage}
-						<div class="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-							{statusMessage}
-						</div>
-					{/if}
-				</Card.Content>
-				<Card.Footer class="flex flex-wrap justify-end gap-2">
-					<Button variant="secondary" type="button" onclick={saveModal} disabled={isSaving}>
-						Save Modal
-					</Button>
-					<Button type="button" onclick={saveCredentials} disabled={isSaving}>
-						Save LLM keys
-					</Button>
-				</Card.Footer>
-			</Card.Root>
-		</section>
-
-		<section class="space-y-4">
-			<Card.Root class="border border-border/60 bg-card/70 shadow-lg backdrop-blur">
-				<Card.Header class="pb-3">
-					<div class="flex items-start gap-4">
-						<div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-muted/70 text-muted-foreground">
-							<Robot size={18} weight="bold" />
-						</div>
-						<div class="space-y-1">
-							<p class={headerLabelClass}>Step 05</p>
-							<h2 class="text-lg font-semibold text-foreground">Enable agents</h2>
-							<p class="text-xs text-muted-foreground">
-								Choose which agents Porter can run in the cloud.
-							</p>
-						</div>
-					</div>
-				</Card.Header>
-				<Card.Content class="pt-0">
-					<AgentSettings
-						bind:agents={agentConfig}
-						mode="quick"
-						framed={false}
-						onsave={handleAgentSave}
-					/>
-				</Card.Content>
-			</Card.Root>
-		</section>
-
-		<section class="space-y-4">
-			<Card.Root class="border border-border/60 bg-card/70 shadow-lg backdrop-blur">
-				<Card.Header class="pb-3">
-					<div class="flex items-start justify-between gap-4">
-						<div class="space-y-1">
-							<p class={headerLabelClass}>Finish</p>
-							<h2 class="text-lg font-semibold text-foreground">Ready to run</h2>
-							<p class="text-xs text-muted-foreground">All steps complete when every signal is green.</p>
-						</div>
-						<Badge variant={runtimeReady ? 'secondary' : 'outline'} class="text-xs">
-							{runtimeReady ? 'Ready' : 'Incomplete'}
-						</Badge>
-					</div>
-				</Card.Header>
-				<Card.Content class="grid gap-3 pt-0 sm:grid-cols-2 lg:grid-cols-4">
-					<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-						<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">GitHub</p>
-						<p class="mt-2 text-sm font-medium">{isConnected ? 'Connected' : 'Missing'}</p>
-					</div>
-					<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-						<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Repos</p>
-						<p class="mt-2 text-sm font-medium">{reposReady ? 'Selected' : 'Missing'}</p>
-					</div>
-					<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-						<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Modal</p>
-						<p class="mt-2 text-sm font-medium">{modalReady ? 'Ready' : 'Missing'}</p>
-					</div>
-					<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-						<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Agents</p>
-						<p class="mt-2 text-sm font-medium">{agentsReady ? 'Enabled' : 'Missing'}</p>
-					</div>
-				</Card.Content>
-				<Card.Footer class="flex items-center justify-end">
-					<Button href="/" disabled={!runtimeReady}>
-						Go to dashboard
-					</Button>
-				</Card.Footer>
-			</Card.Root>
-		</section>
+				</div>
+			</div>
+		</div>
 	</div>
 </div>

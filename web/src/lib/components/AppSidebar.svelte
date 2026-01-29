@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { CaretDown, ClockCounterClockwise, Gauge, Gear, Lightning } from 'phosphor-svelte';
+	import { CaretDown, Check, ClockCounterClockwise, Gauge, Gear, Lightning } from 'phosphor-svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -14,6 +14,7 @@
 
 	const navItems = [
 		{ label: 'Dashboard', href: '/', icon: Gauge, action: null as (() => void) | null, shortcut: null as string | null },
+		{ label: 'Review', href: '/review', icon: Check, action: null as (() => void) | null, shortcut: null as string | null },
 		{ label: 'History', href: '/history', icon: ClockCounterClockwise, action: null as (() => void) | null, shortcut: null as string | null },
 		{ label: 'Quick Settings', href: null as string | null, icon: Lightning, action: () => showQuickSettings = true, shortcut: '⌘,' },
 		{ label: 'Settings', href: '/settings', icon: Gear, action: null as (() => void) | null, shortcut: null as string | null }
@@ -63,12 +64,17 @@
 				<Sidebar.Menu>
 					{#each navItems as item}
 						<Sidebar.MenuItem>
-						<Sidebar.MenuButton
-							tooltipContent={item.label}
-							isActive={item.href ? $page.url.pathname === item.href : false}
-							onclick={() => item.action ? item.action() : item.href && goto(item.href)}
-							class="rounded-lg border border-transparent transition hover:border-sidebar-border/60 hover:bg-sidebar-accent/70"
-						>
+					<Sidebar.MenuButton
+						tooltipContent={item.label}
+						isActive={
+							item.href
+								? $page.url.pathname === item.href ||
+									($page.url.pathname.startsWith(`${item.href}/`) && item.href !== '/')
+								: false
+						}
+						onclick={() => item.action ? item.action() : item.href && goto(item.href)}
+						class="rounded-lg border border-transparent transition hover:border-sidebar-border/60 hover:bg-sidebar-accent/70"
+					>
 							<item.icon size={16} weight="bold" />
 							<span>{item.label}</span>
 							{#if item.shortcut}

@@ -3,7 +3,7 @@
 	import AgentSettingsModal from '$lib/components/AgentSettingsModal.svelte';
 	import CommandBar from '$lib/components/CommandBar.svelte';
 	import TaskFeed from '$lib/components/TaskFeed.svelte';
-	import { GitBranch, Plus, RocketLaunch, Sparkle } from 'phosphor-svelte';
+	import { ArrowRight, GitBranch, Key, Plus, RocketLaunch, Sliders, Sparkle } from 'phosphor-svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import type { PageData } from './$types';
@@ -300,17 +300,42 @@
 				</div>
 			{:else}
 				{#if !hasReadyAgents}
-					<div class="rounded-2xl border border-border/60 bg-card/70 p-6">
-						<div class="flex flex-wrap items-center justify-between gap-4">
+					<div class="mx-auto max-w-2xl rounded-2xl border border-border/60 bg-card/70 p-6">
+						<div class="flex flex-wrap items-start justify-between gap-4">
 							<div>
-								<p class="text-sm font-semibold text-foreground">Complete agent setup</p>
+								<p class="text-xs font-semibold uppercase tracking-[0.26em] text-muted-foreground">
+									Setup
+								</p>
+								<p class="mt-2 text-sm font-semibold text-foreground">Complete agent setup</p>
 								<p class="mt-1 text-xs text-muted-foreground">
-									Add provider keys to unlock cloud agents for task dispatch.
+									Add provider keys and enable at least one agent to unlock task dispatch.
 								</p>
 							</div>
 							<Button variant="secondary" href="/settings">
 								Open Settings
 							</Button>
+						</div>
+						<div class="mt-5 flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
+							<div class="flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-2">
+								<span class="flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-muted/60 text-primary">
+									<Key size={14} weight="bold" />
+								</span>
+								<span class="font-medium text-foreground">Add keys</span>
+							</div>
+							<ArrowRight size={14} weight="bold" class="text-muted-foreground" />
+							<div class="flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-2">
+								<span class="flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-muted/60 text-primary">
+									<Sliders size={14} weight="bold" />
+								</span>
+								<span class="font-medium text-foreground">Enable agents</span>
+							</div>
+							<ArrowRight size={14} weight="bold" class="text-muted-foreground" />
+							<div class="flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-2">
+								<span class="flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-muted/60 text-primary">
+									<RocketLaunch size={14} weight="bold" />
+								</span>
+								<span class="font-medium text-foreground">Dispatch tasks</span>
+							</div>
 						</div>
 					</div>
 				{/if}

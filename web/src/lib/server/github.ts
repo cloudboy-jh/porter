@@ -262,6 +262,7 @@ export const buildTaskFromIssue = (
 		issueUrl: issue.html_url,
 		prNumber: metadata?.prNumber,
 		prUrl: metadata?.prUrl,
+		summary: metadata?.summary,
 		logs: buildTaskLog(metadata, status),
 		errorMessage: status === 'failed' ? metadata?.summary : undefined
 	};

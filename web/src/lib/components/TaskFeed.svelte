@@ -20,6 +20,8 @@
 	export let onStop: (id: string) => void = () => undefined;
 	export let onRestart: (id: string) => void = () => undefined;
 	export let highlightStatus: Task['status'] | null = null;
+	export let primaryActionLabel = 'View';
+	export let showStatusActions = true;
 
 	const agentDomains: Record<string, string> = {
 		opencode: 'opencode.ai',
@@ -187,29 +189,29 @@
 											<span class="text-muted-foreground/60">&bull;</span>
 											<span>{task.started}</span>
 										</div>
-										<div class="task-actions flex items-center gap-2 md:ml-auto">
-											<Button variant="ghost" size="sm" onclick={(event: MouseEvent) => handleViewClick(event, task.id)}>
-												View
+									<div class="task-actions flex items-center gap-2 md:ml-auto">
+										<Button variant="ghost" size="sm" onclick={(event: MouseEvent) => handleViewClick(event, task.id)}>
+											{primaryActionLabel}
+										</Button>
+										{#if showStatusActions && task.status === 'failed'}
+											<Button
+												variant="ghost"
+												size="sm"
+												onclick={(event: MouseEvent) => handleRestartClick(event, task.id)}
+											>
+												Retry
 											</Button>
-											{#if task.status === 'failed'}
-												<Button
-													variant="ghost"
-													size="sm"
-													onclick={(event: MouseEvent) => handleRestartClick(event, task.id)}
-												>
-													Retry
-												</Button>
-											{/if}
-											{#if task.status === 'running' || task.status === 'queued'}
-												<Button
-													variant="ghost"
-													size="sm"
-													onclick={(event: MouseEvent) => handleStopClick(event, task.id)}
-												>
-													Cancel
-												</Button>
-											{/if}
-										</div>
+										{/if}
+										{#if showStatusActions && (task.status === 'running' || task.status === 'queued')}
+											<Button
+												variant="ghost"
+												size="sm"
+												onclick={(event: MouseEvent) => handleStopClick(event, task.id)}
+											>
+												Cancel
+											</Button>
+										{/if}
+									</div>
 									</div>
 								</Card.Content>
 							</Card.Root>

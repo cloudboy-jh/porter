@@ -24,6 +24,7 @@ export interface Task {
 	issueUrl?: string;
 	prNumber?: number;
 	prUrl?: string;
+	summary?: string;
 	errorMessage?: string;
 	logs: TaskLog[];
 }

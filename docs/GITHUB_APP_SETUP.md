@@ -88,7 +88,7 @@ SESSION_SECRET=replace-with-a-secure-random-string
 WEBHOOK_SECRET=your_webhook_secret
 
 # GitHub App install link for onboarding
-PUBLIC_GITHUB_APP_INSTALL_URL=https://github.com/apps/porter/installations/new
+PUBLIC_GITHUB_APP_INSTALL_URL=https://github.com/settings/apps/porter-orchastrator/installations
 
 # GitHub Token (for desktop daemon)
 GITHUB_TOKEN=ghp_your_personal_access_token

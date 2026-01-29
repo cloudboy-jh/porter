@@ -1,6 +1,5 @@
 import { redirect } from '@sveltejs/kit';
 import { env as privateEnv } from '$env/dynamic/private';
-import { env as publicEnv } from '$env/dynamic/public';
 import {
 	clearOAuthState,
 	getOAuthState,
@@ -66,25 +65,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		}
 	);
 
-	let primaryEmail: string | null = null;
-	try {
-		const emails = await fetchJson<Array<{ email: string; primary: boolean; verified: boolean }>>(
-			'https://api.github.com/user/emails',
-			{
-				headers: {
-					Authorization: `Bearer ${accessToken}`,
-					Accept: 'application/vnd.github+json'
-				}
-			}
-		);
-		primaryEmail =
-			emails.find((email) => email.primary && email.verified)?.email ??
-			emails.find((email) => email.verified)?.email ??
-			emails[0]?.email ??
-			null;
-	} catch (error) {
-		console.error('GitHub email fetch failed:', error);
-	}
+	const primaryEmail = null;
 
 	let hasInstallation = false;
 	try {
@@ -114,37 +95,32 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		hasInstallation
 	});
 
-	if (!hasInstallation) {
-		const appInstallUrl =
-			publicEnv.PUBLIC_GITHUB_APP_INSTALL_URL ??
-			'https://github.com/apps/porter/installations/new';
-		throw redirect(302, appInstallUrl);
-	}
-
-	try {
-		const config = await getConfig(accessToken);
-		if (!config.onboarding?.completed) {
-			const { repositories } = await listInstallationRepos(accessToken);
-			const selectedRepos = repositories.map((repo) => ({
-				id: repo.id,
-				fullName: repo.fullName,
-				owner: repo.owner,
-				name: repo.name,
-				private: repo.private
-			}));
-			await updateConfig(accessToken, {
-				...config,
-				onboarding: {
-					completed: true,
-					selectedRepos,
-					enabledAgents: config.onboarding?.enabledAgents?.length
-						? config.onboarding.enabledAgents
-						: ['opencode', 'claude-code']
-				}
-			});
+	if (hasInstallation) {
+		try {
+			const config = await getConfig(accessToken);
+			if (!config.onboarding?.completed) {
+				const { repositories } = await listInstallationRepos(accessToken);
+				const selectedRepos = repositories.map((repo) => ({
+					id: repo.id,
+					fullName: repo.fullName,
+					owner: repo.owner,
+					name: repo.name,
+					private: repo.private
+				}));
+				await updateConfig(accessToken, {
+					...config,
+					onboarding: {
+						completed: true,
+						selectedRepos,
+						enabledAgents: config.onboarding?.enabledAgents?.length
+							? config.onboarding.enabledAgents
+							: ['opencode', 'claude-code']
+					}
+				});
+			}
+		} catch (error) {
+			console.error('Auth callback config update failed:', error);
 		}
-	} catch (error) {
-		console.error('Auth callback config update failed:', error);
 	}
 
 	throw redirect(302, '/');
