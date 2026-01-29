@@ -4,6 +4,10 @@
   <img src="./porter-logo-readme.png" alt="Porter" />
 </p>
 
+<p align="center">
+  <img src="./porter-visual.png" alt="Porter visual" />
+</p>
+
 Universal agent orchestrator for GitHub Issues. Porter brings the @mention workflow to any coding agent by running tasks in Modal containers and returning PRs automatically.
 
 ## What it does

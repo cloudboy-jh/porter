@@ -10,7 +10,7 @@
 - [x] Git filter buttons (Repository, Branch, Issue) with dropdown + type-ahead
 - [x] Component tests (Vitest + Testing Library)
 - [x] E2E test scaffolding (Playwright)
-- [ ] UI/UX polish (in progress - timeline + states)
+- [ ] UI/UX polish (task feed + review feed + auth)
 
 ### Phase 2: Onboarding + Auth
 - [x] Auth landing UI shell (no sidebar)
@@ -22,6 +22,7 @@
 - [x] Unified settings page for Modal + API keys
 - [x] Gist creation/management for credential storage
 - [ ] Validate Modal credentials before proceeding
+- [ ] Finalize auth layout (animation pacing, spacing, mobile stack)
 
 ### Phase 3: Core API + Task Model
 - In progress (basic task API used in UI)
@@ -29,6 +30,8 @@
 - [ ] Runtime readiness CTA + refresh flow in Settings + Dashboard
 - [x] Config API reads/writes to user's Gist
 - [x] Credential validation endpoints
+- [x] Review feed + diff embed foundation
+- [ ] Review detail polish + merge confirmation UX
 
 ### Phase 4+: Modal Execution
 - Not started
@@ -40,3 +43,22 @@
 
 - Cloud-native only: remove any local/daemon wording going forward.
 - BYOC-only: users bring Modal + model API keys via a single user-owned Gist.
+
+## Next Focus
+
+### Task feed refinement
+- tighten card spacing + hierarchy across TaskFeed
+- standardize action button placement and labels
+- make diff badges more prominent and consistent alongside PR links/commit info
+- normalize scrolling behavior (avoid ad-hoc internal scroll boxes)
+
+### Review feed refinement
+- align review feed visuals with TaskFeed (same rhythm + badges)
+- polish empty/loaded states
+- finalize diff pagination UI (5 per page) and controls
+- surface mergeable state clearly + show permission gating
+
+### Auth page finalization
+- tune animation pacing + contrast on left panel
+- refine right panel typography + spacing
+- ensure mobile layout stacks cleanly with a clear primary CTA
