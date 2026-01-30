@@ -1,3 +1,5 @@
+import { githubCache, CACHE_TTL } from './cache';
+
 const GITHUB_API = 'https://api.github.com';
 
 export class GitHubRequestError extends Error {
@@ -14,6 +16,9 @@ export class GitHubRequestError extends Error {
 
 export const isGitHubAuthError = (error: unknown) =>
 	error instanceof GitHubRequestError && error.status === 401;
+
+export const isGitHubRateLimitError = (error: unknown) =>
+	error instanceof GitHubRequestError && error.status === 403;
 
 export type PorterTaskStatus = 'queued' | 'running' | 'success' | 'failed';
 
@@ -40,6 +45,10 @@ const PORTER_STATUS_LABELS: Record<PorterTaskStatus, string> = {
 
 const porterMetadataRegex = /<!--\s*porter:(.*?)\s*-->/s;
 
+// Track rate limit info
+let rateLimitRemaining = 5000;
+let rateLimitReset = 0;
+
 export const fetchGitHub = async <T>(path: string, token: string, init?: RequestInit): Promise<T> => {
 	const url = path.startsWith('http') ? path : `${GITHUB_API}${path}`;
 	const response = await fetch(url, {
@@ -50,12 +59,25 @@ export const fetchGitHub = async <T>(path: string, token: string, init?: Request
 			...(init?.headers ?? {})
 		}
 	});
+	
+	// Update rate limit tracking
+	const remaining = response.headers.get('X-RateLimit-Remaining');
+	const reset = response.headers.get('X-RateLimit-Reset');
+	if (remaining) rateLimitRemaining = parseInt(remaining, 10);
+	if (reset) rateLimitReset = parseInt(reset, 10);
+	
 	if (!response.ok) {
 		const body = await response.text();
 		throw new GitHubRequestError(response.status, `GitHub request failed: ${response.status}`, body);
 	}
 	return (await response.json()) as T;
 };
+
+export const getRateLimitStatus = () => ({
+	remaining: rateLimitRemaining,
+	reset: rateLimitReset,
+	isLow: rateLimitRemaining < 100
+});
 
 type GitHubRepo = {
 	id: number;
@@ -67,36 +89,42 @@ type GitHubRepo = {
 };
 
 export const listInstallationRepos = async (token: string) => {
-	const installations = await fetchGitHub<{ total_count: number; installations: { id: number }[] }>(
-		'/user/installations',
-		token
-	);
-
-	if (!installations.total_count) {
-		return { repositories: [], installations };
-	}
-
-	const repoMap = new Map<number, GitHubRepo>();
-	for (const installation of installations.installations) {
-		const result = await fetchGitHub<{ repositories: GitHubRepo[] }>(
-			`/user/installations/${installation.id}/repositories?per_page=100`,
+	const cacheKey = `installations:${token.slice(-8)}`;
+	
+	return githubCache.getOrFetch(cacheKey, async () => {
+		console.log('[Fetching] listInstallationRepos from GitHub');
+		
+		const installations = await fetchGitHub<{ total_count: number; installations: { id: number }[] }>(
+			'/user/installations',
 			token
 		);
-		for (const repo of result.repositories) {
-			repoMap.set(repo.id, repo);
+
+		if (!installations.total_count) {
+			return { repositories: [], installations };
 		}
-	}
 
-	const repositories = Array.from(repoMap.values()).map((repo) => ({
-		id: repo.id,
-		fullName: repo.full_name,
-		name: repo.name,
-		owner: repo.owner.login,
-		private: repo.private,
-		description: repo.description
-	}));
+		const repoMap = new Map<number, GitHubRepo>();
+		for (const installation of installations.installations) {
+			const result = await fetchGitHub<{ repositories: GitHubRepo[] }>(
+				`/user/installations/${installation.id}/repositories?per_page=100`,
+				token
+			);
+			for (const repo of result.repositories) {
+				repoMap.set(repo.id, repo);
+			}
+		}
 
-	return { repositories, installations };
+		const repositories = Array.from(repoMap.values()).map((repo) => ({
+			id: repo.id,
+			fullName: repo.full_name,
+			name: repo.name,
+			owner: repo.owner.login,
+			private: repo.private,
+			description: repo.description
+		}));
+
+		return { repositories, installations };
+	}, CACHE_TTL.REPOS);
 };
 
 export const deriveIssueTitle = (prompt: string) => {
@@ -199,8 +227,17 @@ export const addIssueComment = (token: string, owner: string, repo: string, numb
 		body: JSON.stringify({ body })
 	});
 
-export const listIssueComments = (token: string, owner: string, repo: string, number: number) =>
-	fetchGitHub<GitHubComment[]>(`/repos/${owner}/${repo}/issues/${number}/comments?per_page=100`, token);
+export const listIssueComments = async (token: string, owner: string, repo: string, number: number) => {
+	const cacheKey = `comments:${owner}/${repo}#${number}:${token.slice(-8)}`;
+	
+	return githubCache.getOrFetch(cacheKey, async () => {
+		console.log(`[Fetching] listIssueComments: ${owner}/${repo}#${number}`);
+		return fetchGitHub<GitHubComment[]>(
+			`/repos/${owner}/${repo}/issues/${number}/comments?per_page=100`,
+			token
+		);
+	}, CACHE_TTL.COMMENTS);
+};
 
 export const listIssuesWithLabel = async (
 	token: string,
@@ -208,11 +245,16 @@ export const listIssuesWithLabel = async (
 	repo: string,
 	state: 'open' | 'closed'
 ) => {
-	const issues = await fetchGitHub<GitHubIssue[]>(
-		`/repos/${owner}/${repo}/issues?labels=${encodeURIComponent(PORTER_LABEL)}&state=${state}&per_page=100`,
-		token
-	);
-	return issues.filter((issue) => !issue.pull_request);
+	const cacheKey = `issues:${owner}/${repo}:${state}:${token.slice(-8)}`;
+	
+	return githubCache.getOrFetch(cacheKey, async () => {
+		console.log(`[Fetching] listIssuesWithLabel: ${owner}/${repo}:${state}`);
+		const issues = await fetchGitHub<GitHubIssue[]>(
+			`/repos/${owner}/${repo}/issues?labels=${encodeURIComponent(PORTER_LABEL)}&state=${state}&per_page=100`,
+			token
+		);
+		return issues.filter((issue) => !issue.pull_request);
+	}, CACHE_TTL.ISSUES);
 };
 
 export const getLatestPorterMetadata = (comments: GitHubComment[]) => {

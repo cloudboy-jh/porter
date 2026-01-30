@@ -300,83 +300,14 @@
 				</div>
 			{:else}
 				{#if !hasReadyAgents}
-					<div class="mx-auto max-w-2xl rounded-2xl border border-border/60 bg-card/70 p-6">
-						<div class="flex flex-wrap items-start justify-between gap-4">
-							<div>
-								<p class="text-xs font-semibold uppercase tracking-[0.26em] text-muted-foreground">
-									Setup
-								</p>
-								<p class="mt-2 text-sm font-semibold text-foreground">Complete agent setup</p>
-								<p class="mt-1 text-xs text-muted-foreground">
-									Add provider keys and enable at least one agent to unlock task dispatch.
-								</p>
-							</div>
-							<Button variant="secondary" href="/settings">
-								Open Settings
-							</Button>
-						</div>
-						<div class="mt-5 flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
-							<div class="flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-2">
-								<span class="flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-muted/60 text-primary">
-									<Key size={14} weight="bold" />
-								</span>
-								<span class="font-medium text-foreground">Add keys</span>
-							</div>
-							<ArrowRight size={14} weight="bold" class="text-muted-foreground" />
-							<div class="flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-2">
-								<span class="flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-muted/60 text-primary">
-									<Sliders size={14} weight="bold" />
-								</span>
-								<span class="font-medium text-foreground">Enable agents</span>
-							</div>
-							<ArrowRight size={14} weight="bold" class="text-muted-foreground" />
-							<div class="flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-2">
-								<span class="flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-muted/60 text-primary">
-									<RocketLaunch size={14} weight="bold" />
-								</span>
-								<span class="font-medium text-foreground">Dispatch tasks</span>
-							</div>
-						</div>
+					<div class="mx-auto max-w-[680px] py-2 text-center">
+						<p class="text-xs text-muted-foreground">
+							<a href="/settings" class="text-primary hover:underline">Add keys and enable an agent</a> to dispatch tasks
+						</p>
 					</div>
 				{/if}
-				<section class="flex flex-wrap items-center justify-between gap-3">
-					<div class="flex flex-wrap gap-2 rounded-xl border border-border/60 bg-muted/40 p-1">
-						<Button
-							variant="ghost"
-							size="sm"
-							onclick={() => (activeFilter = 'All')}
-							class={`${filterBaseClass} ${activeFilter === 'All' ? 'border-border/70 bg-background text-foreground shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'text-muted-foreground hover:border-border/50 hover:bg-background/70 hover:text-foreground'}`}
-						>
-							<span>{tasks.length}</span>
-							<span>All</span>
-						</Button>
-						{#each statusPills as pill}
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={() => (activeFilter = pill.label === 'Completed' ? 'Completed' : pill.label)}
-								class={`${filterBaseClass} ${statusStyles[pill.key]} ${activeFilter === (pill.label === 'Completed' ? 'Completed' : pill.label) ? 'border-border/70 bg-background text-foreground shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'hover:border-border/50 hover:bg-background/70 hover:text-foreground'}`}
-							>
-								<span class="h-2 w-2 rounded-full bg-current/80"></span>
-								<span>{pill.count}</span>
-								<span>{pill.label}</span>
-							</Button>
-						{/each}
-					</div>
-					<div class="flex flex-wrap gap-2">
-						<Button variant="secondary" type="button" onclick={() => (showAgentSettings = true)}>
-							Agents
-						</Button>
-						<Button type="button" onclick={() => (showDispatch = true)}>
-							<Plus size={16} weight="bold" />
-							Dispatch
-							<span class="text-xs opacity-70">⌘K</span>
-						</Button>
-					</div>
-				</section>
-
 				{#if isLoadingTasks}
-					<div class="rounded-2xl border border-border/60 bg-card/70 p-10 text-center text-sm text-muted-foreground">
+					<div class="mx-auto max-w-[680px] rounded-2xl border border-border/60 bg-card/70 p-10 text-center text-sm text-muted-foreground">
 						Loading tasks...
 					</div>
 				{:else if tasks.length === 0}
@@ -443,15 +374,45 @@
 						</Card.Content>
 					</Card.Root>
 				{:else}
-					<section class="px-2">
-						<TaskFeed
-							tasks={filteredTasks}
-							onToggleExpanded={toggleExpanded}
-							onStop={handleStop}
-							onRestart={handleRestart}
-							highlightStatus={highlightStatus}
-						/>
-					</section>
+					<TaskFeed
+						title="Tasks"
+						tasks={filteredTasks}
+						onToggleExpanded={toggleExpanded}
+						onStop={handleStop}
+						onRestart={handleRestart}
+						highlightStatus={highlightStatus}
+					>
+						<div slot="header" class="flex flex-wrap items-center gap-2">
+							<Button
+								variant="ghost"
+								size="sm"
+								onclick={() => (activeFilter = 'All')}
+								class={`${filterBaseClass} ${activeFilter === 'All' ? 'border-border/70 bg-background text-foreground shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'text-muted-foreground hover:border-border/50 hover:bg-background/70 hover:text-foreground'}`}
+							>
+								<span>{tasks.length}</span>
+								<span>All</span>
+							</Button>
+							{#each statusPills as pill}
+								<Button
+									variant="ghost"
+									size="sm"
+									onclick={() => (activeFilter = pill.label === 'Completed' ? 'Completed' : pill.label)}
+									class={`${filterBaseClass} ${statusStyles[pill.key]} ${activeFilter === (pill.label === 'Completed' ? 'Completed' : pill.label) ? 'border-border/70 bg-background text-foreground shadow-[0_1px_2px_rgba(20,19,18,0.08)]' : 'hover:border-border/50 hover:bg-background/70 hover:text-foreground'}`}
+								>
+									<span class="h-2 w-2 rounded-full bg-current/80"></span>
+									<span>{pill.count}</span>
+									<span>{pill.label}</span>
+								</Button>
+							{/each}
+							<Button variant="secondary" type="button" onclick={() => (showAgentSettings = true)}>
+								Agents
+							</Button>
+							<Button type="button" onclick={() => (showDispatch = true)}>
+								<Plus size={16} weight="bold" />
+								Dispatch
+							</Button>
+						</div>
+					</TaskFeed>
 				{/if}
 			{/if}
 		</div>

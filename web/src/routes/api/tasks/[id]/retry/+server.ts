@@ -10,6 +10,7 @@ import {
 	updateIssueLabels
 } from '$lib/server/github';
 import type { PorterTaskMetadata } from '$lib/server/github';
+import { githubCache } from '$lib/server/cache';
 
 const parseTaskId = (id: string) => {
 	const match = id.match(/^([^/]+)\/([^#]+)#(\d+)$/);
@@ -66,6 +67,9 @@ export const PUT = async ({ params, locals }: { params: { id: string }; locals: 
 		parsed.issueNumber,
 		buildPorterComment('Retry requested', metadata)
 	);
+
+	// Clear cache for this repo's issues to reflect the status change
+	githubCache.clearPattern(`issues:${parsed.owner}/${parsed.repo}`);
 
 	return json({ ok: true });
 };

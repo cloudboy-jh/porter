@@ -68,13 +68,12 @@
 </script>
 
 <div class="flex min-h-full items-center justify-center py-6">
-	<div class="w-full max-w-6xl space-y-5">
-		<TaskFeed
-			tasks={tasks}
-			onToggleExpanded={handleReview}
-			highlightStatus="success"
-			primaryActionLabel="Review"
-			showStatusActions={false}
-		/>
-	</div>
+	<TaskFeed
+		title="Review"
+		tasks={tasks}
+		onToggleExpanded={handleReview}
+		highlightStatus="success"
+		primaryActionLabel="Review"
+		showStatusActions={false}
+	/>
 </div>

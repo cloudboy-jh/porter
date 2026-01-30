@@ -10,6 +10,7 @@ import {
 	type PorterTaskMetadata
 } from '$lib/server/github';
 import { listAgents } from '$lib/server/store';
+import { githubCache } from '$lib/server/cache';
 
 const commandPattern = /@porter(?:\s+([^\s]+))?(.*)/i;
 
@@ -101,6 +102,10 @@ export const POST = async ({ request }: { request: Request }) => {
 		updatedAt: new Date().toISOString()
 	});
 	await addIssueComment(token, repoOwner, repoName, issueNumber, comment);
+
+	// Clear cache so the new task appears immediately
+	githubCache.clearPattern(`issues:${repoOwner}/${repoName}`);
+	console.log(`[Webhook] Task created, cleared cache for ${repoOwner}/${repoName}`);
 
 	return json({ status: 'accepted', taskId: metadata.taskId }, { status: 202 });
 };

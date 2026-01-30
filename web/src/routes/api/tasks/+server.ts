@@ -9,7 +9,9 @@ import {
 	deriveIssueTitle,
 	fetchIssue,
 	getLatestPorterMetadata,
+	getRateLimitStatus,
 	isGitHubAuthError,
+	isGitHubRateLimitError,
 	listInstallationRepos,
 	listIssueComments,
 	listIssuesWithLabel,
@@ -18,6 +20,7 @@ import {
 import type { PorterTaskMetadata } from '$lib/server/github';
 import type { TaskStatus } from '$lib/server/types';
 import { clearSession } from '$lib/server/auth';
+import { githubCache } from '$lib/server/cache';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ url, locals, cookies }) => {
@@ -29,12 +32,22 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 	try {
 		const status = url.searchParams.get('status') as TaskStatus | null;
 		const { repositories } = await listInstallationRepos(session.token);
+		
+		// Limit to first 20 repos to prevent rate limit issues
+		// In production, implement pagination or database caching
+		const limitedRepos = repositories.slice(0, 20);
+		if (repositories.length > 20) {
+			console.warn(`[Rate Limit Protection] Limiting to 20 repos out of ${repositories.length} total`);
+		}
+		
 		const tasks = await Promise.all(
-			repositories.map(async (repo) => {
+			limitedRepos.map(async (repo) => {
 				try {
 					const issues = await listIssuesWithLabel(session.token, repo.owner, repo.name, 'open');
+					// Limit to 10 issues per repo to prevent rate limit issues
+					const limitedIssues = issues.slice(0, 10);
 					const mapped = await Promise.all(
-						issues.map(async (issue) => {
+						limitedIssues.map(async (issue) => {
 							const comments = await listIssueComments(session.token, repo.owner, repo.name, issue.number);
 							const metadata = getLatestPorterMetadata(comments);
 							return buildTaskFromIssue(issue, repo.owner, repo.name, metadata);
@@ -58,6 +71,18 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 		if (isGitHubAuthError(error)) {
 			clearSession(cookies);
 			return json({ error: 'unauthorized', action: 'reauth' }, { status: 401 });
+		}
+		if (isGitHubRateLimitError(error)) {
+			const status = getRateLimitStatus();
+			const resetDate = new Date(status.reset * 1000);
+			const minutesUntil = Math.ceil((status.reset * 1000 - Date.now()) / 60000);
+			console.error('GitHub rate limit exceeded, resets at:', resetDate.toISOString());
+			return json({ 
+				error: 'rate_limit', 
+				message: `GitHub API rate limit exceeded. Resets in ${minutesUntil} minutes at ${resetDate.toLocaleTimeString()}`,
+				resetAt: resetDate.toISOString(),
+				minutesUntilReset: minutesUntil 
+			}, { status: 429 });
 		}
 		console.error('Failed to load tasks:', error);
 		return json({ error: 'failed' }, { status: 500 });
@@ -116,6 +141,9 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 		};
 
 		await updateLabelsAndComment(session.token, repoOwner, repoName, issue.number, metadata);
+
+		// Clear cache for this repo's issues to reflect the new task
+		githubCache.clearPattern(`issues:${repoOwner}/${repoName}`);
 
 		const comments = await listIssueComments(session.token, repoOwner, repoName, issue.number);
 		const latestMetadata = getLatestPorterMetadata(comments);
