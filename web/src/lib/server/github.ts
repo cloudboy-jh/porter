@@ -309,3 +309,160 @@ export const buildTaskFromIssue = (
 		errorMessage: status === 'failed' ? metadata?.summary : undefined
 	};
 };
+
+// Pull Request types
+type GitHubPull = {
+	number: number;
+	html_url: string;
+	base: { sha: string };
+	head: { sha: string };
+	additions: number;
+	deletions: number;
+	mergeable: boolean | null;
+	mergeable_state?: string;
+};
+
+type GitHubPullFile = {
+	filename: string;
+	additions: number;
+	deletions: number;
+};
+
+type GitHubRepoWithPermissions = {
+	id: number;
+	full_name: string;
+	name: string;
+	owner: { login: string };
+	private: boolean;
+	description: string | null;
+	permissions?: { push?: boolean; admin?: boolean };
+};
+
+// Cached PR operations
+export const fetchPullRequest = async (
+	token: string,
+	owner: string,
+	repo: string,
+	prNumber: number
+): Promise<GitHubPull> => {
+	const cacheKey = `pr:${owner}/${repo}/${prNumber}:${token.slice(-8)}`;
+	
+	return githubCache.getOrFetch(cacheKey, async () => {
+		console.log(`[Fetching] fetchPullRequest: ${owner}/${repo}/${prNumber}`);
+		return fetchGitHub<GitHubPull>(`/repos/${owner}/${repo}/pulls/${prNumber}`, token);
+	}, CACHE_TTL.ISSUES);
+};
+
+export const fetchPullRequestFiles = async (
+	token: string,
+	owner: string,
+	repo: string,
+	prNumber: number,
+	page: number = 1,
+	perPage: number = 5
+): Promise<{ files: GitHubPullFile[]; totalPages: number }> => {
+	const cacheKey = `pr-files:${owner}/${repo}/${prNumber}:${page}:${perPage}:${token.slice(-8)}`;
+	
+	return githubCache.getOrFetch(cacheKey, async () => {
+		console.log(`[Fetching] fetchPullRequestFiles: ${owner}/${repo}/${prNumber} page ${page}`);
+		const response = await fetch(
+			`${GITHUB_API}/repos/${owner}/${repo}/pulls/${prNumber}/files?per_page=${perPage}&page=${page}`,
+			{
+				headers: {
+					Accept: 'application/vnd.github+json',
+					Authorization: `Bearer ${token}`
+				}
+			}
+		);
+		
+		if (!response.ok) {
+			throw new GitHubRequestError(response.status, `Failed to fetch PR files: ${response.status}`);
+		}
+		
+		const files = (await response.json()) as GitHubPullFile[];
+		const linkHeader = response.headers.get('link');
+		const totalPages = parseLastPage(linkHeader);
+		
+		// Update rate limit tracking
+		const remaining = response.headers.get('X-RateLimit-Remaining');
+		const reset = response.headers.get('X-RateLimit-Reset');
+		if (remaining) rateLimitRemaining = parseInt(remaining, 10);
+		if (reset) rateLimitReset = parseInt(reset, 10);
+		
+		return { files, totalPages };
+	}, CACHE_TTL.ISSUES);
+};
+
+const parseLastPage = (linkHeader: string | null): number => {
+	if (!linkHeader) return 1;
+	const match = linkHeader.match(/&page=(\d+)>; rel="last"/);
+	if (!match) return 1;
+	return Number.parseInt(match[1], 10);
+};
+
+export const fetchRepo = async (
+	token: string,
+	owner: string,
+	repo: string
+): Promise<GitHubRepoWithPermissions> => {
+	const cacheKey = `repo:${owner}/${repo}:${token.slice(-8)}`;
+	
+	return githubCache.getOrFetch(cacheKey, async () => {
+		console.log(`[Fetching] fetchRepo: ${owner}/${repo}`);
+		return fetchGitHub<GitHubRepoWithPermissions>(`/repos/${owner}/${repo}`, token);
+	}, CACHE_TTL.REPOS);
+};
+
+export const mergePullRequest = async (
+	token: string,
+	owner: string,
+	repo: string,
+	prNumber: number
+): Promise<{ merged: boolean; message?: string; sha?: string }> => {
+	// This is a write operation - do not cache
+	console.log(`[Fetching] mergePullRequest: ${owner}/${repo}/${prNumber}`);
+	
+	const response = await fetch(
+		`${GITHUB_API}/repos/${owner}/${repo}/pulls/${prNumber}/merge`,
+		{
+			method: 'PUT',
+			headers: {
+				Accept: 'application/vnd.github+json',
+				Authorization: `Bearer ${token}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({})
+		}
+	);
+	
+	// Update rate limit tracking
+	const remaining = response.headers.get('X-RateLimit-Remaining');
+	const reset = response.headers.get('X-RateLimit-Reset');
+	if (remaining) rateLimitRemaining = parseInt(remaining, 10);
+	if (reset) rateLimitReset = parseInt(reset, 10);
+	
+	if (!response.ok) {
+		const body = await response.json().catch(() => ({}));
+		return { merged: false, message: body?.message ?? 'Merge failed' };
+	}
+	
+	const result = await response.json() as { sha?: string };
+	
+	// Clear PR-related caches after successful merge
+	githubCache.delete(`pr:${owner}/${repo}/${prNumber}:${token.slice(-8)}`);
+	githubCache.clearPattern(`pr-files:${owner}/${repo}/${prNumber}:`);
+	
+	return { merged: true, sha: result.sha };
+};
+
+// Cache clearing utilities for PR operations
+export const clearPRCache = (token: string, owner: string, repo: string, prNumber?: number) => {
+	if (prNumber) {
+		githubCache.delete(`pr:${owner}/${repo}/${prNumber}:${token.slice(-8)}`);
+		githubCache.clearPattern(`pr-files:${owner}/${repo}/${prNumber}:`);
+	}
+};
+
+export const clearRepoCache = (token: string, owner: string, repo: string) => {
+	githubCache.delete(`repo:${owner}/${repo}:${token.slice(-8)}`);
+};

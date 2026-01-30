@@ -34,38 +34,39 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 		const { repositories } = await listInstallationRepos(session.token);
 		
 		// Limit to first 20 repos to prevent rate limit issues
-		// In production, implement pagination or database caching
 		const limitedRepos = repositories.slice(0, 20);
 		if (repositories.length > 20) {
 			console.warn(`[Rate Limit Protection] Limiting to 20 repos out of ${repositories.length} total`);
 		}
 		
-		const tasks = await Promise.all(
-			limitedRepos.map(async (repo) => {
-				try {
-					const issues = await listIssuesWithLabel(session.token, repo.owner, repo.name, 'open');
-					// Limit to 10 issues per repo to prevent rate limit issues
-					const limitedIssues = issues.slice(0, 10);
-					const mapped = await Promise.all(
-						limitedIssues.map(async (issue) => {
-							const comments = await listIssueComments(session.token, repo.owner, repo.name, issue.number);
-							const metadata = getLatestPorterMetadata(comments);
-							return buildTaskFromIssue(issue, repo.owner, repo.name, metadata);
-						})
-					);
-					return mapped;
-				} catch (error) {
-					if (isGitHubAuthError(error)) {
-						throw error;
+		// Process repos sequentially to avoid burst
+		const allTasks = [];
+		for (const repo of limitedRepos) {
+			try {
+				const issues = await listIssuesWithLabel(session.token, repo.owner, repo.name, 'open');
+				// Limit to 10 issues per repo to prevent rate limit issues
+				const limitedIssues = issues.slice(0, 10);
+				
+				// Process issues sequentially to avoid burst
+				for (const issue of limitedIssues) {
+					try {
+						const comments = await listIssueComments(session.token, repo.owner, repo.name, issue.number);
+						const metadata = getLatestPorterMetadata(comments);
+						const task = buildTaskFromIssue(issue, repo.owner, repo.name, metadata);
+						allTasks.push(task);
+					} catch (error) {
+						console.error(`Failed to load task for issue ${repo.fullName}#${issue.number}:`, error);
 					}
-					console.error('Failed to load tasks for repo:', repo.fullName, error);
-					return [];
 				}
-			})
-		);
+			} catch (error) {
+				if (isGitHubAuthError(error)) {
+					throw error;
+				}
+				console.error('Failed to load tasks for repo:', repo.fullName, error);
+			}
+		}
 
-		const flattened = tasks.flat();
-		const filtered = status ? flattened.filter((task) => task.status === status) : flattened;
+		const filtered = status ? allTasks.filter((task) => task.status === status) : allTasks;
 		return json(filtered);
 	} catch (error) {
 		if (isGitHubAuthError(error)) {

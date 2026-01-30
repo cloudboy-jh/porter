@@ -11,6 +11,10 @@ import {
 import { clearSession } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
+// Limits to prevent rate limit exhaustion
+const MAX_REPOS_TO_CHECK = 20;
+const MAX_ISSUES_PER_REPO = 50;
+
 export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 	const session = locals.session;
 	if (!session) {
@@ -30,33 +34,46 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 	let filteredTasks: ReturnType<typeof buildTaskFromIssue>[] = [];
 	try {
 		const { repositories } = await listInstallationRepos(session.token);
-		const tasks = await Promise.all(
-			repositories.map(async (repo) => {
-				try {
-					const [openIssues, closedIssues] = await Promise.all([
-						listIssuesWithLabel(session.token, repo.owner, repo.name, 'open'),
-						listIssuesWithLabel(session.token, repo.owner, repo.name, 'closed')
-					]);
-					const issues = [...openIssues, ...closedIssues];
-					const mapped = await Promise.all(
-						issues.map(async (issue) => {
-							const comments = await listIssueComments(session.token, repo.owner, repo.name, issue.number);
-							const metadata = getLatestPorterMetadata(comments);
-							return buildTaskFromIssue(issue, repo.owner, repo.name, metadata);
-						})
-					);
-					return mapped;
-				} catch (error) {
-					if (isGitHubAuthError(error)) {
-						throw error;
+		
+		// Limit repos to prevent rate limit exhaustion
+		const reposToCheck = repositories.slice(0, MAX_REPOS_TO_CHECK);
+		if (repositories.length > MAX_REPOS_TO_CHECK) {
+			console.warn(`[History] Limiting to ${MAX_REPOS_TO_CHECK} repos out of ${repositories.length} total`);
+		}
+		
+		console.log(`[History] Loading tasks from ${reposToCheck.length} repos`);
+		
+		// Process repos sequentially to avoid burst
+		const allTasks: ReturnType<typeof buildTaskFromIssue>[] = [];
+		for (const repo of reposToCheck) {
+			try {
+				const [openIssues, closedIssues] = await Promise.all([
+					listIssuesWithLabel(session.token, repo.owner, repo.name, 'open'),
+					listIssuesWithLabel(session.token, repo.owner, repo.name, 'closed')
+				]);
+				
+				// Limit issues per repo
+				const issues = [...openIssues, ...closedIssues].slice(0, MAX_ISSUES_PER_REPO);
+				
+				// Process issues sequentially to avoid burst
+				for (const issue of issues) {
+					try {
+						const comments = await listIssueComments(session.token, repo.owner, repo.name, issue.number);
+						const metadata = getLatestPorterMetadata(comments);
+						allTasks.push(buildTaskFromIssue(issue, repo.owner, repo.name, metadata));
+					} catch (error) {
+						console.error(`Failed to process issue ${repo.fullName}#${issue.number}:`, error);
 					}
-					console.error('Failed to load history for repo:', repo.fullName, error);
-					return [];
 				}
-			})
-		);
+			} catch (error) {
+				if (isGitHubAuthError(error)) {
+					throw error;
+				}
+				console.error('Failed to load history for repo:', repo.fullName, error);
+			}
+		}
 
-		filteredTasks = tasks.flat();
+		filteredTasks = allTasks;
 	} catch (error) {
 		if (isGitHubAuthError(error)) {
 			clearSession(cookies);

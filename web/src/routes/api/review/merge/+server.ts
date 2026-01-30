@@ -1,18 +1,16 @@
 import { json } from '@sveltejs/kit';
 import {
 	buildTaskFromIssue,
+	fetchRepo,
 	getLatestPorterMetadata,
 	isGitHubAuthError,
 	listInstallationRepos,
 	listIssueComments,
-	listIssuesWithLabel
+	listIssuesWithLabel,
+	mergePullRequest
 } from '$lib/server/github';
 import { clearSession } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
-
-type GitHubRepo = {
-	permissions?: { push?: boolean; admin?: boolean };
-};
 
 const findTaskById = async (token: string, taskId: string) => {
 	const { repositories } = await listInstallationRepos(token);
@@ -48,41 +46,24 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 			return json({ error: 'task not reviewable' }, { status: 400 });
 		}
 
-		const repoResponse = await fetch(`https://api.github.com/repos/${task.repoOwner}/${task.repoName}`, {
-			headers: {
-				Accept: 'application/vnd.github+json',
-				Authorization: `Bearer ${session.token}`
-			}
-		});
-		if (!repoResponse.ok) {
-			return json({ error: 'failed to check permissions' }, { status: 500 });
-		}
-		const repoInfo = (await repoResponse.json()) as GitHubRepo;
+		const repoInfo = await fetchRepo(session.token, task.repoOwner, task.repoName);
 		const canMerge = Boolean(repoInfo.permissions?.push || repoInfo.permissions?.admin);
 		if (!canMerge) {
 			return json({ error: 'missing merge permissions' }, { status: 403 });
 		}
 
-		const mergeResponse = await fetch(
-			`https://api.github.com/repos/${task.repoOwner}/${task.repoName}/pulls/${task.prNumber}/merge`,
-			{
-				method: 'PUT',
-				headers: {
-					Accept: 'application/vnd.github+json',
-					Authorization: `Bearer ${session.token}`,
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({})
-			}
+		const mergeResult = await mergePullRequest(
+			session.token,
+			task.repoOwner,
+			task.repoName,
+			task.prNumber
 		);
 
-		if (!mergeResponse.ok) {
-			const body = await mergeResponse.json().catch(() => ({}));
-			return json({ error: body?.message ?? 'merge failed' }, { status: mergeResponse.status });
+		if (!mergeResult.merged) {
+			return json({ error: mergeResult.message ?? 'merge failed' }, { status: 500 });
 		}
 
-		const mergeResult = await mergeResponse.json();
-		return json({ merged: true, result: mergeResult });
+		return json({ merged: true, sha: mergeResult.sha });
 	} catch (error) {
 		if (isGitHubAuthError(error)) {
 			clearSession(cookies);

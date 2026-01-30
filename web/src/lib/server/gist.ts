@@ -1,12 +1,22 @@
 import type { PorterConfig } from './types';
+import { githubCache, CACHE_TTL } from './cache';
 
 const GITHUB_API = 'https://api.github.com';
 const CONFIG_FILENAME = 'porter-config.json';
 const CONFIG_DESCRIPTION = 'Porter Config';
 
-const gistIdCache = new Map<string, string>();
+// Track rate limit info for gists
+let rateLimitRemaining = 5000;
+let rateLimitReset = 0;
 
 const getAuthHeaders = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+const updateRateLimitFromResponse = (response: Response) => {
+	const remaining = response.headers.get('X-RateLimit-Remaining');
+	const reset = response.headers.get('X-RateLimit-Reset');
+	if (remaining) rateLimitRemaining = parseInt(remaining, 10);
+	if (reset) rateLimitReset = parseInt(reset, 10);
+};
 
 type GistSummary = {
 	id: string;
@@ -16,23 +26,31 @@ type GistSummary = {
 };
 
 const listGists = async (token: string): Promise<GistSummary[]> => {
-	const response = await fetch(`${GITHUB_API}/gists?per_page=100`, {
-		headers: {
-			Accept: 'application/vnd.github+json',
-			...getAuthHeaders(token)
+	const cacheKey = `gists:list:${token.slice(-8)}`;
+	
+	return githubCache.getOrFetch(cacheKey, async () => {
+		console.log('[Fetching] listGists from GitHub');
+		const response = await fetch(`${GITHUB_API}/gists?per_page=100`, {
+			headers: {
+				Accept: 'application/vnd.github+json',
+				...getAuthHeaders(token)
+			}
+		});
+		updateRateLimitFromResponse(response);
+		if (!response.ok) {
+			return [];
 		}
-	});
-	if (!response.ok) {
-		return [];
-	}
-	return (await response.json()) as GistSummary[];
+		return (await response.json()) as GistSummary[];
+	}, CACHE_TTL.INSTALLATIONS); // Use longer TTL for gist list (5 min)
 };
 
 const findConfigGist = async (token: string): Promise<GistSummary | null> => {
-	const cached = gistIdCache.get(token);
+	const cacheKey = `gists:configId:${token.slice(-8)}`;
+	const cached = githubCache.get<string>(cacheKey);
 	if (cached) {
 		return { id: cached };
 	}
+	
 	const gists = await listGists(token);
 	const match = gists.find((gist) => {
 		const files = gist.files ?? {};
@@ -40,13 +58,14 @@ const findConfigGist = async (token: string): Promise<GistSummary | null> => {
 		return Object.values(files).some((file) => file.filename === CONFIG_FILENAME);
 	});
 	if (match?.id) {
-		gistIdCache.set(token, match.id);
+		githubCache.set(cacheKey, match.id, CACHE_TTL.INSTALLATIONS);
 		return match;
 	}
 	return null;
 };
 
 const createConfigGist = async (token: string, config: PorterConfig): Promise<GistSummary | null> => {
+	console.log('[Fetching] createConfigGist');
 	const response = await fetch(`${GITHUB_API}/gists`, {
 		method: 'POST',
 		headers: {
@@ -64,10 +83,12 @@ const createConfigGist = async (token: string, config: PorterConfig): Promise<Gi
 			}
 		})
 	});
+	updateRateLimitFromResponse(response);
 	if (!response.ok) return null;
 	const gist = (await response.json()) as GistSummary;
 	if (gist.id) {
-		gistIdCache.set(token, gist.id);
+		const cacheKey = `gists:configId:${token.slice(-8)}`;
+		githubCache.set(cacheKey, gist.id, CACHE_TTL.INSTALLATIONS);
 	}
 	return gist;
 };
@@ -78,6 +99,25 @@ const ensureConfigGist = async (token: string, config: PorterConfig): Promise<Gi
 	return createConfigGist(token, config);
 };
 
+const fetchGist = async (token: string, gistId: string): Promise<GistSummary | null> => {
+	const cacheKey = `gists:${gistId}:${token.slice(-8)}`;
+	
+	return githubCache.getOrFetch(cacheKey, async () => {
+		console.log(`[Fetching] fetchGist: ${gistId}`);
+		const response = await fetch(`${GITHUB_API}/gists/${gistId}`, {
+			headers: {
+				Accept: 'application/vnd.github+json',
+				...getAuthHeaders(token)
+			}
+		});
+		updateRateLimitFromResponse(response);
+		if (!response.ok) {
+			return null;
+		}
+		return (await response.json()) as GistSummary;
+	}, CACHE_TTL.INSTALLATIONS);
+};
+
 export const loadConfigFromGist = async (
 	token: string,
 	fallbackConfig: PorterConfig
@@ -86,16 +126,12 @@ export const loadConfigFromGist = async (
 	if (!gist?.id) {
 		return null;
 	}
-	const response = await fetch(`${GITHUB_API}/gists/${gist.id}`, {
-		headers: {
-			Accept: 'application/vnd.github+json',
-			...getAuthHeaders(token)
-		}
-	});
-	if (!response.ok) {
+	const gistData = await fetchGist(token, gist.id);
+	if (!gistData) {
 		return null;
 	}
-	const data = (await response.json()) as { files?: Record<string, { content?: string }> };
+	
+	const data = gistData as unknown as { files?: Record<string, { content?: string }> };
 	const content = data.files?.[CONFIG_FILENAME]?.content;
 	if (!content) {
 		await saveConfigToGist(token, fallbackConfig);
@@ -112,6 +148,7 @@ export const loadConfigFromGist = async (
 export const saveConfigToGist = async (token: string, config: PorterConfig): Promise<boolean> => {
 	const gist = await ensureConfigGist(token, config);
 	if (!gist?.id) return false;
+	console.log(`[Fetching] saveConfigToGist: ${gist.id}`);
 	const response = await fetch(`${GITHUB_API}/gists/${gist.id}`, {
 		method: 'PATCH',
 		headers: {
@@ -127,5 +164,19 @@ export const saveConfigToGist = async (token: string, config: PorterConfig): Pro
 			}
 		})
 	});
+	updateRateLimitFromResponse(response);
+	
+	// Clear the gist cache on save since content changed
+	if (response.ok) {
+		const cacheKey = `gists:${gist.id}:${token.slice(-8)}`;
+		githubCache.delete(cacheKey);
+	}
+	
 	return response.ok;
+};
+
+export const clearGistCache = (token: string) => {
+	const cacheKey = `gists:configId:${token.slice(-8)}`;
+	githubCache.delete(cacheKey);
+	githubCache.clearPattern(`gists:list:${token.slice(-8)}`);
 };
