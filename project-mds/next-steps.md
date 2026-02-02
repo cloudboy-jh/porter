@@ -1,64 +1,62 @@
-# Next Steps (Jan 22, 2026)
+# Next Steps (Feb 2, 2026)
 
 ## Where we are (per `project-mds/main-spec.md`)
 
-### Phase 1: UI Foundation + Testing Harness
-- [x] Changelog-style dashboard feed (timeline task feed)
+### Phase 1: Core Infrastructure
+- [ ] Docker image with all agents (Node 20 + CLI installs)
+- [ ] Fly Machines integration (create machine + env injection)
+- [ ] GitHub webhook handler for issue_comment events
+- [ ] Callback endpoint for task completion
+- [ ] Entrypoint flow (clone repo, run agent, report result)
+
+### Phase 2: Web App
+- [x] SvelteKit scaffold
+- [x] Dashboard feed (timeline task feed)
 - [x] Task history view (filters + table)
-- [x] Settings page shell (cloud execution language)
+- [x] Settings page shell
 - [x] Mock data layer for UI development
 - [x] Git filter buttons (Repository, Branch, Issue) with dropdown + type-ahead
 - [x] Component tests (Vitest + Testing Library)
 - [x] E2E test scaffolding (Playwright)
-- [ ] UI/UX polish (task feed + review feed + auth)
-
-### Phase 2: Onboarding + Auth
-- [x] Auth landing UI shell (no sidebar)
+- [x] Auth landing UI shell
 - [x] GitHub OAuth flow + session handling
 - [x] GitHub App install detection
 - [x] Repo list from GitHub App installations
 - [x] Persist onboarding configuration
 - [x] Collapse onboarding into /auth with auto-configured repos/agents
-- [x] Unified settings page for Modal + API keys
+- [x] Unified settings page for API keys
 - [x] Gist creation/management for credential storage
-- [ ] Validate Modal credentials before proceeding
-- [ ] Finalize auth layout (animation pacing, spacing, mobile stack)
+- [ ] Validate Fly credentials before proceeding
+- [ ] UI/UX polish (task feed + review feed + auth)
 
-### Phase 3: Core API + Task Model
-- In progress (basic task API used in UI)
-- [x] Agent enablement + credential setup UI (Anthropic required)
-- [ ] Runtime readiness CTA + refresh flow in Settings + Dashboard
-- [x] Config API reads/writes to user's Gist
-- [x] Credential validation endpoints
-- [x] Review feed + diff embed foundation
-- [ ] Review detail polish + merge confirmation UX
+### Phase 3: GitHub App
+- [ ] App registration
+- [ ] Webhook verification
+- [ ] Issue comment parsing for @porter commands
+- [ ] PR link commenting on completion
 
-### Phase 4+: Modal Execution
-- Not started
-- [ ] Modal function receives credentials as parameter (no Modal secrets)
-- [ ] Porter triggers Modal using user's Modal token
-
+### Phase 4: Polish
+- [ ] Error handling and retries
+- [ ] Task history refinements
+- [ ] Settings UX polish
 
 ## Notes
 
-- Cloud-native only: remove any local/daemon wording going forward.
-- BYOC-only: users bring Modal + model API keys via a single user-owned Gist.
+- Cloud execution is Fly Machines only; remove Modal references going forward.
+- BYOC-only: users provide Fly + model API keys via a user-owned Gist.
 
 ## Next Focus
 
-### Task feed refinement
-- tighten card spacing + hierarchy across TaskFeed
-- standardize action button placement and labels
-- make diff badges more prominent and consistent alongside PR links/commit info
-- normalize scrolling behavior (avoid ad-hoc internal scroll boxes)
+### Fly execution foundation
+- finalize Docker image + entrypoint scripts
+- implement Fly Machines create API with env injection
+- wire callback endpoint to update task status and PR URL
 
-### Review feed refinement
-- align review feed visuals with TaskFeed (same rhythm + badges)
-- polish empty/loaded states
-- finalize diff pagination UI (5 per page) and controls
-- surface mergeable state clearly + show permission gating
+### GitHub webhook integration
+- verify webhook signatures
+- parse @porter agent commands
+- enqueue tasks and kick off Fly Machines
 
-### Auth page finalization
-- tune animation pacing + contrast on left panel
-- refine right panel typography + spacing
-- ensure mobile layout stacks cleanly with a clear primary CTA
+### UI readiness cues
+- runtime readiness CTA for Fly token + API keys
+- surface task run status + PR link in task detail

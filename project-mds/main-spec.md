@@ -1,332 +1,247 @@
 # Porter - Main Specification
 
-**Version:** 2.0.0
+**Version:** 3.0.0
 **Status:** Active Development
-**Architecture:** Cloud-Native (SvelteKit + Modal)
-**Last Updated:** January 26, 2026
+**Architecture:** SvelteKit + Fly Machines
+**Last Updated:** February 2, 2026
 
 ---
 
 ## Overview
 
-Porter is a cloud-native AI agent orchestrator for GitHub Issues. It brings the @mention workflow to any CLI-based coding agent and produces PRs automatically.
+Porter is a cloud-native AI agent orchestrator for GitHub Issues. Comment `@porter <agent>` on an issue and get a PR back.
 
-**BYOC-only model:** Porter does not manage compute or model billing. Users connect their own Modal account and LLM API keys stored in a user-owned GitHub Gist.
-
-**Core value:** Comment `@porter <agent>` on an issue and get a PR back, without running the agent locally.
-
----
-
-## Problem and Solution
-
-GitHub's @copilot workflow is great but locked to Copilot. Teams using Claude Code, Opencode, Amp, or other agents are stuck with manual cloning and PR creation. Porter makes the @mention workflow universal and cloud-executed.
-
----
-
-## Core Principles
-
-1. **BYOC Execution**
-   - Users bring Modal and LLM credentials.
-   - Porter orchestrates, users pay for compute and model usage.
-
-2. **GitHub as Source of Truth**
-   - Issues and PRs store task state.
-   - Config and credentials live in a user-owned private Gist.
-
-3. **Agent Agnostic**
-   - Clean adapter interface for any CLI-based agent.
-
-4. **Monolithic Simplicity**
-   - Single SvelteKit service (UI + API).
+**Core value:** Universal @mention workflow for any CLI-based coding agent, executed in the cloud.
 
 ---
 
 ## Architecture
 
-### High-Level System Design
-
 ```
-GitHub Issues/PRs/Webhooks/Gists
+GitHub (Issues, PRs, Webhooks)
            │
            ▼
-Porter (SvelteKit UI + API)
+    Porter (SvelteKit)
            │
            ▼
-Modal (ephemeral containers running agents)
+    Fly Machines API
+           │
+           ▼
+    Docker Container
+    (Agent CLI runs, creates PR)
+           │
+           ▼
+    Callback to Porter
 ```
-
-### Core Flow
-
-```
-1. User comments: @porter <agent>
-2. GitHub webhook triggers Porter
-3. Porter validates, enriches prompt, reads user Gist
-4. Porter triggers Modal with user credentials
-5. Container runs agent, creates branch and PR
-6. Modal calls back with PR URL
-7. Porter comments on the issue with the PR
-```
-
-Typical execution time: 2-10 minutes depending on issue scope.
 
 ---
 
 ## Tech Stack
 
-### Web App (SvelteKit)
-
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| Framework | SvelteKit | UI + API routes |
-| Runtime | Bun | Server runtime |
-| Language | TypeScript | Application code |
-| Styling | Tailwind CSS | UI styling |
-
-### Execution Layer
-
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| Containers | Modal | Serverless execution |
-| Agent Runtime | Python | Agent orchestration |
-| Base OS | Debian Slim | Lightweight images |
-
-### Infrastructure
-
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| Hosting | Vercel or Cloudflare Pages | Web + API |
-| Auth | GitHub OAuth | User authentication |
-| Config Storage | GitHub Gists | User config and credentials |
-| State Storage | GitHub Issues/PRs | Task state |
-| Webhooks | GitHub App | Events |
-
-### Supported Agents
-
-| Agent | Provider | Status |
-|-------|----------|--------|
-| Opencode | Anthropic | Default |
-| Claude Code | Anthropic | Primary |
-| Amp | Anthropic | Secondary |
-| Cursor | Anthropic/OpenAI | Future |
+| Layer | Technology |
+|-------|------------|
+| Web App | SvelteKit + Bun |
+| Hosting | Vercel |
+| Auth | GitHub OAuth |
+| Execution | Fly Machines |
+| Container | Docker (Node 20 + Agent CLIs) |
+| Config Storage | GitHub Gist (user-owned) |
 
 ---
 
-## User Model and Credentials
+## Supported Agents
 
-**Users provide:**
-- GitHub OAuth
-- Modal token ID and secret
-- LLM API keys (Anthropic required, OpenAI optional)
-
-**Porter provides:**
-- Orchestration and UI
-- GitHub App integration
-- Unified settings management
-
-**Credential storage:**
-- Stored in a single private GitHub Gist owned by the user
-- Read at runtime and injected into Modal containers
-- Users can revoke by rotating keys or deleting the Gist
+| Agent | Package | Headless Command |
+|-------|---------|------------------|
+| Opencode | `opencode-ai` | `opencode run --model anthropic/claude-sonnet-4 "prompt"` |
+| Claude Code | `@anthropic-ai/claude-code` | `claude -p "prompt" --dangerously-skip-permissions` |
+| Amp | `@sourcegraph/amp` | `amp -x "prompt" --dangerously-allow-all` |
 
 ---
 
-## Prompt Enrichment (WRAP)
+## Docker Image
 
-Porter builds prompts in WRAP format:
+```dockerfile
+FROM node:20-slim
 
-```markdown
-## Issue
-{issue title}
-{issue body}
-{issue comments if relevant}
+RUN apt-get update && apt-get install -y git curl && \
+    npm install -g opencode-ai @anthropic-ai/claude-code @sourcegraph/amp && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-## Repository Context
-{from AGENTS.md if present}
-{key files and directory structure}
-{relevant documentation}
+WORKDIR /workspace
 
-## Instructions
-Complete this GitHub issue by making the necessary code changes.
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-1. Analyze the issue requirements
-2. Make the minimal changes needed
-3. Ensure changes follow existing code style
-4. Create a PR with clear description
-5. Reference this issue in the PR
-
-Issue URL: {issue_url}
+ENTRYPOINT ["/entrypoint.sh"]
 ```
 
-Context sources:
-- Issue metadata (title, body, labels, comments)
-- Repository docs (`AGENTS.md`, `.porter/config.json`, README)
-- Repository summary (top-level tree, primary language)
+**Image builds once, pushed to Fly registry, cached for all tasks.**
 
 ---
 
-## Modal Execution
+## Entrypoint
 
-### Container Image (illustrative)
+```bash
+#!/bin/bash
+set -e
 
-```python
-from modal import Image
+# Clone repo
+git clone "https://${GITHUB_TOKEN}@github.com/${REPO_FULL_NAME}.git" .
+git checkout -b "porter/${TASK_ID}"
 
-porter_image = (
-    Image.debian_slim()
-    .apt_install("git", "curl", "build-essential")
-    .pip_install("opencode-cli", "amp-cli")
-    .run_commands(
-        "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
-        "apt-get install -y nodejs",
-    )
-)
+# Run agent
+case "$AGENT" in
+  opencode)
+    opencode run --model anthropic/claude-sonnet-4 "$PROMPT"
+    ;;
+  claude)
+    claude -p "$PROMPT" --dangerously-skip-permissions
+    ;;
+  amp)
+    amp -x "$PROMPT" --dangerously-allow-all
+    ;;
+esac
+
+# Callback
+curl -X POST "$CALLBACK_URL" \
+  -H "Content-Type: application/json" \
+  -d "{\"task_id\": \"$TASK_ID\", \"status\": \"complete\"}"
 ```
-
-### Execution Function (illustrative)
-
-```python
-@app.function(image=porter_image, timeout=600, memory=2048, cpu=2.0)
-def execute_agent_task(task_id, repo_url, repo_name, issue_number,
-                       agent_name, enriched_prompt, callback_url, credentials):
-    os.environ["GITHUB_TOKEN"] = credentials["github_token"]
-    os.environ["ANTHROPIC_API_KEY"] = credentials["anthropic_api_key"]
-    if credentials.get("openai_api_key"):
-        os.environ["OPENAI_API_KEY"] = credentials["openai_api_key"]
-
-    clone_dir = f"/tmp/{repo_name}"
-    subprocess.run(["git", "clone", repo_url, clone_dir], check=True)
-    os.chdir(clone_dir)
-
-    if agent_name == "opencode":
-        result = subprocess.run(["opencode", "--prompt", enriched_prompt, "--create-pr"],
-                                capture_output=True, text=True)
-    elif agent_name == "claude-code":
-        result = subprocess.run(["claude-code", "--prompt", enriched_prompt],
-                                capture_output=True, text=True)
-    elif agent_name == "amp":
-        result = subprocess.run(["amp", "--prompt", enriched_prompt],
-                                capture_output=True, text=True)
-    else:
-        raise ValueError(f"Unknown agent: {agent_name}")
-
-    pr_url = extract_pr_url(result.stdout)
-    requests.post(callback_url, json={
-        "task_id": task_id,
-        "status": "success" if result.returncode == 0 else "failed",
-        "pr_url": pr_url,
-        "logs": result.stdout,
-        "error": result.stderr if result.returncode != 0 else None,
-    })
-```
-
-### Resource Limits
-
-| Resource | Limit | Rationale |
-|----------|-------|-----------|
-| Timeout | 10 minutes | Most tasks complete quickly |
-| Memory | 2GB | Agent + repo |
-| CPU | 2 cores | Burstable |
-| Storage | 10GB ephemeral | Fresh per task |
-| Concurrency | 10 per user | Prevent abuse |
-
-### Cost Model
-
-Porter is open source and free to run. Users pay for Modal and LLM usage:
-
-| Service | Purpose | Cost |
-|---------|---------|------|
-| Modal | Container execution | ~ $0.03 per 3-minute task |
-| Anthropic | LLM inference | Per-token pricing |
-| OpenAI (optional) | LLM inference | Per-token pricing |
 
 ---
 
-## API Design
+## Core Flow
 
-### REST Endpoints
+1. User comments `@porter opencode` on GitHub issue
+2. GitHub webhook hits Porter
+3. Porter reads user config from their Gist (API keys, preferences)
+4. Porter builds enriched prompt from issue context
+5. Porter calls Fly Machines API to create container
+6. Container: clones repo, runs agent, agent creates PR
+7. Container calls Porter callback with result
+8. Porter comments on issue with PR link
+9. Machine auto-destroys on exit
 
-**Webhooks**
+---
+
+## Fly Machines Integration
+
+**Create Machine:**
+
 ```
-POST /api/webhooks/github
+POST https://api.machines.dev/v1/apps/{app}/machines
+
+{
+  "config": {
+    "image": "registry.fly.io/porter-worker:latest",
+    "auto_destroy": true,
+    "env": {
+      "TASK_ID": "task_abc123",
+      "REPO_FULL_NAME": "user/repo",
+      "AGENT": "opencode",
+      "PROMPT": "Fix the bug described in issue #42...",
+      "GITHUB_TOKEN": "ghp_xxx",
+      "ANTHROPIC_API_KEY": "sk-ant-xxx",
+      "AMP_API_KEY": "amp_xxx",
+      "CALLBACK_URL": "https://porter.dev/api/callbacks/complete"
+    },
+    "guest": {
+      "cpu_kind": "shared",
+      "cpus": 2,
+      "memory_mb": 2048
+    }
+  }
+}
 ```
 
-**Tasks**
+**Headers:**
+
 ```
-GET    /api/tasks
-POST   /api/tasks
-GET    /api/tasks/:id
-PUT    /api/tasks/:id/retry
-DELETE /api/tasks/:id
+Authorization: Bearer {FLY_API_TOKEN}
+Content-Type: application/json
 ```
 
-**Agents**
+---
+
+## API Endpoints
+
+### Webhooks
+
 ```
-GET /api/agents
-GET /api/agents/:name
+POST /api/webhooks/github    # Receives issue_comment events
 ```
 
-**Config**
+### Tasks
+
 ```
-GET /api/config
-PUT /api/config
+GET    /api/tasks            # List tasks
+POST   /api/tasks            # Create task (internal)
+GET    /api/tasks/:id        # Get task
+DELETE /api/tasks/:id        # Cancel task
 ```
 
-**Callbacks (from Modal)**
+### Callbacks
+
 ```
-POST /api/callbacks/task-update
-POST /api/callbacks/task-complete
+POST /api/callbacks/complete # Receives completion from container
 ```
 
-### Data Models
+### Config
+
+```
+GET /api/config              # Get user config from Gist
+PUT /api/config              # Update user config in Gist
+```
+
+---
+
+## Data Models
 
 ```typescript
 interface Task {
   id: string
-  status: "queued" | "running" | "success" | "failed"
+  status: "queued" | "running" | "complete" | "failed"
   repo: string
   issueNumber: number
-  issueTitle: string
-  issueBody: string
   agent: string
-  priority: number
-  progress: number
-  createdAt: Date
-  startedAt?: Date
-  completedAt?: Date
-  createdBy: string
-  prNumber?: number
+  prompt: string
+  machineId?: string
   prUrl?: string
-  errorMessage?: string
-  logs: LogEntry[]
+  createdAt: Date
+  completedAt?: Date
+  error?: string
 }
 
-interface LogEntry {
-  timestamp: Date
-  level: "info" | "warning" | "error" | "success"
-  message: string
+interface UserConfig {
+  flyToken: string
+  anthropicKey: string
+  ampKey?: string
+  openaiKey?: string
+  defaultAgent: string
 }
+```
 
-interface Agent {
-  name: string
-  displayName: string
-  description: string
-  provider: string
-  languages: string[]
-  status: "available" | "unavailable" | "deprecated"
-  version: string
-  icon: string
-}
+---
 
-interface Config {
-  version: string
-  modal: { tokenId: string; tokenSecret: string }
-  agents: { [name: string]: { enabled: boolean; priority: number; customPrompt?: string } }
-  credentials: { anthropic: string; openai?: string }
-  repositories: {
-    [repo: string]: { defaultAgent: string; autoAssign: boolean; skipLabels: string[] }
-  }
-  notifications: { email: boolean; webhook?: string }
-}
+## Prompt Enrichment
+
+Porter builds the prompt sent to the agent:
+
+```markdown
+## Task
+{issue title}
+
+## Description
+{issue body}
+
+## Repository Context
+{from AGENTS.md if present}
+
+## Instructions
+Complete this GitHub issue by making the necessary code changes.
+Create a branch, make commits, and open a pull request.
+Reference issue #{issue_number} in the PR description.
 ```
 
 ---
@@ -339,156 +254,106 @@ interface Config {
 - Issues: read/write
 - Pull Requests: read/write
 - Metadata: read
-- Members: read
 
 ### Webhook Events
 
-- issue_comment.created
-- issues.opened (auto-run optional)
-- issues.closed (cancel)
-- pull_request.merged (mark complete)
+- `issue_comment.created` (trigger on @porter mention)
+- `issues.closed` (cancel running tasks)
 
 ### Command Syntax
 
 ```
-@porter <agent> [flags]
+@porter <agent>
+@porter opencode
+@porter claude
+@porter amp
 ```
-
-Flags:
-- --priority=low|normal|high
-- --no-tests
-- --model=<name>
-- --branch=<name>
-
-Control commands:
-- @porter stop
-- @porter retry
-- @porter status
 
 ---
 
-## User Interface
-
-### Key Pages
-
-1. **Dashboard** (`/`): overview stats, active tasks, quick actions
-2. **Tasks** (`/tasks`): list, filtering, detail view
-3. **Settings** (`/settings`): GitHub connection, agents, Modal/LLM keys
-
-### Onboarding Flow
+## User Onboarding
 
 1. Sign in with GitHub OAuth
-2. Install Porter GitHub App
-3. Connect Modal and add LLM keys
-4. Select repositories
-5. Start using @porter comments
+2. Install Porter GitHub App on repos
+3. Create config Gist with API keys
+4. Add Fly token to config
+5. Comment `@porter opencode` on any issue
 
 ---
 
-## Testing Strategy
+## Credential Storage
 
-- Unit tests: prompt enrichment, GitHub/Modal helpers
-- Component tests: Svelte components with mocked data
-- Integration tests: API routes + webhooks
-- E2E tests: onboarding and task lifecycle (Playwright)
+All credentials stored in user-owned private GitHub Gist:
+
+```json
+{
+  "fly_token": "...",
+  "anthropic_api_key": "...",
+  "amp_api_key": "...",
+  "default_agent": "opencode"
+}
+```
+
+Porter reads Gist at runtime, injects into container env vars.
 
 ---
 
-## Development Roadmap
+## Resource Limits
 
-### Phase 1: UI Foundation + Testing
-- Dashboard feed, task detail view, filtering, mock data, component tests, Playwright scaffolding
-
-### Phase 2: Onboarding + Auth
-- GitHub OAuth, onboarding wizard, config persistence
-
-### Phase 3: Core API + Task Model
-- Task CRUD, Gist config storage, agent registry, webhook validation, WebSocket updates
-
-### Phase 4: Modal Execution
-- Modal integration, Opencode adapter, callbacks, PR creation
-
-### Phase 5: GitHub App + Multi-Agent
-- App setup, Claude Code and Amp adapters, priority queue, retry handling
-
-### Phase 6: Polish + Launch Prep
-- Task history, error handling, notifications, performance, docs, launch assets
-
-### Phase 7: Post-Launch
-- GitLab/Gitea support, additional providers, team features, billing
+| Resource | Limit |
+|----------|-------|
+| Timeout | 10 minutes |
+| Memory | 2 GB |
+| CPU | 2 shared cores |
+| Concurrent tasks per user | 5 |
 
 ---
 
-## Success Metrics
+## Cost Model
 
-### MVP
-- Webhook dispatch to Modal
-- Agent runs and creates PR
-- Error handling for timeouts and failures
-- Task history visible
+Porter is free. Users pay for:
 
-### Beta
-- 3+ agents supported
-- 100+ tasks completed
-- <30s webhook-to-start latency
-- 95%+ success rate on valid tasks
-
-### Launch (Week 1)
-- 500+ GitHub stars
-- 20+ real users
-- No critical bugs
+| Service | Cost |
+|---------|------|
+| Fly Machines | ~$0.01-0.05 per task |
+| Anthropic/OpenAI | Per-token pricing |
+| Amp | Per Amp pricing |
 
 ---
 
-## Deployment
+## Development Phases
 
-### SvelteKit App
+### Phase 1: Core Infrastructure
+- Docker image with all agents
+- Fly Machines integration
+- Webhook handler
+- Callback endpoint
 
-```bash
-cd web
-bun install
-bun run dev
-```
+### Phase 2: Web App
+- SvelteKit scaffold
+- GitHub OAuth
+- Task list UI
+- Gist config management
 
-Production:
+### Phase 3: GitHub App
+- App registration
+- Webhook verification
+- Issue comment parsing
+- PR link commenting
 
-```bash
-bun run build
-vercel deploy
-```
-
-Environment variables:
-
-```
-GITHUB_APP_ID=123456
-GITHUB_APP_PRIVATE_KEY=...
-GITHUB_WEBHOOK_SECRET=...
-PUBLIC_APP_URL=https://<domain>
-```
-
-### Modal Functions
-
-```bash
-cd modal
-modal serve app.py
-```
-
-Production:
-
-```bash
-modal deploy app.py
-```
-
-Provider keys are always read from the user Gist at runtime.
+### Phase 4: Polish
+- Error handling
+- Retry logic
+- Task history
+- Settings UI
 
 ---
 
 ## Open Questions
 
-1. Multi-repo tasks
-2. Team-level queues and org settings
-3. Rate limiting on free tier
-4. Agent versioning and upgrades
+1. How do agents handle PR creation? (Need to verify each agent's git workflow)
+2. Should Porter create the branch/PR or let agents do it?
+3. Rate limiting strategy for free tier abuse prevention
 
 ---
 
