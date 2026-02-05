@@ -1,7 +1,7 @@
 <!--
-	AgentSettingsModal - Dialog Wrapper for Agent Configuration
+	AgentSettingsDialog - Dialog Wrapper for Agent Configuration
 	
-	This modal wraps the AgentSettings component in a dialog.
+	This dialog wraps the AgentSettings component in a dialog.
 	Opens from the Dashboard "Agents" button for quick agent management.
 	
 	Purpose: Quick access to agent config without navigating to /settings

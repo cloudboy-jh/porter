@@ -9,10 +9,7 @@ let tasks: Task[] = [];
 const baseConfig: PorterConfig = {
 	version: '1.0.0',
 	executionMode: 'cloud',
-	modal: {
-		tokenId: '',
-		tokenSecret: ''
-	},
+	flyToken: '',
 	agents: {
 		opencode: {
 			enabled: true,
@@ -61,13 +58,8 @@ const normalizeCredentials = (credentials?: PorterConfig['credentials']) => {
 	return normalized;
 };
 
-const normalizeModal = (modal?: PorterConfig['modal']) => {
-	if (!modal) return { tokenId: '', tokenSecret: '' };
-	return {
-		tokenId: normalizeCredential(modal.tokenId) ?? '',
-		tokenSecret: normalizeCredential(modal.tokenSecret) ?? ''
-	};
-};
+const normalizeFlyToken = (token?: string) => normalizeCredential(token) ?? '';
+const normalizeFlyAppName = (appName?: string) => normalizeCredential(appName) ?? '';
 
 const normalizeAgentConfig = (agents: PorterConfig['agents']) => {
 	const next = { ...agents };
@@ -139,7 +131,9 @@ const buildAgentConfig = (entry: (typeof AGENT_REGISTRY)[number], activeConfig: 
 	const configEntry = activeConfig.agents?.[entry.id] ?? { enabled: false, priority: 'normal' };
 	const enabled = Boolean(configEntry.enabled);
 	const credentials = activeConfig.credentials ?? {};
-	const hasCredentials = entry.requiredKeys.every((key) => Boolean(credentials?.[key]));
+	const hasCredentials = entry.requiredKeys.every((key) =>
+		Boolean(credentials?.[key as keyof NonNullable<PorterConfig['credentials']>])
+	);
 	const ready = enabled && hasCredentials;
 	let status: AgentConfig['status'] = 'disabled';
 	if (!enabled) status = 'disabled';
@@ -183,16 +177,21 @@ export const getAgentStatus = async (token: string, name: string): Promise<Agent
 
 export const getConfig = async (token: string): Promise<PorterConfig> => {
 	if (!configLoaded.has(token)) {
-		const gistConfig = await loadConfigFromGist(token, baseConfig);
+		const gistConfig = (await loadConfigFromGist(token, baseConfig)) ?? {};
+		const hasLegacyModal = Object.prototype.hasOwnProperty.call(gistConfig as Record<string, unknown>, 'modal');
 		const merged = {
 			...baseConfig,
-			...(gistConfig ?? {}),
-			agents: normalizeAgentConfig(gistConfig?.agents ?? baseConfig.agents),
-			credentials: normalizeCredentials(gistConfig?.credentials),
-			modal: normalizeModal(gistConfig?.modal)
+			...(gistConfig as PorterConfig),
+			agents: normalizeAgentConfig((gistConfig as PorterConfig).agents ?? baseConfig.agents),
+			credentials: normalizeCredentials((gistConfig as PorterConfig).credentials),
+			flyToken: normalizeFlyToken((gistConfig as PorterConfig).flyToken),
+			flyAppName: normalizeFlyAppName((gistConfig as PorterConfig).flyAppName)
 		};
 		configCache.set(token, merged);
 		configLoaded.add(token);
+		if (hasLegacyModal) {
+			await saveConfigToGist(token, merged);
+		}
 	}
 	return configCache.get(token) ?? baseConfig;
 };
@@ -202,7 +201,8 @@ export const updateConfig = async (token: string, next: PorterConfig): Promise<P
 		...next,
 		agents: normalizeAgentConfig(next.agents ?? {}),
 		credentials: normalizeCredentials(next.credentials),
-		modal: normalizeModal(next.modal)
+		flyToken: normalizeFlyToken(next.flyToken),
+		flyAppName: normalizeFlyAppName(next.flyAppName)
 	};
 	configCache.set(token, normalized);
 	configLoaded.add(token);
@@ -237,15 +237,17 @@ export const updateCredentials = async (token: string, credentials: PorterConfig
 	return getConfig(token);
 };
 
-export const updateModalCredentials = async (
+export const updateFlyConfig = async (
 	token: string,
-	modal: PorterConfig['modal']
+	input: { flyToken?: string; flyAppName?: string }
 ): Promise<PorterConfig> => {
 	const activeConfig = await getConfig(token);
-	const nextModal = { ...activeConfig.modal, ...modal };
+	const nextToken = normalizeFlyToken(input.flyToken);
+	const nextApp = normalizeFlyAppName(input.flyAppName);
 	await updateConfig(token, {
 		...activeConfig,
-		modal: nextModal
+		flyToken: nextToken,
+		flyAppName: nextApp
 	});
 	return getConfig(token);
 };

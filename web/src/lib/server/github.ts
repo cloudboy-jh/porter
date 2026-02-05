@@ -227,6 +227,18 @@ export const addIssueComment = (token: string, owner: string, repo: string, numb
 		body: JSON.stringify({ body })
 	});
 
+export const createPullRequest = (
+	token: string,
+	owner: string,
+	repo: string,
+	input: { title: string; head: string; base: string; body?: string; draft?: boolean }
+) =>
+	fetchGitHub<GitHubPull>(`/repos/${owner}/${repo}/pulls`, token, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(input)
+	});
+
 export const listIssueComments = async (token: string, owner: string, repo: string, number: number) => {
 	const cacheKey = `comments:${owner}/${repo}#${number}:${token.slice(-8)}`;
 	

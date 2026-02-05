@@ -1,7 +1,7 @@
 <!--
-	QuickSettingsModal - Quick Settings Dialog
+	QuickSettingsDialog - Quick Settings Dialog
 	
-	Lightweight modal for common settings changes.
+	Lightweight dialog for common settings changes.
 	Accessible via:
 	- Sidebar "Quick Settings" item
 	- Keyboard shortcut: ⌘,

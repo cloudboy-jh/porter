@@ -5,7 +5,7 @@
 	It displays agent status, enable/disable toggles, and cloud defaults.
 	
 	Used in:
-	- AgentSettingsModal (Dashboard "Agents" button)
+	- AgentSettingsDialog (Dashboard "Agents" button)
 	- /settings page (full settings page)
 -->
 <script lang="ts">

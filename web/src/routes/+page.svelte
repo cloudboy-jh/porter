@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import AgentSettingsModal from '$lib/components/AgentSettingsModal.svelte';
+	import AgentSettingsDialog from '$lib/components/AgentSettingsDialog.svelte';
 	import CommandBar from '$lib/components/CommandBar.svelte';
 	import TaskFeed from '$lib/components/TaskFeed.svelte';
 	import { ArrowRight, GitBranch, Key, Plus, RocketLaunch, Sliders, Sparkle } from 'phosphor-svelte';
@@ -419,4 +419,4 @@
 	</div>
 
 <CommandBar bind:open={showDispatch} agents={agentConfig} onsubmit={handleCommandSubmit} />
-<AgentSettingsModal bind:open={showAgentSettings} agents={agentConfig} />
+<AgentSettingsDialog bind:open={showAgentSettings} agents={agentConfig} />

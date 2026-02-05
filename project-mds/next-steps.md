@@ -1,13 +1,14 @@
-# Next Steps (Feb 2, 2026)
+# Next Steps (Feb 5, 2026)
 
 ## Where we are (per `project-mds/main-spec.md`)
 
 ### Phase 1: Core Infrastructure
 - [ ] Docker image with all agents (Node 20 + CLI installs)
-- [ ] Fly Machines integration (create machine + env injection)
-- [ ] GitHub webhook handler for issue_comment events
-- [ ] Callback endpoint for task completion
+- [x] Fly Machines integration (create machine + env injection)
+- [x] GitHub webhook handler for issue_comment events
+- [x] Callback endpoint for task completion
 - [ ] Entrypoint flow (clone repo, run agent, report result)
+- [x] Porter-created PR flow after callback success
 
 ### Phase 2: Web App
 - [x] SvelteKit scaffold
@@ -26,7 +27,7 @@
 - [x] Collapse onboarding into /auth with auto-configured repos/agents
 - [x] Unified settings page for API keys
 - [x] Gist creation/management for credential storage
-- [ ] Validate Fly credentials before proceeding
+- [x] Validate Fly credentials before proceeding
 - [ ] UI/UX polish (task feed + review feed + auth)
 
 ### Phase 3: GitHub App
@@ -49,14 +50,13 @@
 
 ### Fly execution foundation
 - finalize Docker image + entrypoint scripts
-- implement Fly Machines create API with env injection
-- wire callback endpoint to update task status and PR URL
+- persist machine/task state beyond in-memory execution maps
+- add worker callback retries + timeout handling
 
 ### GitHub webhook integration
-- verify webhook signatures
-- parse @porter agent commands
-- enqueue tasks and kick off Fly Machines
+- enqueue tasks and kick off Fly Machines directly from webhook trigger
+- align webhook parsing/flags with dashboard task creation path
 
 ### UI readiness cues
-- runtime readiness CTA for Fly token + API keys
-- surface task run status + PR link in task detail
+- surface callback failures and PR creation errors in task detail
+- finish feed/auth visual polish pass

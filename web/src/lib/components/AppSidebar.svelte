@@ -7,7 +7,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import NavUser from '$lib/components/NavUser.svelte';
-	import QuickSettingsModal from '$lib/components/QuickSettingsModal.svelte';
+	import QuickSettingsDialog from '$lib/components/QuickSettingsDialog.svelte';
 	import logoMain from '../../logos/porter-logo-main.png';
 
 	let showQuickSettings = $state(false);
@@ -241,4 +241,4 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<QuickSettingsModal bind:open={showQuickSettings} />
+<QuickSettingsDialog bind:open={showQuickSettings} />

@@ -34,7 +34,7 @@ The docs app should include:
 1. **Product Overview**
    - What Porter is, core value proposition, supported agents.
 2. **Architecture**
-   - High-level system design, execution flow, Modal integration.
+   - High-level system design, execution flow, Fly Machines integration.
 3. **User Guide**
    - How to install the GitHub App, connect repos, run agents, review PRs.
 4. **Settings Reference**
@@ -57,7 +57,7 @@ The docs app should include:
 Guidelines:
 - Keep docs derived from spec content; do not introduce new product decisions only in docs.
 - Prefer concise summaries with deep links back to relevant sections in the spec.
-- Use consistent naming (Porter, Modal, agents, routes, settings sections).
+- Use consistent naming (Porter, Fly Machines, agents, routes, settings sections).
 
 ---
 

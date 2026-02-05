@@ -6,13 +6,19 @@
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import * as Sheet from '$lib/components/ui/sheet/index.js';
-	import AgentSettingsModal from '$lib/components/AgentSettingsModal.svelte';
+	import AgentSettingsDialog from '$lib/components/AgentSettingsDialog.svelte';
 	import type { PageData } from './$types';
 	import type { AgentConfig } from '$lib/types/agent';
 
 	type AgentDisplay = AgentConfig & { readyState?: 'ready' | 'missing_credentials' | 'disabled' };
 	type Credentials = { anthropic?: string; openai?: string; amp?: string };
-	type ModalCredentials = { tokenId?: string; tokenSecret?: string };
+	type FlyValidation = {
+		ok: boolean;
+		status: 'ready' | 'missing' | 'invalid_token' | 'error';
+		message: string;
+		appCreated: boolean;
+	};
+	type FlyCredentials = { flyToken?: string; flyAppName?: string; validation?: FlyValidation };
 	type RepoSummary = {
 		id: number;
 		fullName: string;
@@ -23,7 +29,8 @@
 	};
 	type ConfigSnapshot = {
 		credentials?: Credentials;
-		modal?: ModalCredentials;
+		flyToken?: string;
+		flyAppName?: string;
 		onboarding?: {
 			completed: boolean;
 			selectedRepos: Array<{
@@ -40,14 +47,16 @@
 	let { data } = $props<{ data: PageData }>();
 	let agentConfig = $state<AgentDisplay[]>([]);
 	let credentials = $state<Credentials>({});
-	let modal = $state<ModalCredentials>({});
+	let fly = $state<FlyCredentials>({});
 	let repositories = $state<RepoSummary[]>([]);
 	let selectedRepoIds = $state<number[]>([]);
 	let configSnapshot = $state<ConfigSnapshot | null>(null);
 	let credentialStatus = $state('');
 	let credentialSaving = $state(false);
-	let modalStatus = $state('');
-	let modalSaving = $state(false);
+	let flyStatus = $state('');
+	let flySaving = $state(false);
+	let flyValidating = $state(false);
+	let flyValidation = $state<FlyValidation | null>(null);
 	let repoStatus = $state('');
 	let repoSaving = $state(false);
 	let repoLoading = $state(false);
@@ -64,10 +73,13 @@
 	);
 	const readyAgentCount = $derived(readyAgents.length);
 	const totalAgents = $derived(agentConfig.length);
-	const modalReady = $derived(Boolean(modal?.tokenId?.trim()) && Boolean(modal?.tokenSecret?.trim()));
+	const flyReady = $derived(Boolean(fly?.flyToken?.trim()) && Boolean(fly?.flyAppName?.trim()));
+	const flyValidationReady = $derived(Boolean(flyValidation?.ok));
 	const anthropicReady = $derived(Boolean(credentials?.anthropic?.trim()));
 	const reposReady = $derived(selectedRepoIds.length > 0);
-	const runtimeReady = $derived(isConnected && modalReady && anthropicReady && readyAgentCount > 0 && reposReady);
+	const runtimeReady = $derived(
+		isConnected && flyReady && flyValidationReady && anthropicReady && readyAgentCount > 0 && reposReady
+	);
 	const filteredRepos = $derived(
 		repoSearch
 			? repositories.filter((repo) =>
@@ -103,6 +115,7 @@
 		loadAgents(true);
 		loadConfig();
 		loadRepositories();
+		validateFly(false);
 	};
 
 	const credentialProviders = [
@@ -144,9 +157,12 @@
 			if (!response.ok) return;
 			const data = (await response.json()) as ConfigSnapshot;
 			credentials = data.credentials ?? {};
-			modal = data.modal ?? {};
+			fly = { flyToken: data.flyToken, flyAppName: data.flyAppName };
 			configSnapshot = data;
 			selectedRepoIds = data.onboarding?.selectedRepos?.map((repo) => repo.id) ?? [];
+			if (data.flyToken && data.flyAppName) {
+				validateFly(false);
+			}
 		} catch {
 			// ignore
 		}
@@ -222,35 +238,68 @@
 		}
 	};
 
-	const updateModalField = (key: keyof ModalCredentials, value: string) => {
-		modal = { ...modal, [key]: value };
+	const updateFlyToken = (value: string) => {
+		fly = { ...fly, flyToken: value };
 	};
 
-	const saveModal = async () => {
-		modalSaving = true;
-		modalStatus = '';
+	const updateFlyAppName = (value: string) => {
+		fly = { ...fly, flyAppName: value };
+	};
+
+	const validateFly = async (showSuccess = true) => {
+		flyValidating = true;
+		if (showSuccess) {
+			flyStatus = '';
+		}
 		try {
-			const response = await fetch('/api/config/modal', {
+			const response = await fetch('/api/config/validate/fly');
+			const data = (await response.json()) as FlyValidation;
+			flyValidation = data;
+			if (showSuccess) {
+				flyStatus = data.message;
+			}
+		} catch (error) {
+			console.error('Validating Fly credentials failed:', error);
+			flyValidation = {
+				ok: false,
+				status: 'error',
+				message: 'Failed to validate Fly credentials.',
+				appCreated: false
+			};
+			if (showSuccess) {
+				flyStatus = 'Failed to validate Fly credentials.';
+			}
+		} finally {
+			flyValidating = false;
+		}
+	};
+
+	const saveFly = async () => {
+		flySaving = true;
+		flyStatus = '';
+		try {
+			const response = await fetch('/api/config/fly', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(modal)
+				body: JSON.stringify({ ...fly, validate: true })
 			});
 			if (response.status === 401) {
 				window.location.href = '/auth';
 				return;
 			}
 			if (!response.ok) {
-				modalStatus = 'Failed to save Modal credentials.';
+				flyStatus = 'Failed to save Fly settings.';
 				return;
 			}
-			const data = (await response.json()) as ModalCredentials;
-			modal = data ?? {};
-			modalStatus = 'Modal credentials updated.';
+			const data = (await response.json()) as FlyCredentials;
+			fly = { flyToken: data.flyToken, flyAppName: data.flyAppName };
+			flyValidation = data.validation ?? null;
+			flyStatus = data.validation?.message ?? 'Fly settings updated.';
 		} catch (error) {
-			console.error('Saving Modal credentials failed:', error);
-			modalStatus = 'Failed to save Modal credentials.';
+			console.error('Saving Fly settings failed:', error);
+			flyStatus = 'Failed to save Fly settings.';
 		} finally {
-			modalSaving = false;
+			flySaving = false;
 		}
 	};
 
@@ -361,12 +410,12 @@
 							<p class="text-xs text-muted-foreground">{github.handle}</p>
 						</div>
 						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-							<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Modal</p>
-							<p class="mt-2 text-sm font-medium text-foreground">
-								{modalReady ? 'Token ready' : 'Missing token'}
-							</p>
-							<p class="text-xs text-muted-foreground">Cloud execution</p>
-						</div>
+						<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Fly</p>
+						<p class="mt-2 text-sm font-medium text-foreground">
+							{flyValidationReady ? 'Token + app ready' : flyReady ? 'Validation needed' : 'Missing token/app'}
+						</p>
+						<p class="text-xs text-muted-foreground">{fly?.flyAppName || 'No Fly app selected'}</p>
+					</div>
 						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
 							<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">LLM</p>
 							<p class="mt-2 text-sm font-medium text-foreground">
@@ -393,7 +442,7 @@
 								</div>
 								<div class="space-y-1">
 									<p class={headerLabelClass}>Credentials</p>
-									<h2 class="text-lg font-semibold text-foreground">Modal + LLM Keys</h2>
+							<h2 class="text-lg font-semibold text-foreground">Fly + LLM Keys</h2>
 								</div>
 							</div>
 							<Button size="sm" variant="secondary" onclick={() => (showCredentials = true)}>
@@ -403,12 +452,12 @@
 					</Card.Header>
 					<Card.Content class="grid gap-3 pt-0">
 						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-							<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Modal</p>
-							<p class="mt-2 text-sm font-medium text-foreground">
-								{modalReady ? 'Configured' : 'Missing tokens'}
-							</p>
-							<p class="text-xs text-muted-foreground">Cloud execution keys</p>
-						</div>
+						<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Fly</p>
+						<p class="mt-2 text-sm font-medium text-foreground">
+							{flyValidationReady ? 'Configured' : flyReady ? 'Needs validation' : 'Missing setup'}
+						</p>
+						<p class="text-xs text-muted-foreground">Cloud execution token</p>
+					</div>
 						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
 							<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Anthropic</p>
 							<p class="mt-2 text-sm font-medium text-foreground">
@@ -526,63 +575,53 @@
 			</div>
 		</div>
 
-		<AgentSettingsModal bind:open={showAgents} bind:agents={agentConfig} />
+		<AgentSettingsDialog bind:open={showAgents} bind:agents={agentConfig} />
 
 		<Sheet.Root bind:open={showCredentials}>
 			<Sheet.Content side="right" class="sm:max-w-xl">
 				<Sheet.Header class="px-6 pt-6">
 					<p class={headerLabelClass}>Credentials</p>
-					<Sheet.Title>Modal + Provider Keys</Sheet.Title>
+				<Sheet.Title>Fly + Provider Keys</Sheet.Title>
 					<Sheet.Description>
 						Stored in your private GitHub Gist and used for cloud execution.
 					</Sheet.Description>
 				</Sheet.Header>
 				<div class="flex-1 overflow-y-auto px-6 pb-6 pt-4 space-y-6">
 					<div class="rounded-xl border border-border/60 bg-background/80 p-4 space-y-3">
-						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Modal</p>
-						<div class="space-y-3">
-							<div class="space-y-2">
-								<p class="text-sm font-medium text-foreground">Token ID</p>
-								<div class="flex flex-wrap gap-2">
-									<Input
-										value={modal?.tokenId ?? ''}
-										type={revealCredential.modalTokenId ? 'text' : 'password'}
-										placeholder="modal_..."
-										class="min-w-[220px] flex-1"
-										oninput={(event) => updateModalField('tokenId', (event.target as HTMLInputElement).value)}
-									/>
-									<Button variant="secondary" size="sm" type="button" onclick={() => toggleReveal('modalTokenId')}>
-										{revealCredential.modalTokenId ? 'Hide' : 'Reveal'}
-									</Button>
-								</div>
-							</div>
-							<div class="space-y-2">
-								<p class="text-sm font-medium text-foreground">Token Secret</p>
-								<div class="flex flex-wrap gap-2">
-									<Input
-										value={modal?.tokenSecret ?? ''}
-										type={revealCredential.modalTokenSecret ? 'text' : 'password'}
-										placeholder="secret_..."
-										class="min-w-[220px] flex-1"
-										oninput={(event) => updateModalField('tokenSecret', (event.target as HTMLInputElement).value)}
-									/>
-									<Button
-										variant="secondary"
-										size="sm"
-										type="button"
-										onclick={() => toggleReveal('modalTokenSecret')}
-									>
-										{revealCredential.modalTokenSecret ? 'Hide' : 'Reveal'}
-									</Button>
-								</div>
+					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Fly</p>
+					<div class="space-y-3">
+						<div class="space-y-2">
+							<p class="text-sm font-medium text-foreground">Fly API Token</p>
+							<div class="flex flex-wrap gap-2">
+								<Input
+									value={fly?.flyToken ?? ''}
+									type={revealCredential.flyToken ? 'text' : 'password'}
+									placeholder="fly_..."
+									class="min-w-[220px] flex-1"
+									oninput={(event) => updateFlyToken((event.target as HTMLInputElement).value)}
+								/>
+								<Button variant="secondary" size="sm" type="button" onclick={() => toggleReveal('flyToken')}>
+									{revealCredential.flyToken ? 'Hide' : 'Reveal'}
+								</Button>
 							</div>
 						</div>
-						{#if modalStatus}
-							<div class="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-								{modalStatus}
-							</div>
-						{/if}
+						<div class="space-y-2">
+							<p class="text-sm font-medium text-foreground">Fly App Name</p>
+							<Input
+								value={fly?.flyAppName ?? ''}
+								type="text"
+								placeholder="porter-yourname"
+								class="min-w-[220px]"
+								oninput={(event) => updateFlyAppName((event.target as HTMLInputElement).value)}
+							/>
+						</div>
 					</div>
+					{#if flyStatus}
+						<div class="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+							{flyStatus}
+						</div>
+					{/if}
+				</div>
 					<div class="rounded-xl border border-border/60 bg-background/80 p-4 space-y-3">
 						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Provider Keys</p>
 						<div class="space-y-3">
@@ -631,9 +670,12 @@
 				</div>
 				<Sheet.Footer class="px-6 pb-6">
 					<div class="flex flex-wrap justify-end gap-2">
-						<Button type="button" variant="secondary" onclick={saveModal} disabled={modalSaving}>
-							{modalSaving ? 'Saving...' : 'Save Modal'}
+						<Button type="button" variant="outline" onclick={() => validateFly(true)} disabled={flyValidating}>
+							{flyValidating ? 'Validating...' : 'Validate Fly'}
 						</Button>
+					<Button type="button" variant="secondary" onclick={saveFly} disabled={flySaving}>
+						{flySaving ? 'Saving...' : 'Save Fly settings'}
+					</Button>
 						<Button type="button" onclick={saveCredentials} disabled={credentialSaving}>
 							{credentialSaving ? 'Saving...' : 'Save Provider Keys'}
 						</Button>
