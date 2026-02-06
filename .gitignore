@@ -31,3 +31,6 @@ desktop/frontend/dist
 desktop/frontend/wailsjs
 desktop/build
 
+# Local smoke tests
+worker/README.md
+/worker

@@ -25,6 +25,31 @@ bun install
 bun run dev
 ```
 
+## Worker image (Phase 1)
+
+Porter launches Fly Machines using `PORTER_WORKER_IMAGE` (default: `registry.fly.io/porter-worker:latest`).
+
+Build locally:
+
+```bash
+docker build -f worker/Dockerfile -t porter-worker:local .
+```
+
+Build for Fly registry:
+
+```bash
+docker build -f worker/Dockerfile -t registry.fly.io/porter-worker:latest .
+```
+
+Entrypoint contract (`worker/entrypoint.sh`) expects:
+
+- `TASK_ID`, `REPO_FULL_NAME`, `AGENT`, `PROMPT`
+- `CALLBACK_URL`, `CALLBACK_TOKEN`
+- `GITHUB_TOKEN` unless `REPO_CLONE_URL` is provided
+- Optional: `BRANCH_NAME`, `BASE_BRANCH`, `REPO_CLONE_URL`
+
+For local smoke tests, see `worker/README.md`.
+
 ## Docs
 
 - Product spec: `project-mds/main-spec.md`

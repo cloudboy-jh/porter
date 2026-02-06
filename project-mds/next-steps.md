@@ -3,11 +3,11 @@
 ## Where we are (per `project-mds/main-spec.md`)
 
 ### Phase 1: Core Infrastructure
-- [ ] Docker image with all agents (Node 20 + CLI installs)
+- [x] Docker image with all agents (Node 20 + CLI installs)
 - [x] Fly Machines integration (create machine + env injection)
 - [x] GitHub webhook handler for issue_comment events
 - [x] Callback endpoint for task completion
-- [ ] Entrypoint flow (clone repo, run agent, report result)
+- [x] Entrypoint flow (clone repo, run agent, report result)
 - [x] Porter-created PR flow after callback success
 
 ### Phase 2: Web App
@@ -31,8 +31,9 @@
 - [x] UI/UX polish (task feed + review feed + auth)
 
 ### Phase 3: GitHub App
-- [ ] App registration
-- [ ] Webhook verification
+- [ ] Local testing for Porter run E2E
+- [x] App registration
+- [x] Webhook verification
 - [ ] Issue comment parsing for @porter commands
 - [ ] PR link commenting on completion
 
@@ -49,9 +50,8 @@
 ## Next Focus
 
 ### Fly execution foundation
-- finalize Docker image + entrypoint scripts
 - persist machine/task state beyond in-memory execution maps
-- add worker callback retries + timeout handling
+- harden worker callback retry telemetry and timeout visibility
 
 ### GitHub webhook integration
 - enqueue tasks and kick off Fly Machines directly from webhook trigger
