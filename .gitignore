@@ -33,4 +33,4 @@ desktop/build
 
 # Local smoke tests
 worker/README.md
-/worker
+\worker
