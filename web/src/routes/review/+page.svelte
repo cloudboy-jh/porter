@@ -67,7 +67,7 @@
 	};
 </script>
 
-<div class="flex min-h-full items-center justify-center py-6">
+<div class="flex min-h-full items-start justify-center py-4">
 	<TaskFeed
 		title="Review"
 		tasks={tasks}

@@ -28,7 +28,7 @@
 - [x] Unified settings page for API keys
 - [x] Gist creation/management for credential storage
 - [x] Validate Fly credentials before proceeding
-- [ ] UI/UX polish (task feed + review feed + auth)
+- [x] UI/UX polish (task feed + review feed + auth)
 
 ### Phase 3: GitHub App
 - [ ] App registration
@@ -59,4 +59,4 @@
 
 ### UI readiness cues
 - surface callback failures and PR creation errors in task detail
-- finish feed/auth visual polish pass
+- maintain feed density and responsiveness as task states expand

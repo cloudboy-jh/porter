@@ -104,16 +104,20 @@
 
 	const isHighlighted = (task: TaskWithLinks) =>
 		task.status === 'running' || (highlightStatus && task.status === highlightStatus);
+
+	const showRetry = (task: TaskWithLinks) => showStatusActions && task.status === 'failed';
+	const showCancel = (task: TaskWithLinks) =>
+		showStatusActions && (task.status === 'running' || task.status === 'queued');
 </script>
 
-<div class="mx-auto max-w-[680px] rounded-2xl border border-border/60 bg-background/80">
-	<div class="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 px-5 py-3">
+<div class="mx-auto w-full max-w-[1160px] rounded-2xl border border-border/60 bg-background/80">
+	<div class="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 px-4 py-3 sm:px-5">
 		<h2 class="text-lg font-semibold text-foreground">{title}</h2>
 		<div class="flex flex-wrap items-center gap-2">
 			<slot name="header" />
 		</div>
 	</div>
-	<div class="max-h-[70vh] overflow-y-auto p-5 hide-scrollbar">
+	<div class="max-h-[74vh] overflow-y-auto p-4 hide-scrollbar sm:p-5">
 		<div class="relative">
 			{#if tasks.length === 0}
 				<div class="rounded-2xl border border-border/60 bg-background/70 p-10 text-center">
@@ -123,15 +127,15 @@
 					</p>
 				</div>
 			{:else}
-				<div class="pointer-events-none absolute left-5 top-0 h-full w-0.5 bg-gradient-to-b from-border/80 via-border/50 to-transparent"></div>
-				<div class="space-y-8">
+				<div class="pointer-events-none absolute left-4 top-0 h-full w-0.5 bg-gradient-to-b from-border/80 via-border/50 to-transparent"></div>
+				<div class="space-y-4 sm:space-y-5">
 					{#each tasks as task}
-						<div class="relative pl-10">
+						<div class="relative pl-8">
 							{#if isHighlighted(task)}
-								<span class={`pointer-events-none absolute left-5 top-2 h-[calc(100%-0.75rem)] w-0.5 ${lineGlow[task.status]}`}></span>
+								<span class={`pointer-events-none absolute left-4 top-2 h-[calc(100%-0.75rem)] w-0.5 ${lineGlow[task.status]}`}></span>
 							{/if}
 							<div
-								class={`absolute left-3 top-6 flex h-4 w-4 items-center justify-center rounded-[6px] border ${nodeStyles[task.status]} ${isHighlighted(task) ? highlightRing[task.status] : ''}`}
+								class={`absolute left-2 top-5 flex h-4 w-4 items-center justify-center rounded-[6px] border ${nodeStyles[task.status]} ${isHighlighted(task) ? highlightRing[task.status] : ''}`}
 							>
 								<span class="h-1.5 w-1.5 rounded-[3px] bg-current/70"></span>
 							</div>
@@ -143,65 +147,45 @@
 								onclick={() => onToggleExpanded(task.id)}
 								onkeydown={(event: KeyboardEvent) => handleRowKey(event, task.id)}
 							>
-								<Card.Content class="space-y-3 p-5">
-									<div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-										<span class="font-medium text-foreground/80">
-											{task.repoOwner ? `${task.repoOwner}/${task.repo}` : task.repo}
-										</span>
-										<span class="text-muted-foreground/60">&bull;</span>
-										<span class="flex items-center gap-2 capitalize">
-											<img class="h-4 w-4 rounded-sm" src={getAgentIcon(task.agent)} alt="" />
-											{task.agent}
-										</span>
-									</div>
-									<div class="flex flex-wrap items-center gap-2">
-										<div class="text-base font-semibold text-foreground">{task.title}</div>
-										<Badge
-											variant="outline"
-											class={`text-[10px] uppercase ${statusBadge[task.status].className}`}
-										>
-											{statusBadge[task.status].label}
-										</Badge>
-									</div>
-									<div class="text-sm text-muted-foreground">
-										{task.technicalSummary ?? 'Summary pending.'}
-									</div>
-									<div class="flex flex-wrap items-center gap-3">
-										<div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-											<GitDiffBadge variant="add" value={task.git?.add ?? 0} />
-											<GitDiffBadge variant="remove" value={task.git?.remove ?? 0} />
-											<span class="text-muted-foreground/60">&bull;</span>
-											{#if task.prUrl}
+								<Card.Content class="space-y-2 p-3.5 sm:p-4">
+									<div class="flex flex-wrap items-start justify-between gap-2">
+										<div class="min-w-0 flex-1">
+											<div class="flex flex-wrap items-center gap-2">
+												<div class="truncate text-sm font-semibold text-foreground sm:text-[0.95rem]">
+													{task.title}
+												</div>
+												<Badge
+													variant="outline"
+													class={`text-[10px] uppercase ${statusBadge[task.status].className}`}
+												>
+													{statusBadge[task.status].label}
+												</Badge>
+											</div>
+											<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground sm:text-xs">
+												<span class="font-medium text-foreground/80">
+													{task.repoOwner ? `${task.repoOwner}/${task.repo}` : task.repo}
+												</span>
+												<span class="text-muted-foreground/60">&bull;</span>
+												<span class="flex items-center gap-1.5 capitalize">
+													<img class="h-3.5 w-3.5 rounded-sm" src={getAgentIcon(task.agent)} alt="" />
+													{task.agent}
+												</span>
+												<span class="text-muted-foreground/60">&bull;</span>
 												<a
 													class="text-primary hover:text-primary/80"
-													href={task.prUrl}
+													href={getIssueUrl(task)}
 													target="_blank"
 													rel="noreferrer"
 												>
-													PR #{task.prNumber ?? '-'}
+													{task.issue}
 												</a>
-											{:else}
-												<span>PR -</span>
-											{/if}
-											<span class="text-muted-foreground/60">&bull;</span>
-											<span>{task.commitHash ?? 'commit -'}</span>
-											<span class="text-muted-foreground/60">&bull;</span>
-											<a
-												class="text-primary hover:text-primary/80"
-												href={getIssueUrl(task)}
-												target="_blank"
-												rel="noreferrer"
-											>
-												{task.issue}
-											</a>
-											<span class="text-muted-foreground/60">&bull;</span>
-											<span>{task.started}</span>
+											</div>
 										</div>
-										<div class="task-actions flex items-center gap-2 md:ml-auto">
+										<div class="flex items-center gap-1.5">
 											<Button variant="ghost" size="sm" onclick={(event: MouseEvent) => handleViewClick(event, task.id)}>
 												{primaryActionLabel}
 											</Button>
-											{#if showStatusActions && task.status === 'failed'}
+											{#if showRetry(task)}
 												<Button
 													variant="ghost"
 													size="sm"
@@ -210,7 +194,7 @@
 													Retry
 												</Button>
 											{/if}
-											{#if showStatusActions && (task.status === 'running' || task.status === 'queued')}
+											{#if showCancel(task)}
 												<Button
 													variant="ghost"
 													size="sm"
@@ -220,6 +204,30 @@
 												</Button>
 											{/if}
 										</div>
+									</div>
+									<div class="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground sm:text-xs">
+										<GitDiffBadge variant="add" value={task.git?.add ?? 0} />
+										<GitDiffBadge variant="remove" value={task.git?.remove ?? 0} />
+										<span class="text-muted-foreground/60">&bull;</span>
+										{#if task.prUrl}
+											<a
+												class="text-primary hover:text-primary/80"
+												href={task.prUrl}
+												target="_blank"
+												rel="noreferrer"
+											>
+												PR #{task.prNumber ?? '-'}
+											</a>
+										{:else}
+											<span>PR -</span>
+										{/if}
+										<span class="text-muted-foreground/60">&bull;</span>
+										<span>{task.commitHash ?? 'commit -'}</span>
+										<span class="text-muted-foreground/60">&bull;</span>
+										<span>{task.started}</span>
+									</div>
+									<div class="line-clamp-2 text-xs text-muted-foreground sm:text-sm">
+										{task.technicalSummary ?? 'Summary pending.'}
 									</div>
 								</Card.Content>
 							</Card.Root>
@@ -282,22 +290,26 @@
 										</Card.Root>
 
 										<div class="flex flex-wrap gap-2">
-											<Button
-												variant="destructive"
-												size="sm"
-												onclick={(event: MouseEvent) => handleStopClick(event, task.id)}
-											>
-												<Square size={14} weight="bold" />
-												Stop
-											</Button>
-											<Button
-												variant="secondary"
-												size="sm"
-												onclick={(event: MouseEvent) => handleRestartClick(event, task.id)}
-											>
-												<ArrowCounterClockwise size={14} weight="bold" />
-												Restart
-											</Button>
+											{#if showCancel(task)}
+												<Button
+													variant="destructive"
+													size="sm"
+													onclick={(event: MouseEvent) => handleStopClick(event, task.id)}
+												>
+													<Square size={14} weight="bold" />
+													Stop
+												</Button>
+											{/if}
+											{#if showRetry(task)}
+												<Button
+													variant="secondary"
+													size="sm"
+													onclick={(event: MouseEvent) => handleRestartClick(event, task.id)}
+												>
+													<ArrowCounterClockwise size={14} weight="bold" />
+													Restart
+												</Button>
+											{/if}
 											<Button
 												variant="secondary"
 												size="sm"

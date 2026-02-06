@@ -286,8 +286,8 @@
 	const highlightStatus = $derived(activeFilter === 'All' ? null : filterMap[activeFilter]);
 </script>
 
-	<div class="flex min-h-full items-center justify-center py-6">
-		<div class="w-full max-w-6xl space-y-5">
+	<div class="flex min-h-full items-start justify-center py-4">
+		<div class="w-full max-w-[1240px] space-y-4">
 			{#if !isConnected}
 				<div class="rounded-2xl border border-border/60 bg-card/70 p-10 text-center">
 					<p class="text-sm font-semibold text-foreground">Connect GitHub to see live tasks</p>
@@ -300,14 +300,14 @@
 				</div>
 			{:else}
 				{#if !hasReadyAgents}
-					<div class="mx-auto max-w-[680px] py-2 text-center">
+					<div class="mx-auto max-w-[1040px] py-1 text-center">
 						<p class="text-xs text-muted-foreground">
 							<a href="/settings" class="text-primary hover:underline">Add keys and enable an agent</a> to dispatch tasks
 						</p>
 					</div>
 				{/if}
 				{#if isLoadingTasks}
-					<div class="mx-auto max-w-[680px] rounded-2xl border border-border/60 bg-card/70 p-10 text-center text-sm text-muted-foreground">
+					<div class="mx-auto max-w-[1040px] rounded-2xl border border-border/60 bg-card/70 p-8 text-center text-sm text-muted-foreground">
 						Loading tasks...
 					</div>
 				{:else if tasks.length === 0}

@@ -86,9 +86,9 @@
 	</div>
 
 	<!-- Sign-in card -->
-	<div class="relative z-10 flex min-h-svh items-center justify-center p-6 md:p-10">
-		<div class="h-full w-full max-w-[420px]">
-			<div class="h-[600px] rounded-lg border border-white/10 bg-[#141210] shadow-[0_30px_70px_-45px_rgba(0,0,0,0.6)]">
+	<div class="relative z-10 flex min-h-svh items-center justify-center p-4 md:p-8">
+		<div class="w-full max-w-[560px]">
+			<div class="rounded-xl border border-white/10 bg-[#141210]/95 shadow-[0_30px_70px_-45px_rgba(0,0,0,0.6)] backdrop-blur-[1px]">
 				<SignInForm 
 					{isConnected} 
 					{githubHandle} 
