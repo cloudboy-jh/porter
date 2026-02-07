@@ -25,8 +25,8 @@ const sign = (value: string) =>
 	createHmac('sha256', SESSION_SECRET).update(value).digest('hex');
 
 const safeCompare = (a: string, b: string) => {
-	const aBuf = Buffer.from(a);
-	const bBuf = Buffer.from(b);
+	const aBuf = Uint8Array.from(Buffer.from(a));
+	const bBuf = Uint8Array.from(Buffer.from(b));
 	if (aBuf.length !== bBuf.length) return false;
 	return timingSafeEqual(aBuf, bBuf);
 };

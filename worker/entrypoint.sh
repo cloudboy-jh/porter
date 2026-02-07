@@ -25,24 +25,28 @@ post_callback() {
   local branch_name="$4"
   local commit_hash="$5"
 
-  local payload
-  payload="{"
-  payload+="\"task_id\":\"${TASK_ID}\","
-  payload+="\"execution_id\":\"${TASK_ID}\","
-  payload+="\"status\":\"${status}\","
-  payload+="\"branch_name\":$(json_escape "${branch_name}"),"
-  payload+="\"base_branch\":$(json_escape "${BASE_BRANCH}"),"
-  payload+="\"commit_hash\":$(json_escape "${commit_hash}"),"
-  payload+="\"summary\":$(json_escape "${summary}"),"
-  payload+="\"error\":$(json_escape "${error_message}"),"
-  payload+="\"callback_token\":\"${CALLBACK_TOKEN}\""
-  payload+="}"
-
   local attempt
   local max_attempts=5
   local sleep_seconds=2
+  local last_http_code='000'
 
   for attempt in $(seq 1 "${max_attempts}"); do
+    local payload
+    payload="{"
+    payload+="\"task_id\":\"${TASK_ID}\","
+    payload+="\"execution_id\":\"${TASK_ID}\","
+    payload+="\"status\":\"${status}\","
+    payload+="\"branch_name\":$(json_escape "${branch_name}"),"
+    payload+="\"base_branch\":$(json_escape "${BASE_BRANCH}"),"
+    payload+="\"commit_hash\":$(json_escape "${commit_hash}"),"
+    payload+="\"summary\":$(json_escape "${summary}"),"
+    payload+="\"error\":$(json_escape "${error_message}"),"
+    payload+="\"callback_attempt\":${attempt},"
+    payload+="\"callback_max_attempts\":${max_attempts},"
+    payload+="\"callback_last_http_code\":$(json_escape "${last_http_code}"),"
+    payload+="\"callback_token\":\"${CALLBACK_TOKEN}\""
+    payload+="}"
+
     local http_code
     http_code=$(curl --silent --show-error --output /tmp/callback-response.txt --write-out '%{http_code}' \
       -X POST "${CALLBACK_URL}" \
@@ -53,9 +57,14 @@ post_callback() {
     if [ -z "${http_code}" ]; then
       http_code='000'
     fi
+    last_http_code="${http_code}"
 
     if [ "${http_code}" -ge 200 ] && [ "${http_code}" -lt 300 ]; then
-      log "Callback succeeded with status ${http_code}."
+      if [ "${attempt}" -gt 1 ]; then
+        log "Callback succeeded on attempt ${attempt}/${max_attempts} with status ${http_code}."
+      else
+        log "Callback succeeded with status ${http_code}."
+      fi
       return 0
     fi
 

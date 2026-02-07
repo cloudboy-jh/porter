@@ -33,6 +33,12 @@ export type PorterTaskMetadata = {
 	summary?: string;
 	prUrl?: string;
 	prNumber?: number;
+	branchName?: string;
+	commitHash?: string;
+	failureStage?: 'dispatch' | 'agent' | 'callback' | 'pr';
+	callbackAttempts?: number;
+	callbackMaxAttempts?: number;
+	callbackLastHttpCode?: number;
 };
 
 const PORTER_LABEL = 'porter:task';
@@ -283,9 +289,23 @@ export const getLatestPorterMetadata = (comments: GitHubComment[]) => {
 export const buildTaskLog = (metadata: PorterTaskMetadata | null, status: PorterTaskStatus) => {
 	const level = status === 'success' ? 'success' : status === 'failed' ? 'error' : 'info';
 	const message = metadata?.summary ?? `Task ${status}`;
-	return metadata?.updatedAt
-		? [{ time: metadata.updatedAt, level, message }]
-		: [{ time: new Date().toISOString(), level, message }];
+	const baseTime = metadata?.updatedAt ?? new Date().toISOString();
+	const logs = [{ time: baseTime, level, message }];
+	if (metadata?.callbackAttempts && metadata.callbackAttempts > 1) {
+		logs.push({
+			time: baseTime,
+			level: 'warning',
+			message: `Callback succeeded after ${metadata.callbackAttempts}/${metadata.callbackMaxAttempts ?? metadata.callbackAttempts} attempts.`
+		});
+	}
+	if (metadata?.callbackLastHttpCode && metadata.callbackLastHttpCode >= 300) {
+		logs.push({
+			time: baseTime,
+			level: 'warning',
+			message: `Callback reported non-2xx code before success: HTTP ${metadata.callbackLastHttpCode}.`
+		});
+	}
+	return logs;
 };
 
 export const buildTaskFromIssue = (
@@ -316,6 +336,10 @@ export const buildTaskFromIssue = (
 		issueUrl: issue.html_url,
 		prNumber: metadata?.prNumber,
 		prUrl: metadata?.prUrl,
+		branch: metadata?.branchName,
+		callbackAttempts: metadata?.callbackAttempts,
+		callbackMaxAttempts: metadata?.callbackMaxAttempts,
+		callbackLastHttpCode: metadata?.callbackLastHttpCode,
 		summary: metadata?.summary,
 		logs: buildTaskLog(metadata, status),
 		errorMessage: status === 'failed' ? metadata?.summary : undefined

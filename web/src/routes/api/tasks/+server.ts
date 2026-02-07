@@ -1,12 +1,7 @@
 import { json } from '@sveltejs/kit';
 
 import {
-	addIssueComment,
-	buildPorterComment,
-	buildPorterLabels,
 	buildTaskFromIssue,
-	createIssue,
-	deriveIssueTitle,
 	fetchIssue,
 	getLatestPorterMetadata,
 	getRateLimitStatus,
@@ -14,16 +9,12 @@ import {
 	isGitHubRateLimitError,
 	listInstallationRepos,
 	listIssueComments,
-	listIssuesWithLabel,
-	updateIssueLabels
+	listIssuesWithLabel
 } from '$lib/server/github';
-import type { PorterTaskMetadata } from '$lib/server/github';
 import type { TaskStatus } from '$lib/server/types';
-import { getConfig } from '$lib/server/store';
-import { createExecutionContext, launchExecutionMachine } from '$lib/server/execution';
+import { dispatchTaskToFly } from '$lib/server/task-dispatch';
 import { clearSession } from '$lib/server/auth';
 import { githubCache } from '$lib/server/cache';
-import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ url, locals, cookies }) => {
@@ -113,19 +104,7 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 			return json({ error: 'repoOwner and repoName are required' }, { status: 400 });
 		}
 
-		if (!issueNumber && !prompt) {
-			return json({ error: 'issueNumber or prompt is required' }, { status: 400 });
-		}
-
-		let issue = null;
-		if (issueNumber) {
-			issue = await fetchIssue(session.token, repoOwner, repoName, issueNumber);
-		} else {
-			const derivedTitle = deriveIssueTitle(prompt);
-			issue = await createIssue(session.token, repoOwner, repoName, derivedTitle, issueBody);
-		}
-
-		const normalizedPriority: PorterTaskMetadata['priority'] =
+		const normalizedPriority =
 			priority === 'low' || priority === 'high' || priority === 'normal'
 				? priority
 				: priority === 1
@@ -134,90 +113,27 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 						? 'high'
 						: 'normal';
 
-		const metadata: PorterTaskMetadata = {
-			taskId: `${repoOwner}/${repoName}#${issue.number}`,
+		const dispatchResult = await dispatchTaskToFly({
+			githubToken: session.token,
+			repoOwner,
+			repoName,
+			issueNumber: issueNumber ?? undefined,
 			agent,
 			priority: normalizedPriority,
-			status: 'queued',
-			progress: 0,
-			createdAt: new Date().toISOString(),
-			summary: 'Task queued'
-		};
+			prompt,
+			issueBody
+		});
 
-		await updateLabelsAndComment(session.token, repoOwner, repoName, issue.number, metadata);
-
-		const activeConfig = await getConfig(session.token);
-		const flyToken = activeConfig.flyToken?.trim();
-		const flyAppName = activeConfig.flyAppName?.trim();
-		const anthropicKey = activeConfig.credentials?.anthropic?.trim();
-
-		if (!flyToken || !flyAppName || !anthropicKey) {
-			const blockedSummary = 'Task blocked: missing Fly setup or Anthropic API key.';
-			await updateLabelsAndComment(session.token, repoOwner, repoName, issue.number, {
-				...metadata,
-				status: 'failed',
-				summary: blockedSummary,
-				updatedAt: new Date().toISOString()
-			});
-			return json({ error: blockedSummary }, { status: 400 });
-		}
-
-		const callbackBaseUrl = env.PUBLIC_APP_URL ?? env.APP_URL;
-		if (!callbackBaseUrl) {
-			const blockedSummary = 'Task blocked: missing callback base URL configuration.';
-			await updateLabelsAndComment(session.token, repoOwner, repoName, issue.number, {
-				...metadata,
-				status: 'failed',
-				summary: blockedSummary,
-				updatedAt: new Date().toISOString()
-			});
-			return json({ error: blockedSummary }, { status: 500 });
-		}
-
-		try {
-			const execution = createExecutionContext({
-				owner: repoOwner,
-				repo: repoName,
-				issueNumber: issue.number,
-				agent,
-				priority: normalizedPriority,
-				prompt: buildEnrichedPrompt(issue.title, issue.body ?? issueBody, issue.number),
-				githubToken: session.token
-			});
-
-			const machine = await launchExecutionMachine(execution, {
-				flyToken,
-				flyAppName,
-				callbackBaseUrl,
-				anthropicKey,
-				ampKey: activeConfig.credentials?.amp,
-				openaiKey: activeConfig.credentials?.openai
-			});
-
-			await updateLabelsAndComment(session.token, repoOwner, repoName, issue.number, {
-				...metadata,
-				status: 'running',
-				progress: 10,
-				updatedAt: new Date().toISOString(),
-				summary: `Task running on Fly Machine ${machine.id}.`
-			});
-		} catch (error) {
-			const failedSummary = 'Task failed to start on Fly Machines.';
-			await updateLabelsAndComment(session.token, repoOwner, repoName, issue.number, {
-				...metadata,
-				status: 'failed',
-				progress: 100,
-				updatedAt: new Date().toISOString(),
-				summary: failedSummary
-			});
-			console.error('Failed to launch Fly Machine:', error);
-			return json({ error: failedSummary }, { status: 500 });
+		if (!dispatchResult.ok) {
+			const status = dispatchResult.summary.includes('missing callback') ? 500 : 400;
+			return json({ error: dispatchResult.error ?? dispatchResult.summary }, { status });
 		}
 
 		// Clear cache for this repo's issues to reflect the new task
 		githubCache.clearPattern(`issues:${repoOwner}/${repoName}`);
 
-		const comments = await listIssueComments(session.token, repoOwner, repoName, issue.number);
+		const issue = await fetchIssue(session.token, repoOwner, repoName, dispatchResult.issueNumber);
+		const comments = await listIssueComments(session.token, repoOwner, repoName, dispatchResult.issueNumber);
 		const latestMetadata = getLatestPorterMetadata(comments);
 		const task = buildTaskFromIssue(issue, repoOwner, repoName, latestMetadata);
 		return json(task, { status: 201 });
@@ -229,47 +145,4 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 		console.error('Failed to create task:', error);
 		return json({ error: 'failed' }, { status: 500 });
 	}
-};
-
-const buildEnrichedPrompt = (title: string, body: string, issueNumber: number) => `## Task
-${title}
-
-## Description
-${body}
-
-## Instructions
-Complete this GitHub issue by making the necessary code changes.
-Create a branch and commit your changes.
-Do not create a PR; Porter will open the PR after completion.
-Reference issue #${issueNumber} in commit messages where appropriate.
-`;
-
-const updateLabelsAndComment = async (
-	token: string,
-	owner: string,
-	repo: string,
-	number: number,
-	metadata: PorterTaskMetadata
-) => {
-	const issue = await fetchIssue(token, owner, repo, number);
-	const existingLabels = issue.labels.map((label) => label.name);
-	const porterLabels = buildPorterLabels(metadata.status, metadata.agent, metadata.priority);
-	const cleanedLabels = existingLabels.filter((label) => {
-		const lower = label.toLowerCase();
-		if (lower === 'porter:task') return false;
-		if (lower.startsWith('porter:agent:')) return false;
-		if (lower.startsWith('porter:priority:')) return false;
-		if (lower.startsWith('porter:queued')) return false;
-		if (lower.startsWith('porter:running')) return false;
-		if (lower.startsWith('porter:success')) return false;
-		if (lower.startsWith('porter:failed')) return false;
-		return true;
-	});
-	const labels = Array.from(new Set([...cleanedLabels, ...porterLabels]));
-	await updateIssueLabels(token, owner, repo, number, labels);
-	const comment = buildPorterComment(metadata.summary ?? 'Task update', {
-		...metadata,
-		updatedAt: new Date().toISOString()
-	});
-	await addIssueComment(token, owner, repo, number, comment);
 };

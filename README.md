@@ -25,6 +25,13 @@ bun install
 bun run dev
 ```
 
+Webhook-to-callback local smoke test:
+
+```bash
+cd web
+bun run smoke:webhook-callback
+```
+
 ## Worker image (Phase 1)
 
 Porter launches Fly Machines using `PORTER_WORKER_IMAGE` (default: `registry.fly.io/porter-worker:latest`).

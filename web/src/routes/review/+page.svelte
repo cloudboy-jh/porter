@@ -6,6 +6,7 @@
 	import type { PageData } from './$types';
 
 	let { data } = $props<{ data: PageData }>();
+	type ReviewTask = NonNullable<PageData['reviewableTasks']>[number];
 
 	const getStatusLabel = (status: string): string => {
 		const labels: Record<string, string> = {
@@ -28,7 +29,7 @@
 	};
 
 	const liveTasks = $derived(
-		(data.reviewableTasks ?? []).map((task) => ({
+		(data.reviewableTasks ?? []).map((task: ReviewTask) => ({
 			id: task.id,
 			status: task.status as Task['status'],
 			statusLabel: getStatusLabel(task.status),

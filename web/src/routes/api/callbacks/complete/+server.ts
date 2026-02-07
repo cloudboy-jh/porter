@@ -23,6 +23,10 @@ type CallbackPayload = {
 	summary?: string;
 	error?: string;
 	branch_name?: string;
+	commit_hash?: string;
+	callback_attempt?: number;
+	callback_max_attempts?: number;
+	callback_last_http_code?: number | string;
 	callback_token?: string;
 	base_branch?: string;
 };
@@ -34,7 +38,7 @@ export const POST = async ({ request }: { request: Request }) => {
 		return json({ error: 'missing execution id' }, { status: 400 });
 	}
 
-	const execution = getExecutionContext(executionId);
+	const execution = await getExecutionContext(executionId);
 	if (!execution) {
 		return json({ error: 'unknown execution' }, { status: 404 });
 	}
@@ -54,6 +58,11 @@ export const POST = async ({ request }: { request: Request }) => {
 
 	const isSuccess = payload.status === 'complete' || payload.status === 'success';
 	const summary = payload.summary ?? (isSuccess ? 'Task complete.' : payload.error ?? 'Task failed.');
+	const branchName = payload.branch_name?.trim() || execution.branchName;
+	const commitHash = payload.commit_hash?.trim() || undefined;
+	const callbackAttempts = toPositiveInt(payload.callback_attempt);
+	const callbackMaxAttempts = toPositiveInt(payload.callback_max_attempts);
+	const callbackLastHttpCode = toPositiveInt(payload.callback_last_http_code);
 
 	if (!isSuccess) {
 		const failedMetadata: PorterTaskMetadata = {
@@ -64,15 +73,20 @@ export const POST = async ({ request }: { request: Request }) => {
 			progress: 100,
 			createdAt: execution.createdAt,
 			updatedAt: new Date().toISOString(),
-			summary
+			summary,
+			branchName,
+			commitHash,
+			callbackAttempts,
+			callbackMaxAttempts,
+			callbackLastHttpCode,
+			failureStage: 'agent'
 		};
 		await updateLabelsAndComment(execution.githubToken, execution.owner, execution.repo, execution.issueNumber, failedMetadata);
-		consumeExecutionContext(executionId);
+		await consumeExecutionContext(executionId);
 		githubCache.clearPattern(`issues:${execution.owner}/${execution.repo}`);
 		return json({ ok: true });
 	}
 
-	const branchName = payload.branch_name?.trim() || execution.branchName;
 	const baseBranchCandidates = [payload.base_branch?.trim() || 'main', 'master'];
 
 	let prUrl: string | undefined;
@@ -96,7 +110,8 @@ export const POST = async ({ request }: { request: Request }) => {
 		}
 	}
 
-	const successSummary = prUrl ? `Task complete. PR created: ${prUrl}` : `Task complete, but PR creation failed: ${String(prError)}`;
+	const formattedPrError = formatError(prError);
+	const successSummary = prUrl ? `Task complete. PR created: ${prUrl}` : `Task complete, but PR creation failed: ${formattedPrError}`;
 	const status: PorterTaskMetadata['status'] = prUrl ? 'success' : 'failed';
 	const metadata: PorterTaskMetadata = {
 		taskId: `${execution.owner}/${execution.repo}#${execution.issueNumber}`,
@@ -106,16 +121,45 @@ export const POST = async ({ request }: { request: Request }) => {
 		progress: 100,
 		createdAt: execution.createdAt,
 		updatedAt: new Date().toISOString(),
-		summary: prUrl ? successSummary : summary,
+		summary: successSummary,
 		prUrl,
-		prNumber
+		prNumber,
+		branchName,
+		commitHash,
+		callbackAttempts,
+		callbackMaxAttempts,
+		callbackLastHttpCode,
+		failureStage: prUrl ? undefined : 'pr'
 	};
 
 	await updateLabelsAndComment(execution.githubToken, execution.owner, execution.repo, execution.issueNumber, metadata);
-	consumeExecutionContext(executionId);
+	await consumeExecutionContext(executionId);
 	githubCache.clearPattern(`issues:${execution.owner}/${execution.repo}`);
 
 	return json({ ok: true, prUrl, prNumber });
+};
+
+const formatError = (error: unknown) => {
+	if (!error) return 'unknown error';
+	if (error instanceof Error) return error.message;
+	if (typeof error === 'string') return error;
+	try {
+		return JSON.stringify(error);
+	} catch {
+		return String(error);
+	}
+};
+
+const toPositiveInt = (value: unknown) => {
+	const numeric =
+		typeof value === 'number'
+			? value
+			: typeof value === 'string' && /^\d+$/.test(value)
+				? Number.parseInt(value, 10)
+				: Number.NaN;
+	if (!Number.isFinite(numeric)) return undefined;
+	const parsed = Math.trunc(numeric);
+	return parsed > 0 ? parsed : undefined;
 };
 
 const updateLabelsAndComment = async (

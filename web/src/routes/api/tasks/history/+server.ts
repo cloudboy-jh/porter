@@ -100,8 +100,7 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 
 	if (branch) {
 		filteredTasks = filteredTasks.filter((task) => {
-			const taskBranch = (task as any).branch;
-			return taskBranch?.toLowerCase() === branch.toLowerCase();
+			return task.branch?.toLowerCase() === branch.toLowerCase();
 		});
 	}
 

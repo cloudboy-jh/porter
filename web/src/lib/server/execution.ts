@@ -1,4 +1,7 @@
 import { createHmac, randomUUID } from 'crypto';
+import { promises as fs } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { env } from '$env/dynamic/private';
 
 import { createFlyMachine } from '$lib/server/fly';
@@ -33,11 +36,36 @@ const callbackSecret = env.CALLBACK_SECRET ?? env.SESSION_SECRET ?? 'porter-call
 const workerImage = env.PORTER_WORKER_IMAGE ?? 'registry.fly.io/porter-worker:latest';
 const cpus = Number.parseInt(env.PORTER_MACHINE_CPUS ?? '2', 10);
 const memoryMb = Number.parseInt(env.PORTER_MACHINE_MEMORY_MB ?? '2048', 10);
+const executionStorePath = env.PORTER_EXECUTION_STORE_PATH ?? join(tmpdir(), 'porter-executions.json');
 
 const pendingExecutions = new Map<string, ExecutionContext>();
+let storeLoaded = false;
 
 const signCallbackToken = (executionId: string) =>
 	createHmac('sha256', callbackSecret).update(executionId).digest('hex');
+
+const loadExecutionStore = async () => {
+	if (storeLoaded) return;
+	storeLoaded = true;
+	try {
+		const raw = await fs.readFile(executionStorePath, 'utf8');
+		const parsed = JSON.parse(raw) as ExecutionContext[];
+		for (const item of parsed) {
+			pendingExecutions.set(item.executionId, item);
+		}
+	} catch {
+		// ignore missing or malformed store
+	}
+};
+
+const persistExecutionStore = async () => {
+	try {
+		const serialized = JSON.stringify(Array.from(pendingExecutions.values()));
+		await fs.writeFile(executionStorePath, serialized, 'utf8');
+	} catch (error) {
+		console.error('Failed to persist execution store:', error);
+	}
+};
 
 export const createExecutionContext = (input: {
 	owner: string;
@@ -65,15 +93,21 @@ export const createExecutionContext = (input: {
 		createdAt: new Date().toISOString()
 	};
 	pendingExecutions.set(executionId, context);
+	void persistExecutionStore();
 	return context;
 };
 
-export const getExecutionContext = (executionId: string) => pendingExecutions.get(executionId) ?? null;
+export const getExecutionContext = async (executionId: string) => {
+	await loadExecutionStore();
+	return pendingExecutions.get(executionId) ?? null;
+};
 
-export const consumeExecutionContext = (executionId: string) => {
+export const consumeExecutionContext = async (executionId: string) => {
+	await loadExecutionStore();
 	const existing = pendingExecutions.get(executionId) ?? null;
 	if (existing) {
 		pendingExecutions.delete(executionId);
+		await persistExecutionStore();
 	}
 	return existing;
 };
@@ -84,6 +118,7 @@ export const verifyCallbackToken = (executionId: string, token: string) => {
 };
 
 export const launchExecutionMachine = async (context: ExecutionContext, input: LaunchInput) => {
+	await loadExecutionStore();
 	const callbackUrl = `${input.callbackBaseUrl.replace(/\/$/, '')}/api/callbacks/complete`;
 	const agentEnv: Record<string, string> = {};
 	if (input.anthropicKey?.trim()) agentEnv.ANTHROPIC_API_KEY = input.anthropicKey.trim();
@@ -115,6 +150,7 @@ export const launchExecutionMachine = async (context: ExecutionContext, input: L
 
 	const updated: ExecutionContext = { ...context, machineId: machine.id };
 	pendingExecutions.set(context.executionId, updated);
+	await persistExecutionStore();
 
 	return machine;
 };

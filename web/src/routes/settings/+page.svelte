@@ -80,6 +80,7 @@
 	const runtimeReady = $derived(
 		isConnected && flyReady && flyValidationReady && anthropicReady && readyAgentCount > 0 && reposReady
 	);
+	const webhookReady = $derived(isConnected && flyValidationReady && readyAgentCount > 0);
 	const filteredRepos = $derived(
 		repoSearch
 			? repositories.filter((repo) =>
@@ -390,6 +391,9 @@
 									<h2 class="text-lg font-semibold text-foreground">Readiness Status</h2>
 									<p class="text-xs text-muted-foreground">
 										Cloud runtime readiness for Porter tasks.
+									</p>
+									<p class="text-xs text-muted-foreground">
+										Webhook mentions: {webhookReady ? 'ready' : 'blocked'}
 									</p>
 								</div>
 							</div>

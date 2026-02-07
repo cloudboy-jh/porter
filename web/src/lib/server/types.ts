@@ -24,6 +24,10 @@ export interface Task {
 	issueUrl?: string;
 	prNumber?: number;
 	prUrl?: string;
+	branch?: string;
+	callbackAttempts?: number;
+	callbackMaxAttempts?: number;
+	callbackLastHttpCode?: number;
 	summary?: string;
 	errorMessage?: string;
 	logs: TaskLog[];

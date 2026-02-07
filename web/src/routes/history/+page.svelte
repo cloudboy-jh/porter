@@ -69,6 +69,8 @@
 	let historyTasks = $state<TaskWithLinks[]>([]);
 	let totalTasks = $state(0);
 	let isLoading = $state(false);
+	let retryingTaskId = $state<string | null>(null);
+	let actionStatus = $state('');
 	let expandedTasks = $state<Record<string, boolean>>({});
 	const isConnected = $derived(Boolean(data?.session));
 
@@ -175,6 +177,37 @@
 
 	const handleLoadMore = () => {
 		limit += 20;
+	};
+
+	const formatCallbackTelemetry = (task: TaskWithLinks) => {
+		if (!task.callbackAttempts) return 'callback 1x';
+		return task.callbackMaxAttempts
+			? `callback ${task.callbackAttempts}/${task.callbackMaxAttempts}`
+			: `callback ${task.callbackAttempts}x`;
+	};
+
+	const handleRetry = async (taskId: string) => {
+		retryingTaskId = taskId;
+		actionStatus = '';
+		try {
+			const response = await fetch(`/api/tasks/${encodeURIComponent(taskId)}/retry`, {
+				method: 'PUT'
+			});
+			if (response.status === 401) {
+				window.location.href = '/auth';
+				return;
+			}
+			if (!response.ok) {
+				actionStatus = 'Retry failed to start.';
+				return;
+			}
+			actionStatus = 'Retry started.';
+			await loadHistory();
+		} catch {
+			actionStatus = 'Retry failed to start.';
+		} finally {
+			retryingTaskId = null;
+		}
 	};
 
 	const handleExport = () => {
@@ -524,6 +557,11 @@
 					<span class="sr-only">Download CSV</span>
 				</Button>
 			</div>
+			{#if actionStatus}
+				<div class="mt-3 rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+					{actionStatus}
+				</div>
+			{/if}
 			<div class="mt-3 grid grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 rounded-xl bg-muted/40 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
 				<span>Status</span>
 				<span>Task</span>
@@ -582,6 +620,9 @@
 									<div class="text-xs text-muted-foreground">
 										Issue #{task.issueNumber}
 										{task.prNumber ? ` · PR #${task.prNumber}` : ''}
+										{task.callbackAttempts && task.callbackAttempts > 1
+											? ` · ${formatCallbackTelemetry(task)}`
+											: ''}
 									</div>
 								</div>
 								<div class="text-xs text-muted-foreground font-mono">
@@ -610,7 +651,7 @@
 						{#if expandedTasks[task.id]}
 							<Card.Root class="border border-border/60 bg-background/70">
 								<Card.Content class="space-y-4 p-4">
-									<div class="grid gap-4 md:grid-cols-4">
+									<div class="grid gap-4 md:grid-cols-6">
 										<div>
 											<p class="text-xs uppercase text-muted-foreground">Issue</p>
 											<p class="text-sm font-medium">#{task.issueNumber}</p>
@@ -628,6 +669,14 @@
 										<div>
 											<p class="text-xs uppercase text-muted-foreground">Completed</p>
 											<p class="text-sm font-medium">{formatRelativeTime(task.completedAt)}</p>
+										</div>
+										<div>
+											<p class="text-xs uppercase text-muted-foreground">Callback</p>
+											<p class="text-sm font-medium">{formatCallbackTelemetry(task)}</p>
+										</div>
+										<div>
+											<p class="text-xs uppercase text-muted-foreground">Branch</p>
+											<p class="text-sm font-medium font-mono">{task.branch ?? '—'}</p>
 										</div>
 									</div>
 
@@ -657,10 +706,15 @@
 									</Card.Root>
 
 									<div class="flex flex-wrap gap-2">
-										<Button variant="secondary" size="sm">
-											<ArrowCounterClockwise size={14} weight="bold" />
-											Retry
-										</Button>
+									<Button
+										variant="secondary"
+										size="sm"
+										disabled={retryingTaskId === task.id}
+										onclick={() => handleRetry(task.id)}
+									>
+										<ArrowCounterClockwise size={14} weight="bold" />
+										{retryingTaskId === task.id ? 'Retrying...' : 'Retry'}
+									</Button>
 										<Button
 											variant="secondary"
 											size="sm"

@@ -31,11 +31,12 @@
 - [x] UI/UX polish (task feed + review feed + auth)
 
 ### Phase 3: GitHub App
-- [ ] Local testing for Porter run E2E
+- [x] Local testing for Porter run E2E
+- [ ] Live Fly Machine creation for "Production" for just cloudboy-jh to start, To establish the container lifecycle. 
 - [x] App registration
 - [x] Webhook verification
-- [ ] Issue comment parsing for @porter commands
-- [ ] PR link commenting on completion
+- [x] Issue comment parsing for @porter commands
+- [x] PR link commenting on completion
 
 ### Phase 4: Polish
 - [ ] Error handling and retries
@@ -52,6 +53,7 @@
 ### Fly execution foundation
 - persist machine/task state beyond in-memory execution maps
 - harden worker callback retry telemetry and timeout visibility
+- add production allowlist guardrail for webhook-triggered runs (`cloudboy-jh` first)
 
 ### GitHub webhook integration
 - enqueue tasks and kick off Fly Machines directly from webhook trigger
