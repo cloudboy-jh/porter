@@ -50,15 +50,12 @@
 
 ## Next Focus
 
-### Fly execution foundation
-- persist machine/task state beyond in-memory execution maps
-- harden worker callback retry telemetry and timeout visibility
-- add production allowlist guardrail for webhook-triggered runs (`cloudboy-jh` first)
+### UI/UX refinement sprint
+- continue reviewing every web app surface for visual and interaction consistency
+- refine typography, spacing, color tokens, and component behavior across light/dark themes
+- tighten review feed and diff viewer polish until they match Porter design intent
 
-### GitHub webhook integration
-- enqueue tasks and kick off Fly Machines directly from webhook trigger
-- align webhook parsing/flags with dashboard task creation path
-
-### UI readiness cues
-- surface callback failures and PR creation errors in task detail
-- maintain feed density and responsiveness as task states expand
+### After UI/UX pass
+- run final verification sweep for UI/UX regressions
+- commit finalized UI/UX refinement changes
+- push branch updates to remote repository
