@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { GithubLogo, Robot, Stack } from 'phosphor-svelte';
+	import { GithubLogo, Robot, Stack, Gear } from 'phosphor-svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 	import { onMount } from 'svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -138,7 +139,7 @@
 	];
 
 	const headerLabelClass =
-		'text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground';
+		'text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground';
 
 	onMount(() => {
 		loadAgents(true);
@@ -361,17 +362,16 @@
 </script>
 
 
-<div class="w-full space-y-6">
+<div class="w-full max-w-[1200px] mx-auto space-y-6">
 	{#if !isConnected}
-		<div class="rounded-2xl border border-border/60 bg-card/70 p-10 text-center">
-			<p class="text-sm font-semibold text-foreground">Connect GitHub to unlock settings</p>
-			<p class="mt-2 text-xs text-muted-foreground">
-				Authorize Porter to configure agents, repos, and runtime preferences.
-			</p>
-			<div class="mt-4 flex justify-center">
-				<Button size="lg" href="/api/auth/github">Connect GitHub</Button>
-			</div>
-		</div>
+		<EmptyState 
+			icon={GithubLogo}
+			title="Connect GitHub to unlock settings"
+			description="Authorize Porter to configure agents, repos, and runtime preferences."
+			actionLabel="Connect GitHub"
+			actionHref="/api/auth/github"
+			variant="hero"
+		/>
 	{/if}
 	{#if isConnected}
 		<div class="overflow-y-auto lg:h-[calc(100vh-190px)] lg:overflow-hidden">

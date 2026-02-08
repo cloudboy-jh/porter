@@ -360,6 +360,8 @@ type GitHubPull = {
 
 type GitHubPullFile = {
 	filename: string;
+	status?: 'added' | 'modified' | 'removed' | 'renamed' | string;
+	previous_filename?: string;
 	additions: number;
 	deletions: number;
 };

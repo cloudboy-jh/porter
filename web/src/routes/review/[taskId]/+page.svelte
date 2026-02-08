@@ -1,12 +1,11 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { ArrowLeft, ArrowRight, Check } from 'phosphor-svelte';
+	import { Check } from 'phosphor-svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import GitDiffBadge from '$lib/components/GitDiffBadge.svelte';
-	import DiffsEmbed from '$lib/components/DiffsEmbed.svelte';
+	import DiffViewer from '$lib/components/DiffViewer.svelte';
 	import type { PageData } from './$types';
 
 	let { data } = $props<{ data: PageData }>();
@@ -14,6 +13,7 @@
 	let isMerging = $state(false);
 	let mergeError = $state('');
 	let mergeSuccess = $state(false);
+	let diffLayout = $state<'split' | 'stacked'>('split');
 
 	const handleMerge = async () => {
 		if (isMerging) return;
@@ -39,8 +39,12 @@
 		}
 	};
 
-	const goToPage = (page: number) => {
-		goto(`/review/${encodeURIComponent(data.task.id)}?page=${page}`);
+	const getAnchorId = (filename: string) => `diff-${filename.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
+	const scrollToFile = (filename: string) => {
+		const id = getAnchorId(filename);
+		if (typeof document === 'undefined') return;
+		document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 	};
 </script>
 
@@ -94,28 +98,62 @@
 
 	<Card.Root class="border border-border/60 bg-card/70">
 		<Card.Header class="pb-2">
-			<Card.Title class="text-sm">Code Changes</Card.Title>
+			<div class="flex items-center justify-between gap-3">
+				<Card.Title class="text-sm">Code Changes</Card.Title>
+				<div class="flex items-center gap-2">
+					<Button
+						variant={diffLayout === 'split' ? 'secondary' : 'ghost'}
+						size="sm"
+						onclick={() => (diffLayout = 'split')}
+					>
+						Split
+					</Button>
+					<Button
+						variant={diffLayout === 'stacked' ? 'secondary' : 'ghost'}
+						size="sm"
+						onclick={() => (diffLayout = 'stacked')}
+					>
+						Stacked
+					</Button>
+				</div>
+			</div>
 		</Card.Header>
 		<Card.Content class="space-y-4 pt-0">
-			{#each data.diffUrls as diff}
-				<DiffsEmbed filename={diff.filename} beforeUrl={diff.beforeUrl} afterUrl={diff.afterUrl} />
+			{#if data.files.length === 0}
+				<p class="text-sm text-muted-foreground">No file changes found for this pull request.</p>
+			{:else}
+				<div class="rounded-lg border border-border/60 bg-background/70 p-3">
+					<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Files</p>
+					<div class="mt-3 grid gap-2 sm:grid-cols-2">
+						{#each data.files as file}
+							<button
+								type="button"
+								class="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background px-3 py-2 text-left text-xs hover:border-border"
+								onclick={() => scrollToFile(file.filename)}
+							>
+								<span class="truncate font-mono text-foreground/85">{file.filename}</span>
+								<div class="flex items-center gap-2">
+									<GitDiffBadge variant="add" value={file.additions} />
+									<GitDiffBadge variant="remove" value={file.deletions} />
+								</div>
+							</button>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
+			{#each data.files as file}
+				<div id={getAnchorId(file.filename)} class="scroll-mt-24">
+					<DiffViewer
+						filename={file.filename}
+						before={file.beforeContent}
+						after={file.afterContent}
+						language={file.language}
+						status={file.status}
+						layout={diffLayout}
+					/>
+				</div>
 			{/each}
-			<div class="flex items-center justify-between">
-				<Button variant="secondary" size="sm" disabled={data.page <= 1} onclick={() => goToPage(data.page - 1)}>
-					<ArrowLeft size={14} weight="bold" />
-					Previous
-				</Button>
-				<p class="text-xs text-muted-foreground">Page {data.page} of {data.totalPages}</p>
-				<Button
-					variant="secondary"
-					size="sm"
-					disabled={data.page >= data.totalPages}
-					onclick={() => goToPage(data.page + 1)}
-				>
-					Next
-					<ArrowRight size={14} weight="bold" />
-				</Button>
-			</div>
 		</Card.Content>
 	</Card.Root>
 

@@ -13,7 +13,49 @@ import {
 import { clearSession } from '$lib/server/auth';
 import type { PageServerLoad } from './$types';
 
-const PER_PAGE = 5;
+const PER_PAGE = 100;
+
+const parsePRNumberFromUrl = (prUrl?: string) => {
+	if (!prUrl) return null;
+	const match = prUrl.match(/\/pull\/(\d+)(?:$|[/?#])/);
+	if (!match) return null;
+	const value = Number.parseInt(match[1], 10);
+	return Number.isFinite(value) ? value : null;
+};
+
+const inferLanguage = (filename: string) => {
+	const name = filename.toLowerCase();
+	if (name.endsWith('.ts')) return 'typescript';
+	if (name.endsWith('.tsx')) return 'tsx';
+	if (name.endsWith('.js')) return 'javascript';
+	if (name.endsWith('.jsx')) return 'jsx';
+	if (name.endsWith('.svelte')) return 'svelte';
+	if (name.endsWith('.json')) return 'json';
+	if (name.endsWith('.css')) return 'css';
+	if (name.endsWith('.md')) return 'markdown';
+	if (name.endsWith('.py')) return 'python';
+	if (name.endsWith('.go')) return 'go';
+	if (name.endsWith('.rs')) return 'rust';
+	if (name.endsWith('.yml') || name.endsWith('.yaml')) return 'yaml';
+	if (name.endsWith('dockerfile')) return 'dockerfile';
+	return 'text';
+};
+
+const fetchRawContent = async (
+	token: string,
+	owner: string,
+	repo: string,
+	sha: string,
+	path: string
+) => {
+	const response = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${sha}/${path}`, {
+		headers: {
+			Authorization: `Bearer ${token}`
+		}
+	});
+	if (!response.ok) return null;
+	return response.text();
+};
 
 const findTaskById = async (token: string, taskId: string) => {
 	const { repositories } = await listInstallationRepos(token);
@@ -33,7 +75,7 @@ const findTaskById = async (token: string, taskId: string) => {
 	return null;
 };
 
-export const load: PageServerLoad = async ({ params, url, locals, cookies }) => {
+export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 	const session = locals.session;
 	if (!session) {
 		throw redirect(302, '/auth');
@@ -42,26 +84,57 @@ export const load: PageServerLoad = async ({ params, url, locals, cookies }) => 
 	try {
 		const taskId = params.taskId;
 		const task = await findTaskById(session.token, taskId);
-		if (!task || task.status !== 'success' || !task.prUrl || !task.prNumber) {
+		if (!task || task.status !== 'success' || !task.prUrl) {
 			throw redirect(302, '/review');
 		}
 
 		const owner = task.repoOwner;
 		const repo = task.repoName;
-		const prNumber = task.prNumber;
-		const page = Number.parseInt(url.searchParams.get('page') ?? '1', 10);
+		const prNumber = task.prNumber ?? parsePRNumberFromUrl(task.prUrl);
+		if (!prNumber) {
+			throw redirect(302, '/review');
+		}
 
-		const [pr, repoInfo, { files, totalPages }] = await Promise.all([
+		const [pr, repoInfo, { files }] = await Promise.all([
 			fetchPullRequest(session.token, owner, repo, prNumber),
 			fetchRepo(session.token, owner, repo),
-			fetchPullRequestFiles(session.token, owner, repo, prNumber, page, PER_PAGE)
+			fetchPullRequestFiles(session.token, owner, repo, prNumber, 1, PER_PAGE)
 		]);
 
-		const diffUrls = files.map((file) => ({
-			filename: file.filename,
-			beforeUrl: `https://raw.githubusercontent.com/${owner}/${repo}/${pr.base.sha}/${file.filename}`,
-			afterUrl: `https://raw.githubusercontent.com/${owner}/${repo}/${pr.head.sha}/${file.filename}`
-		}));
+		const diffFiles = await Promise.all(
+			files.map(async (file) => {
+				const status = file.status ?? 'modified';
+				const beforePath = file.previous_filename ?? file.filename;
+
+				const beforeContent =
+					status === 'added'
+						? null
+						: await fetchRawContent(session.token, owner, repo, pr.base.sha, beforePath);
+
+				const afterContent =
+					status === 'removed'
+						? null
+						: await fetchRawContent(session.token, owner, repo, pr.head.sha, file.filename);
+
+				return {
+					filename: file.filename,
+					status,
+					additions: file.additions,
+					deletions: file.deletions,
+					language: inferLanguage(file.filename),
+					beforeContent,
+					afterContent
+				};
+			})
+		);
+
+		const diffStats = diffFiles.reduce(
+			(acc, file) => ({
+				additions: acc.additions + file.additions,
+				deletions: acc.deletions + file.deletions
+			}),
+			{ additions: 0, deletions: 0 }
+		);
 
 		const canMerge = Boolean(repoInfo.permissions?.push || repoInfo.permissions?.admin);
 
@@ -70,14 +143,12 @@ export const load: PageServerLoad = async ({ params, url, locals, cookies }) => 
 			pr: {
 				number: pr.number,
 				htmlUrl: pr.html_url,
-				additions: pr.additions,
-				deletions: pr.deletions,
+				additions: diffStats.additions,
+				deletions: diffStats.deletions,
 				mergeable: pr.mergeable,
 				mergeableState: pr.mergeable_state ?? null
 			},
-			diffUrls,
-			page,
-			totalPages,
+			files: diffFiles,
 			canMerge
 		};
 	} catch (error) {

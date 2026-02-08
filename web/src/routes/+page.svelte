@@ -3,7 +3,9 @@
 	import AgentSettingsDialog from '$lib/components/AgentSettingsDialog.svelte';
 	import CommandBar from '$lib/components/CommandBar.svelte';
 	import TaskFeed from '$lib/components/TaskFeed.svelte';
-	import { ArrowRight, GitBranch, Key, Plus, RocketLaunch, Sliders, Sparkle } from 'phosphor-svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
+	import { GithubLogo } from 'phosphor-svelte';
+	import { ArrowRight, GitBranch, Key, ListChecks, Plus, RocketLaunch, Sliders, Sparkle } from 'phosphor-svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import type { PageData } from './$types';
@@ -287,17 +289,16 @@
 </script>
 
 	<div class="flex min-h-full items-start justify-center py-4">
-		<div class="w-full max-w-[1240px] space-y-4">
+		<div class="w-full max-w-[1200px] space-y-4">
 			{#if !isConnected}
-				<div class="rounded-2xl border border-border/60 bg-card/70 p-10 text-center">
-					<p class="text-sm font-semibold text-foreground">Connect GitHub to see live tasks</p>
-					<p class="mt-2 text-xs text-muted-foreground">
-						Authorize Porter to start dispatching tasks and opening PRs.
-					</p>
-					<div class="mt-4 flex justify-center">
-						<Button size="lg" href="/api/auth/github">Connect GitHub</Button>
-					</div>
-				</div>
+				<EmptyState 
+					icon={GithubLogo}
+					title="Connect GitHub to see live tasks"
+					description="Authorize Porter to start dispatching tasks and opening PRs."
+					actionLabel="Connect GitHub"
+					actionHref="/api/auth/github"
+					variant="hero"
+				/>
 			{:else}
 				{#if !hasReadyAgents}
 					<div class="mx-auto max-w-[1040px] py-1 text-center">
@@ -317,7 +318,7 @@
 							<div class="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(251,146,60,0.12),transparent_55%)]"></div>
 						</div>
 						<Card.Content class="relative mx-auto flex max-w-2xl flex-col items-center gap-6 p-10 text-center">
-							<div class="flex flex-wrap items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+							<div class="flex flex-wrap items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
 								<span class="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-primary">
 									<Sparkle size={14} weight="bold" />
 									First run
@@ -361,7 +362,7 @@
 								</div>
 							</div>
 							{#if tasksError}
-								<div class="inline-flex items-center gap-2 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-destructive">
+								<div class="inline-flex items-center gap-2 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-destructive">
 									{tasksError}
 								</div>
 							{/if}
@@ -376,6 +377,7 @@
 				{:else}
 					<TaskFeed
 						title="Tasks"
+						headerIcon={ListChecks}
 						tasks={filteredTasks}
 						onToggleExpanded={toggleExpanded}
 						onStop={handleStop}

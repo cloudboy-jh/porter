@@ -14,7 +14,9 @@
 		Percent,
 		Robot,
 		WarningCircle,
-		X
+		X,
+		ClockCounterClockwise,
+		GithubLogo
 	} from 'phosphor-svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -22,6 +24,8 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import DateFilterButton from '$lib/components/DateFilterButton.svelte';
 	import GitFilterButton from '$lib/components/GitFilterButton.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 	import type { PageData } from './$types';
 	import type { Task } from '$lib/server/types';
 
@@ -430,21 +434,20 @@
 	const hasMore = $derived(showingCount < totalTasks);
 </script>
 
-<div class="space-y-8">
+<div class="w-full max-w-[1200px] mx-auto space-y-8">
 	{#if !isConnected}
-		<div class="rounded-2xl border border-border/60 bg-card/70 p-10 text-center">
-			<p class="text-sm font-semibold text-foreground">Connect GitHub to view history</p>
-			<p class="mt-2 text-xs text-muted-foreground">
-				Authorize Porter to record your completed tasks and PRs.
-			</p>
-			<div class="mt-4 flex justify-center">
-				<Button size="lg" href="/api/auth/github">Connect GitHub</Button>
-			</div>
-		</div>
+		<EmptyState 
+			icon={GithubLogo}
+			title="Connect GitHub to view history"
+			description="Authorize Porter to record your completed tasks and PRs."
+			actionLabel="Connect GitHub"
+			actionHref="/api/auth/github"
+			variant="hero"
+		/>
 	{:else}
 		<section class="flex flex-col items-center justify-center gap-2">
 			<div class="flex w-full max-w-4xl flex-wrap items-center justify-center gap-2 rounded-2xl border border-border/60 bg-card/70 px-4 py-2 shadow-[0_10px_30px_-24px_rgba(15,15,15,0.5)] transition focus-within:border-border/90 focus-within:bg-card">
-				<span class="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+				<span class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
 					Search
 				</span>
 				<MagnifyingGlass size={16} weight="bold" class="text-muted-foreground" />
@@ -532,7 +535,7 @@
 				<Card.Content class="flex items-center justify-between gap-4 px-4 py-3">
 					<div class="space-y-1">
 						<div class="text-xl font-semibold text-foreground">{stat.value}</div>
-						<div class="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+						<div class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
 							{stat.label}
 						</div>
 					</div>
@@ -549,9 +552,7 @@
 	<section class="space-y-6">
 		<section class="rounded-2xl border border-border/60 bg-card/70 p-4 shadow-lg backdrop-blur">
 			<div class="flex items-center justify-between gap-3">
-				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-					History Table
-				</p>
+				<PageHeader icon={ClockCounterClockwise} label="History" title="Task History" />
 				<Button variant="secondary" size="icon" type="button" onclick={handleExport}>
 					<DownloadSimple size={16} weight="bold" />
 					<span class="sr-only">Download CSV</span>
@@ -589,12 +590,14 @@
 						</Card.Root>
 					{/each}
 				</div>
-			{:else if historyTasks.length === 0}
-				<div class="flex flex-col items-center gap-2 py-12 text-center">
-					<p class="text-sm font-medium">No completed tasks found</p>
-					<p class="text-xs text-muted-foreground">Try adjusting your filters to widen the results.</p>
-					<Button variant="secondary" size="sm" onclick={resetFilters}>Clear filters</Button>
-				</div>
+		{:else if historyTasks.length === 0}
+				<EmptyState 
+					title="No completed tasks found" 
+					description="Try adjusting your filters to widen the results."
+					actionLabel="Clear filters"
+					actionOnClick={resetFilters}
+					variant="default"
+				/>
 			{:else}
 				<div class="mt-4 space-y-3">
 					{#each historyTasks as task}

@@ -12,6 +12,14 @@ import {
 import { clearSession } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
+const parsePRNumberFromUrl = (prUrl?: string) => {
+	if (!prUrl) return null;
+	const match = prUrl.match(/\/pull\/(\d+)(?:$|[/?#])/);
+	if (!match) return null;
+	const value = Number.parseInt(match[1], 10);
+	return Number.isFinite(value) ? value : null;
+};
+
 const findTaskById = async (token: string, taskId: string) => {
 	const { repositories } = await listInstallationRepos(token);
 	for (const repo of repositories) {
@@ -42,8 +50,13 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 			return json({ error: 'taskId is required' }, { status: 400 });
 		}
 		const task = await findTaskById(session.token, payload.taskId);
-		if (!task || !task.prNumber || !task.prUrl) {
+		if (!task || !task.prUrl) {
 			return json({ error: 'task not reviewable' }, { status: 400 });
+		}
+
+		const prNumber = task.prNumber ?? parsePRNumberFromUrl(task.prUrl);
+		if (!prNumber) {
+			return json({ error: 'pull request number missing' }, { status: 400 });
 		}
 
 		const repoInfo = await fetchRepo(session.token, task.repoOwner, task.repoName);
@@ -56,7 +69,7 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 			session.token,
 			task.repoOwner,
 			task.repoName,
-			task.prNumber
+			prNumber
 		);
 
 		if (!mergeResult.merged) {

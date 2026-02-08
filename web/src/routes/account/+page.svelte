@@ -70,7 +70,7 @@
 	});
 </script>
 
-<div class="space-y-6">
+<div class="w-full max-w-[1200px] mx-auto space-y-6">
 	<section class="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
 		<Card.Root>
 			<Card.Header class="pb-3">
@@ -99,11 +99,11 @@
 				</div>
 				<div class="grid gap-3 sm:grid-cols-2">
 					<div class="rounded-lg border border-border/60 bg-background/70 p-3">
-						<p class="text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground">Role</p>
+						<p class="text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground">Role</p>
 						<p class="text-sm font-medium">{user.role}</p>
 					</div>
 					<div class="rounded-lg border border-border/60 bg-background/70 p-3">
-						<p class="text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground">Workspace</p>
+						<p class="text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground">Workspace</p>
 						<p class="text-sm font-medium">{workspace.name}</p>
 					</div>
 				</div>
@@ -151,14 +151,14 @@
 				</div>
 				<div class="grid gap-3">
 				<div class="rounded-lg border border-border/60 bg-background/70 p-3">
-					<p class="text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground">Scopes</p>
+					<p class="text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground">Scopes</p>
 					<p class="text-sm">Issues, PRs, Repository contents, Organizations</p>
 					<p class="mt-1 text-xs text-muted-foreground">
 						{github.repoCount} repos • {github.orgCount} orgs • {github.installationCount} installs
 					</p>
 				</div>
 					<div class="rounded-lg border border-border/60 bg-background/70 p-3">
-						<p class="text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground">Audit</p>
+						<p class="text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground">Audit</p>
 						<p class="text-sm">Last authorization review 2 days ago</p>
 					</div>
 				</div>
@@ -185,7 +185,7 @@
 					<p class="text-xs text-muted-foreground">{workspace.seats}</p>
 				</div>
 				<div class="rounded-lg border border-border/60 bg-background/70 p-3">
-					<p class="text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground">Billing Owner</p>
+					<p class="text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground">Billing Owner</p>
 					<p class="text-sm">Porter Labs Finance</p>
 				</div>
 			</Card.Content>

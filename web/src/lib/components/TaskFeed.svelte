@@ -5,12 +5,15 @@
 		Folder,
 		GithubLogo,
 		GitBranch,
-		Square
+		Square,
+		ListChecks
 	} from 'phosphor-svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import GitDiffBadge from '$lib/components/GitDiffBadge.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 	import type { Task } from '$lib/types/task';
 
 	type TaskWithLinks = Task & { repoOwner?: string; issueUrl?: string };
@@ -23,6 +26,10 @@
 	export let highlightStatus: Task['status'] | null = null;
 	export let primaryActionLabel = 'View';
 	export let showStatusActions = true;
+	export let headerIcon: typeof ListChecks | null = null;
+	export let headerLabel: string | null = null;
+	export let emptyTitle = 'No active tasks yet';
+	export let emptyDescription = 'Start by dispatching a task from the command bar.';
 
 	const agentDomains: Record<string, string> = {
 		opencode: 'opencode.ai',
@@ -110,9 +117,9 @@
 		showStatusActions && (task.status === 'running' || task.status === 'queued');
 </script>
 
-<div class="mx-auto w-full max-w-[1160px] rounded-2xl border border-border/60 bg-background/80">
+<div class="mx-auto w-full max-w-[1200px] rounded-2xl border border-border/60 bg-card/70">
 	<div class="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 px-4 py-3 sm:px-5">
-		<h2 class="text-lg font-semibold text-foreground">{title}</h2>
+		<PageHeader icon={headerIcon ?? undefined} label={headerLabel} title={title} titleClass="font-mono" />
 		<div class="flex flex-wrap items-center gap-2">
 			<slot name="header" />
 		</div>
@@ -120,12 +127,11 @@
 	<div class="max-h-[74vh] overflow-y-auto p-4 hide-scrollbar sm:p-5">
 		<div class="relative">
 			{#if tasks.length === 0}
-				<div class="rounded-2xl border border-border/60 bg-background/70 p-10 text-center">
-					<p class="text-sm font-semibold text-foreground">No active tasks yet</p>
-					<p class="mt-2 text-xs text-muted-foreground">
-						Start by dispatching a task from the command bar.
-					</p>
-				</div>
+				<EmptyState 
+					title={emptyTitle}
+					description={emptyDescription}
+					variant="simple"
+				/>
 			{:else}
 				<div class="pointer-events-none absolute left-4 top-0 h-full w-0.5 bg-gradient-to-b from-border/80 via-border/50 to-transparent"></div>
 				<div class="space-y-4 sm:space-y-5">
@@ -140,7 +146,7 @@
 								<span class="h-1.5 w-1.5 rounded-[3px] bg-current/70"></span>
 							</div>
 							<Card.Root
-								class={`group task-card task-card--${task.status} rounded-2xl border border-border/60 bg-background/80 ${task.expanded ? 'is-expanded' : ''}`}
+								class={`group task-card task-card--${task.status} rounded-2xl border border-border/60 bg-card/75 ${task.expanded ? 'is-expanded' : ''}`}
 								style={`--task-progress: ${task.progress}%`}
 								role="button"
 								tabindex={0}

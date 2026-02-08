@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { CheckSquareOffset } from 'phosphor-svelte';
 	import TaskFeed from '$lib/components/TaskFeed.svelte';
-	import { mockTasks } from '$lib/mock/tasks';
+	import { mockReviewTasks } from '$lib/test/mocks/tasks';
 	import type { Task } from '$lib/types/task';
 	import type { PageData } from './$types';
 
@@ -51,26 +52,25 @@
 		}))
 	);
 
-	const mockReviewTasks = $derived(
-		mockTasks
-			.filter((task) => task.status === 'success' && Boolean(task.prUrl))
-			.map((task) => ({
-				...task,
-				technicalSummary: task.technicalSummary,
-				expanded: false
-			}))
-	);
+	const showMockReviewData = true;
 
-	const tasks = $derived(liveTasks.length ? liveTasks : mockReviewTasks);
+	const tasks = $derived((showMockReviewData ? [...mockReviewTasks, ...liveTasks] : liveTasks));
 
 	const handleReview = (id: string) => {
+		if (id.startsWith('mock-review-')) {
+			goto('/review/mock');
+			return;
+		}
 		goto(`/review/${encodeURIComponent(id)}`);
 	};
 </script>
 
-<div class="flex min-h-full items-start justify-center py-4">
+<div class="w-full max-w-[1200px] mx-auto flex min-h-full items-start justify-center py-4">
 	<TaskFeed
 		title="Review"
+		headerIcon={CheckSquareOffset}
+		emptyTitle="No pull requests ready for review"
+		emptyDescription="Completed Porter tasks with PRs will show up here."
 		tasks={tasks}
 		onToggleExpanded={handleReview}
 		highlightStatus="success"
