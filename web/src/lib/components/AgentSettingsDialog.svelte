@@ -7,9 +7,11 @@
 	Purpose: Quick access to agent config without navigating to /settings
 -->
 <script lang="ts">
+	import { SlidersHorizontal } from 'phosphor-svelte';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import AgentSettings from '$lib/components/AgentSettings.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 	import type { AgentConfig } from '$lib/types/agent';
 
 	let {
@@ -49,15 +51,16 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="sm:max-w-3xl max-h-[85vh] flex flex-col">
-		<Dialog.Header class="flex-shrink-0">
-			<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-				Agent Controls
-			</p>
-			<Dialog.Title>Quick Agent Configuration</Dialog.Title>
-			<Dialog.Description>
-				Toggle agents, set priority, and add prompt guidance.
-			</Dialog.Description>
+	<Dialog.Content class="flex max-h-[88vh] flex-col sm:max-w-3xl">
+		<Dialog.Header class="flex-shrink-0 border-b border-border/40 pb-4">
+			<PageHeader
+				icon={SlidersHorizontal}
+				label="Agent Controls"
+				title="Quick Agent Configuration"
+				description="Toggle agents, set defaults, and tune prompt guidance."
+			/>
+			<Dialog.Title class="sr-only">Quick Agent Configuration</Dialog.Title>
+			<Dialog.Description class="sr-only">Manage agent defaults and status.</Dialog.Description>
 		</Dialog.Header>
 
 		<div class="flex-1 overflow-y-auto py-4">
@@ -70,9 +73,10 @@
 			/>
 		</div>
 
-		<Dialog.Footer class="flex-shrink-0">
-			<Button onclick={() => handleAgentSave(agents)}>Save Changes</Button>
+		<Dialog.Footer class="flex-shrink-0 border-t border-border/40 pt-4">
 			<Button variant="ghost" onclick={() => (open = false)}>Close</Button>
+			<Button variant="secondary" type="button" onclick={handleAgentRefresh}>Refresh</Button>
+			<Button onclick={() => handleAgentSave(agents)}>Save Changes</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

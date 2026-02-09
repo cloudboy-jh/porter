@@ -26,6 +26,7 @@
 	export let highlightStatus: Task['status'] | null = null;
 	export let primaryActionLabel = 'View';
 	export let showStatusActions = true;
+	export let layout: 'timeline' | 'stacked' = 'timeline';
 	export let headerIcon: typeof ListChecks | null = null;
 	export let headerLabel: string | null = null;
 	export let emptyTitle = 'No active tasks yet';
@@ -133,18 +134,22 @@
 					variant="simple"
 				/>
 			{:else}
-				<div class="pointer-events-none absolute left-4 top-0 h-full w-0.5 bg-gradient-to-b from-border/80 via-border/50 to-transparent"></div>
+				{#if layout === 'timeline'}
+					<div class="pointer-events-none absolute left-4 top-0 h-full w-0.5 bg-gradient-to-b from-border/80 via-border/50 to-transparent"></div>
+				{/if}
 				<div class="space-y-4 sm:space-y-5">
 					{#each tasks as task}
-						<div class="relative pl-8">
-							{#if isHighlighted(task)}
+						<div class={`relative ${layout === 'timeline' ? 'pl-8' : ''}`}>
+							{#if layout === 'timeline' && isHighlighted(task)}
 								<span class={`pointer-events-none absolute left-4 top-2 h-[calc(100%-0.75rem)] w-0.5 ${lineGlow[task.status]}`}></span>
 							{/if}
-							<div
-								class={`absolute left-2 top-5 flex h-4 w-4 items-center justify-center rounded-[6px] border ${nodeStyles[task.status]} ${isHighlighted(task) ? highlightRing[task.status] : ''}`}
-							>
-								<span class="h-1.5 w-1.5 rounded-[3px] bg-current/70"></span>
-							</div>
+							{#if layout === 'timeline'}
+								<div
+									class={`absolute left-2 top-5 flex h-4 w-4 items-center justify-center rounded-[6px] border ${nodeStyles[task.status]} ${isHighlighted(task) ? highlightRing[task.status] : ''}`}
+								>
+									<span class="h-1.5 w-1.5 rounded-[3px] bg-current/70"></span>
+								</div>
+							{/if}
 							<Card.Root
 								class={`group task-card task-card--${task.status} rounded-2xl border border-border/60 bg-card/75 ${task.expanded ? 'is-expanded' : ''}`}
 								style={`--task-progress: ${task.progress}%`}

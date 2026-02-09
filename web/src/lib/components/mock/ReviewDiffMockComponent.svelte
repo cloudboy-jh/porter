@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { GitDiff } from 'phosphor-svelte';
 	import DiffViewer from '$lib/components/DiffViewer.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 
@@ -24,7 +26,7 @@
 <Card.Root class="border border-border/60 bg-card/70">
 	<Card.Header class="pb-2">
 		<div class="flex items-center justify-between gap-3">
-			<Card.Title class="text-sm">Review Diff Mock</Card.Title>
+			<PageHeader icon={GitDiff} label="Review" title="Code Changes" description="Mock review diff" />
 			<div class="flex items-center gap-2">
 				<Button variant={layout === 'split' ? 'secondary' : 'ghost'} size="sm" onclick={() => (layout = 'split')}>
 					Split

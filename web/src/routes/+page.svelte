@@ -286,9 +286,10 @@
 	);
 
 	const highlightStatus = $derived(activeFilter === 'All' ? null : filterMap[activeFilter]);
+	const isCompactTaskFeed = $derived(filteredTasks.length >= 1 && filteredTasks.length <= 3);
 </script>
 
-	<div class="flex min-h-full items-start justify-center py-4">
+	<div class={`flex min-h-full justify-center py-4 ${isCompactTaskFeed ? 'items-center' : 'items-start'}`}>
 		<div class="w-full max-w-[1200px] space-y-4">
 			{#if !isConnected}
 				<EmptyState 
@@ -301,9 +302,10 @@
 				/>
 			{:else}
 				{#if !hasReadyAgents}
-					<div class="mx-auto max-w-[1040px] py-1 text-center">
-						<p class="text-xs text-muted-foreground">
-							<a href="/settings" class="text-primary hover:underline">Add keys and enable an agent</a> to dispatch tasks
+					<div class="mx-auto w-full max-w-[720px] rounded-xl border border-border/60 bg-card/60 px-5 py-3 text-center">
+						<p class="text-sm text-muted-foreground">
+							Task dispatch is currently unavailable.
+							<a href="/settings" class="ml-1 font-semibold text-primary hover:underline">Configure provider keys and enable at least one agent in Settings.</a>
 						</p>
 					</div>
 				{/if}

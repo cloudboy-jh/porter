@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { GithubLogo, Robot, Stack, Gear } from 'phosphor-svelte';
+	import { GithubLogo, Robot, Stack, Gear, Key, GitBranch } from 'phosphor-svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import { onMount } from 'svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -8,6 +8,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import * as Sheet from '$lib/components/ui/sheet/index.js';
 	import AgentSettingsDialog from '$lib/components/AgentSettingsDialog.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 	import type { PageData } from './$types';
 	import type { AgentConfig } from '$lib/types/agent';
 
@@ -583,12 +584,15 @@
 
 		<Sheet.Root bind:open={showCredentials}>
 			<Sheet.Content side="right" class="sm:max-w-xl">
-				<Sheet.Header class="px-6 pt-6">
-					<p class={headerLabelClass}>Credentials</p>
-				<Sheet.Title>Fly + Provider Keys</Sheet.Title>
-					<Sheet.Description>
-						Stored in your private GitHub Gist and used for cloud execution.
-					</Sheet.Description>
+				<Sheet.Header class="border-b border-border/40 px-6 pb-4 pt-6">
+					<PageHeader
+						icon={Key}
+						label="Credentials"
+						title="Fly + Provider Keys"
+						description="Stored in your private GitHub Gist and used for cloud execution."
+					/>
+					<Sheet.Title class="sr-only">Fly + Provider Keys</Sheet.Title>
+					<Sheet.Description class="sr-only">Manage runtime credentials and provider keys.</Sheet.Description>
 				</Sheet.Header>
 				<div class="flex-1 overflow-y-auto px-6 pb-6 pt-4 space-y-6">
 					<div class="rounded-xl border border-border/60 bg-background/80 p-4 space-y-3">
@@ -672,14 +676,14 @@
 						{/if}
 					</div>
 				</div>
-				<Sheet.Footer class="px-6 pb-6">
+				<Sheet.Footer class="border-t border-border/40 px-6 pb-6 pt-4">
 					<div class="flex flex-wrap justify-end gap-2">
 						<Button type="button" variant="outline" onclick={() => validateFly(true)} disabled={flyValidating}>
 							{flyValidating ? 'Validating...' : 'Validate Fly'}
 						</Button>
-					<Button type="button" variant="secondary" onclick={saveFly} disabled={flySaving}>
-						{flySaving ? 'Saving...' : 'Save Fly settings'}
-					</Button>
+						<Button type="button" variant="secondary" onclick={saveFly} disabled={flySaving}>
+							{flySaving ? 'Saving...' : 'Save Fly settings'}
+						</Button>
 						<Button type="button" onclick={saveCredentials} disabled={credentialSaving}>
 							{credentialSaving ? 'Saving...' : 'Save Provider Keys'}
 						</Button>
@@ -690,12 +694,15 @@
 
 		<Sheet.Root bind:open={showRepos}>
 			<Sheet.Content side="right" class="sm:max-w-xl">
-				<Sheet.Header class="px-6 pt-6">
-					<p class={headerLabelClass}>Repositories</p>
-					<Sheet.Title>Repository Scope</Sheet.Title>
-					<Sheet.Description>
-						Select which repositories Porter should monitor.
-					</Sheet.Description>
+				<Sheet.Header class="border-b border-border/40 px-6 pb-4 pt-6">
+					<PageHeader
+						icon={GitBranch}
+						label="Repositories"
+						title="Repository Scope"
+						description="Select which repositories Porter should monitor."
+					/>
+					<Sheet.Title class="sr-only">Repository Scope</Sheet.Title>
+					<Sheet.Description class="sr-only">Manage repository selection scope.</Sheet.Description>
 				</Sheet.Header>
 				<div class="flex-1 overflow-y-auto px-6 pb-6 pt-4 space-y-4">
 					<Input placeholder="Search repositories" class="h-10" bind:value={repoSearch} />
@@ -733,7 +740,7 @@
 						</div>
 					{/if}
 				</div>
-				<Sheet.Footer class="px-6 pb-6">
+				<Sheet.Footer class="border-t border-border/40 px-6 pb-6 pt-4">
 					<div class="flex justify-end">
 						<Button type="button" onclick={saveRepos} disabled={repoSaving}>
 							{repoSaving ? 'Saving...' : 'Save Repositories'}

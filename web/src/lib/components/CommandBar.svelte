@@ -7,12 +7,14 @@
 		Check,
 		Clock,
 		GitBranch,
+		PaperPlaneTilt,
 		Sparkle
 	} from 'phosphor-svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import type { AgentConfig, ParsedCommand, GitHubIssue } from '$lib/types/agent';
@@ -240,21 +242,20 @@
 
 <Dialog.Root bind:open>
 	<Dialog.Content class="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-		<Dialog.Header class="space-y-2">
+		<Dialog.Header class="space-y-2 border-b border-border/40 pb-4">
 			<div class="flex items-start justify-between gap-4">
-				<div>
-					<p class="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-						Dispatch
-					</p>
-					<Dialog.Title class="text-2xl font-semibold text-foreground">Run a Porter task</Dialog.Title>
-				</div>
+				<PageHeader
+					icon={PaperPlaneTilt}
+					label="Dispatch"
+					title="Run a Porter Task"
+					description="Select an agent, repository, and issue to dispatch a new task."
+				/>
 				<Badge variant="secondary" class="text-[0.65rem] uppercase tracking-[0.22em]">
 					New task
 				</Badge>
 			</div>
-			<Dialog.Description class="text-sm text-muted-foreground">
-				Select an agent, repository, and issue to dispatch a new task.
-			</Dialog.Description>
+			<Dialog.Title class="sr-only">Run a Porter Task</Dialog.Title>
+			<Dialog.Description class="sr-only">Dispatch task configuration dialog.</Dialog.Description>
 		</Dialog.Header>
 
 		<div class="space-y-6 py-4">
@@ -262,9 +263,9 @@
 				<div class="flex items-center justify-between gap-4">
 					<div>
 						<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-							Agents
+							Step 1
 						</p>
-						<p class="text-sm font-semibold text-foreground">Choose who runs the task</p>
+						<p class="text-sm font-semibold text-foreground">Choose an agent</p>
 					</div>
 				<Badge variant="outline" class="text-[0.65rem] uppercase tracking-[0.18em]">
 					{readyAgents.length} ready
@@ -328,6 +329,10 @@
 		</section>
 
 			<section class="grid gap-4 rounded-2xl border border-border/60 bg-background/70 p-5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+				<div class="sm:col-span-2">
+					<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Step 2</p>
+					<p class="mt-1 text-sm font-semibold text-foreground">Pick repository and issue</p>
+				</div>
 				<div class="space-y-2">
 					<label class="text-sm font-medium">Repository</label>
 					<DropdownMenu.Root>
@@ -382,6 +387,8 @@
 			</section>
 
 			<section class="space-y-2 rounded-2xl border border-border/60 bg-background/70 p-5">
+				<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Step 3</p>
+				<p class="text-sm font-semibold text-foreground">Task instructions</p>
 				<label for="prompt" class="text-sm font-medium">Issue Prompt</label>
 				<textarea
 					id="prompt"
@@ -568,7 +575,7 @@
 			{/if}
 		</div>
 
-		<Dialog.Footer class="flex gap-2">
+		<Dialog.Footer class="flex gap-2 border-t border-border/40 pt-4">
 			<Button variant="outline" onclick={() => (open = false)}>
 				Cancel
 			</Button>

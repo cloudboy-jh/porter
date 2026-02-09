@@ -125,14 +125,22 @@
 									<p class="text-xs text-muted-foreground">{getProviderLabel(agent)} provider</p>
 								</div>
 							</div>
-							<Button
-								variant={agent.enabled ? 'secondary' : 'outline'}
-								size="sm"
-								type="button"
-								onclick={() => toggleAgent(agent.name)}
-							>
-								{agent.enabled ? 'Enabled' : 'Disabled'}
-							</Button>
+							<div class="flex items-center gap-2">
+								<Badge
+									variant="outline"
+									class={getStatusColor(agent.status, isReady(agent) ? undefined : false)}
+								>
+									{needsCredentials(agent) ? 'missing keys' : agent.status}
+								</Badge>
+								<Button
+									variant={agent.enabled ? 'secondary' : 'default'}
+									size="sm"
+									type="button"
+									onclick={() => toggleAgent(agent.name)}
+								>
+									{agent.enabled ? 'Disable' : 'Enable'}
+								</Button>
+							</div>
 						</div>
 
 						{#if agent.enabled && needsCredentials(agent)}

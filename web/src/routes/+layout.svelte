@@ -51,7 +51,7 @@
 				{ label: 'porter', href: '/' },
 				{ label: 'review' }
 			],
-			subtitle: 'Review completed pull requests.'
+			subtitle: ''
 		},
 		'/auth': {
 			title: 'Sign in',

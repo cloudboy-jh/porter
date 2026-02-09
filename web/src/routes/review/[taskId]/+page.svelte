@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { Check } from 'phosphor-svelte';
+	import { Check, GitDiff, NotePencil } from 'phosphor-svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import GitDiffBadge from '$lib/components/GitDiffBadge.svelte';
 	import DiffViewer from '$lib/components/DiffViewer.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 	import type { PageData } from './$types';
 
 	let { data } = $props<{ data: PageData }>();
@@ -46,19 +47,21 @@
 		if (typeof document === 'undefined') return;
 		document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 	};
+
+	const isCompactReviewDiff = $derived(data.files.length >= 1 && data.files.length <= 3);
 </script>
 
-<div class="space-y-6">
-	<Card.Root class="border border-border/60 bg-card/70">
+<div class={`flex min-h-full justify-center py-4 ${isCompactReviewDiff ? 'items-center' : 'items-start'}`}>
+	<div class="w-full max-w-[1200px] space-y-6">
+		<Card.Root class="border border-border/60 bg-card/70">
 		<Card.Content class="space-y-4 p-6">
 			<div class="flex flex-wrap items-start justify-between gap-4">
-				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Review</p>
-					<h1 class="mt-2 text-2xl font-semibold text-foreground">{data.task.issueTitle}</h1>
-					<p class="mt-2 text-sm text-muted-foreground">
-						{data.task.repoOwner}/{data.task.repoName} · #{data.task.issueNumber}
-					</p>
-				</div>
+				<PageHeader
+					icon={GitDiff}
+					label="Review"
+					title="Code Changes"
+					description={`${data.task.issueTitle} · ${data.task.repoOwner}/${data.task.repoName} · #${data.task.issueNumber}`}
+				/>
 				<div class="flex flex-wrap items-center gap-2">
 					<Badge variant="outline" class="text-[10px] uppercase border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
 						Ready
@@ -79,11 +82,19 @@
 				{/if}
 			</div>
 		</Card.Content>
-	</Card.Root>
+		</Card.Root>
 
-	<Card.Root class="border border-border/60 bg-card/70">
+		<Card.Root class="border border-border/60 bg-card/70">
 		<Card.Header class="pb-2">
-			<Card.Title class="text-sm">Issue Context</Card.Title>
+			<div class="flex items-center gap-3">
+				<div class="flex h-9 w-9 items-center justify-center rounded-2xl border border-border/70 bg-muted/70">
+					<NotePencil size={18} weight="bold" class="text-muted-foreground" />
+				</div>
+				<div class="space-y-0.5">
+					<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Context</p>
+					<h2 class="text-base font-semibold text-foreground">Issue Context</h2>
+				</div>
+			</div>
 		</Card.Header>
 		<Card.Content class="space-y-4 pt-0 text-sm text-muted-foreground">
 			<p>{data.task.issueBody || 'No issue description provided.'}</p>
@@ -94,28 +105,25 @@
 				</div>
 			{/if}
 		</Card.Content>
-	</Card.Root>
+		</Card.Root>
 
-	<Card.Root class="border border-border/60 bg-card/70">
+		<Card.Root class="border border-border/60 bg-card/70">
 		<Card.Header class="pb-2">
-			<div class="flex items-center justify-between gap-3">
-				<Card.Title class="text-sm">Code Changes</Card.Title>
-				<div class="flex items-center gap-2">
-					<Button
+			<div class="flex items-center justify-end gap-2">
+				<Button
 						variant={diffLayout === 'split' ? 'secondary' : 'ghost'}
 						size="sm"
 						onclick={() => (diffLayout = 'split')}
 					>
 						Split
 					</Button>
-					<Button
+				<Button
 						variant={diffLayout === 'stacked' ? 'secondary' : 'ghost'}
 						size="sm"
 						onclick={() => (diffLayout = 'stacked')}
 					>
 						Stacked
 					</Button>
-				</div>
 			</div>
 		</Card.Header>
 		<Card.Content class="space-y-4 pt-0">
@@ -155,9 +163,9 @@
 				</div>
 			{/each}
 		</Card.Content>
-	</Card.Root>
+		</Card.Root>
 
-	<Card.Root class="border border-border/60 bg-card/70">
+		<Card.Root class="border border-border/60 bg-card/70">
 		<Card.Content class="flex flex-wrap items-center justify-between gap-3 p-6">
 			<Button variant="secondary" href={data.pr.htmlUrl} target="_blank" rel="noreferrer">
 				View PR in GitHub
@@ -174,7 +182,8 @@
 				<span class="text-xs text-destructive">{mergeError}</span>
 			{/if}
 		</Card.Content>
-	</Card.Root>
+		</Card.Root>
+	</div>
 </div>
 
 <Dialog.Root bind:open={confirmOpen}>
