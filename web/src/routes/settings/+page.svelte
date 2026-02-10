@@ -571,7 +571,7 @@
 										View Gist ↗
 									</a>
 								{:else}
-									<span>View Gist unavailable</span>
+									<span>Gist unavailable (reconnect GitHub to grant gist access)</span>
 								{/if}
 								<span>Need another provider? Use Manage Credentials.</span>
 								{#if credentialStatus}<span>{credentialStatus}</span>{/if}

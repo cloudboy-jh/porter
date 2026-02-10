@@ -63,6 +63,8 @@ If you want OAuth authentication for users to sign in:
    - **Client Secret**
 4. Set **Callback URL**: `http://localhost:5173/api/auth/github/callback` (development)
 
+Porter requests `repo` and `gist` OAuth scopes during sign-in so it can automatically create and update a private config gist for each user.
+
 ## Step 5: Install the App
 
 1. On the left sidebar, click **"Install App"**
