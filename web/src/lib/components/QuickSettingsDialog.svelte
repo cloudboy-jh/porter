@@ -1,31 +1,23 @@
-<!--
-	QuickSettingsDialog - Quick Settings Dialog
-	
-	Lightweight dialog for common settings changes.
-	Accessible via:
-	- Sidebar "Quick Settings" item
-	- Keyboard shortcut: ⌘,
-	
-	Contains: Theme toggle, GitHub status, Agent enable/disable
-	For full settings, navigate to /settings page
--->
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { Gear, Moon, Sun } from 'phosphor-svelte';
 	import { onMount } from 'svelte';
-	import { GithubLogo, Moon, Sun } from 'phosphor-svelte';
-	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
-	import { Label } from '$lib/components/ui/label/index.js';
-	import * as Card from '$lib/components/ui/card/index.js';
+	import AgentSettingsDialog from '$lib/components/AgentSettingsDialog.svelte';
 	import type { AgentConfig } from '$lib/types/agent';
 
 	let { open = $bindable(false) } = $props();
 
-	// Theme state
 	let theme = $state('dark');
+	let agents = $state<AgentConfig[]>([]);
+	let showAgentSettings = $state(false);
+
+	const session = $derived($page.data?.session ?? null);
+	const githubConnected = $derived(Boolean(session));
+	const githubHandle = $derived(session?.user?.login ? `@${session.user.login}` : '');
 
 	const applyTheme = (value: string) => {
 		if (typeof document !== 'undefined') {
@@ -37,63 +29,16 @@
 		theme = theme === 'dark' ? 'light' : 'dark';
 	};
 
-	onMount(() => {
-		if (typeof localStorage !== 'undefined') {
-			const stored = localStorage.getItem('porter-theme');
-			if (stored === 'light' || stored === 'dark') {
-				theme = stored;
-				return;
-			}
-		}
-		if (typeof window !== 'undefined') {
-			theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-		}
-	});
-
-	$effect(() => {
-		applyTheme(theme);
-		if (typeof localStorage !== 'undefined') {
-			localStorage.setItem('porter-theme', theme);
-		}
-	});
-
-	const session = $derived($page.data?.session ?? null);
-	const github = $derived({
-		connected: Boolean(session),
-		handle: session?.user?.login ? `@${session.user.login}` : 'Not connected',
-		lastSync: session ? 'Just now' : '—'
-	});
-
-	// Agent quick toggles
 	const agentDomains: Record<string, string> = {
 		opencode: 'opencode.ai',
 		'claude-code': 'claude.ai',
-		amp: 'anthropic.com'
+		amp: 'ampcode.com'
 	};
 
 	const getAgentIcon = (name: string) =>
 		`https://www.google.com/s2/favicons?domain=${agentDomains[name] ?? 'github.com'}&sz=64`;
 
-	let agents = $state<AgentConfig[]>([]);
-
-	const toggleAgent = (name: string) => {
-		agents = agents.map((agent) =>
-			agent.name === name ? { ...agent, enabled: !agent.enabled } : agent
-		);
-	};
-
-	const handleGitHubAction = async () => {
-		if (github.connected) {
-			try {
-				await fetch('/api/auth/logout', { method: 'POST' });
-			} catch (error) {
-				console.error('Disconnect failed:', error);
-			}
-			await goto('/auth');
-			return;
-		}
-		await goto('/auth');
-	};
+	const hasMissingCredentials = (agent: AgentConfig) => agent.readyState === 'missing_credentials';
 
 	const loadAgents = async (force = false) => {
 		try {
@@ -101,14 +46,35 @@
 				method: force ? 'POST' : 'GET'
 			});
 			if (!response.ok) return;
-			const data = await response.json();
-			agents = data as AgentConfig[];
+			agents = (await response.json()) as AgentConfig[];
 		} catch (error) {
 			console.error('Failed to load agents:', error);
 		}
 	};
 
-	// Keyboard shortcut handler
+	const saveAgents = async (nextAgents: AgentConfig[]) => {
+		try {
+			const response = await fetch('/api/agents', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(nextAgents)
+			});
+			if (!response.ok) throw new Error('Failed to save agents');
+			agents = (await response.json()) as AgentConfig[];
+		} catch (error) {
+			console.error('Failed to save agent toggles:', error);
+			await loadAgents(false);
+		}
+	};
+
+	const toggleAgent = async (name: string) => {
+		const nextAgents = agents.map((agent) =>
+			agent.name === name ? { ...agent, enabled: !agent.enabled } : agent
+		);
+		agents = nextAgents;
+		await saveAgents(nextAgents);
+	};
+
 	const handleKeydown = (event: KeyboardEvent) => {
 		if ((event.metaKey || event.ctrlKey) && event.key === ',') {
 			event.preventDefault();
@@ -117,12 +83,26 @@
 	};
 
 	onMount(() => {
+		if (typeof localStorage !== 'undefined') {
+			const stored = localStorage.getItem('porter-theme');
+			if (stored === 'light' || stored === 'dark') {
+				theme = stored;
+			}
+		}
+		if (typeof window !== 'undefined' && !localStorage.getItem('porter-theme')) {
+			theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+		}
+
 		window.addEventListener('keydown', handleKeydown);
+		loadAgents(true);
 		return () => window.removeEventListener('keydown', handleKeydown);
 	});
 
-	onMount(() => {
-		loadAgents(true);
+	$effect(() => {
+		applyTheme(theme);
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem('porter-theme', theme);
+		}
 	});
 </script>
 
@@ -130,107 +110,93 @@
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Quick Settings</Dialog.Title>
-			<Dialog.Description>
-				Common settings and quick toggles
-			</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="space-y-6 py-4">
-			<!-- Theme Toggle -->
+		<div class="space-y-4 py-2">
 			<div class="flex items-center justify-between">
-				<div class="space-y-0.5">
-					<Label>Appearance</Label>
-					<p class="text-xs text-muted-foreground">
-						{theme === 'dark' ? 'Dark mode' : 'Light mode'}
-					</p>
+				<div>
+					<p class="text-sm font-medium text-foreground">Appearance</p>
+					<p class="text-xs text-muted-foreground">{theme === 'dark' ? 'Dark mode' : 'Light mode'}</p>
 				</div>
 				<Button variant="outline" size="icon" onclick={toggleTheme}>
 					{#if theme === 'dark'}
-							<Moon size={16} weight="bold" />
+						<Moon size={16} weight="bold" />
 					{:else}
-							<Sun size={16} weight="bold" />
+						<Sun size={16} weight="bold" />
 					{/if}
 				</Button>
 			</div>
 
 			<Separator />
 
-			<!-- GitHub Connection -->
-			<div class="space-y-3">
-				<Label>GitHub Connection</Label>
-				<div class="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-3">
-					<div class="flex items-center gap-2">
-							<GithubLogo size={16} weight="bold" class="text-muted-foreground" />
-						{#if github.connected}
-							<div>
-								<p class="text-sm font-medium">Connected</p>
-								<p class="text-xs text-muted-foreground">{github.handle} • {github.lastSync}</p>
-							</div>
-						{:else}
-							<p class="text-sm text-muted-foreground">Not connected</p>
-						{/if}
+			<div class="space-y-2">
+				<p class="text-sm font-medium text-foreground">GitHub</p>
+				{#if githubConnected}
+					<div class="flex items-center gap-2 text-sm text-foreground">
+						<span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+						<span>Connected as {githubHandle}</span>
 					</div>
-					<Button variant="ghost" size="sm" onclick={handleGitHubAction}>
-						{github.connected ? 'Disconnect' : 'Connect'}
-					</Button>
-				</div>
+				{:else}
+					<div class="flex items-center gap-2 text-sm text-muted-foreground">
+						<span class="h-2 w-2 rounded-full bg-amber-500"></span>
+						<span>Not connected</span>
+						<Button variant="link" size="sm" class="h-auto px-0 py-0 text-xs" onclick={() => goto('/settings')}>
+							Settings
+						</Button>
+					</div>
+				{/if}
 			</div>
 
 			<Separator />
 
-			<!-- Quick Agent Toggles -->
-			<div class="space-y-3">
-				<Label>Agents</Label>
-				<div class="grid gap-2">
-					{#if agents.length === 0}
-						<p class="text-xs text-muted-foreground">No agents available.</p>
-					{:else}
+			<div class="space-y-2">
+				<p class="text-sm font-medium text-foreground">Agents</p>
+				{#if agents.length === 0}
+					<p class="text-xs text-muted-foreground">No agents available.</p>
+				{:else}
+					<div class="space-y-2">
 						{#each agents as agent}
-							<div 
-								class="flex items-center justify-between rounded-lg border p-2.5 transition-colors {agent.enabled 
-									? 'border-emerald-500/40 bg-emerald-500/10' 
-									: 'border-border bg-muted/30'}"
-							>
-							<div class="flex items-center gap-2.5">
-								<img 
-									src={getAgentIcon(agent.name)} 
-									alt={agent.name}
-									class="h-5 w-5 rounded {agent.enabled ? 'opacity-100' : 'opacity-40'}"
-								/>
-								<span 
-									class="h-2 w-2 rounded-full {agent.enabled 
-										? 'bg-emerald-500' 
-										: 'bg-muted-foreground/40'}"
-								></span>
-								<span class="text-sm font-mono capitalize {agent.enabled 
-									? 'text-foreground' 
-									: 'text-muted-foreground'}"
+							<div class="flex items-center justify-between rounded-lg border border-border/60 bg-background/60 px-3 py-2">
+								<div class="flex min-w-0 items-center gap-2.5">
+									<img src={getAgentIcon(agent.name)} alt={agent.name} class="h-4 w-4 rounded-sm" />
+									<button
+										type="button"
+										class="truncate text-left text-sm font-medium capitalize text-foreground hover:text-primary"
+										onclick={() => (showAgentSettings = true)}
+									>
+										{agent.displayName ?? agent.name}
+									</button>
+									{#if hasMissingCredentials(agent)}
+										<span class="h-1.5 w-1.5 rounded-full bg-amber-500" title="Missing credentials"></span>
+									{/if}
+									<Button
+										variant="ghost"
+										size="icon-sm"
+										class="h-7 w-7"
+										onclick={() => (showAgentSettings = true)}
+									>
+										<Gear size={14} weight="bold" />
+									</Button>
+								</div>
+								<button
+									type="button"
+									role="switch"
+									aria-checked={agent.enabled}
+									aria-label={`Toggle ${agent.displayName ?? agent.name}`}
+									class={`relative h-6 w-10 rounded-full transition ${agent.enabled ? 'bg-primary/80' : 'bg-muted'}`}
+									onclick={() => toggleAgent(agent.name)}
 								>
-									{agent.name}
-								</span>
+									<span
+										class={`absolute top-0.5 h-5 w-5 rounded-full bg-background shadow transition ${agent.enabled ? 'left-[1.15rem]' : 'left-0.5'}`}
+									></span>
+								</button>
 							</div>
-							<Button
-								variant={agent.enabled ? 'secondary' : 'outline'}
-								size="sm"
-								onclick={() => toggleAgent(agent.name)}
-								class={agent.enabled 
-									? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-700 dark:text-emerald-400 border-emerald-500/40' 
-									: ''}
-							>
-								{agent.enabled ? 'Enabled' : 'Disabled'}
-							</Button>
-						</div>
 						{/each}
-					{/if}
-				</div>
-				<p class="text-xs text-muted-foreground">
-					For advanced agent configuration, visit <a href="/settings" class="underline">Settings</a>
-				</p>
+					</div>
+				{/if}
 			</div>
 		</div>
-
-		<Dialog.Footer>
-			<Button variant="outline" onclick={() => (open = false)}>Close</Button>
-		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
+
+<AgentSettingsDialog bind:open={showAgentSettings} bind:agents />

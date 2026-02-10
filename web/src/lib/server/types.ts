@@ -59,6 +59,7 @@ export interface PorterConfig {
 		openai?: string;
 		amp?: string;
 	};
+	providerCredentials?: Record<string, Record<string, string>>;
 	settings: {
 		maxRetries: number;
 		taskTimeout: number;

@@ -7,6 +7,7 @@
 	Purpose: Quick access to agent config without navigating to /settings
 -->
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { SlidersHorizontal } from 'phosphor-svelte';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -48,6 +49,11 @@
 			console.error('Refreshing agents failed:', error);
 		}
 	};
+
+	const handleOpenCredentials = async () => {
+		open = false;
+		await goto('/settings#credentials');
+	};
 </script>
 
 <Dialog.Root bind:open>
@@ -56,10 +62,10 @@
 			<PageHeader
 				icon={SlidersHorizontal}
 				label="Agent Controls"
-				title="Quick Agent Configuration"
+				title="Agent Configuration"
 				description="Toggle agents, set defaults, and tune prompt guidance."
 			/>
-			<Dialog.Title class="sr-only">Quick Agent Configuration</Dialog.Title>
+			<Dialog.Title class="sr-only">Agent Configuration</Dialog.Title>
 			<Dialog.Description class="sr-only">Manage agent defaults and status.</Dialog.Description>
 		</Dialog.Header>
 
@@ -68,6 +74,7 @@
 				bind:agents
 				onsave={handleAgentSave}
 				onrefresh={handleAgentRefresh}
+				onopencredentials={handleOpenCredentials}
 				framed={false}
 				mode="quick"
 			/>
@@ -75,7 +82,6 @@
 
 		<Dialog.Footer class="flex-shrink-0 border-t border-border/40 pt-4">
 			<Button variant="ghost" onclick={() => (open = false)}>Close</Button>
-			<Button variant="secondary" type="button" onclick={handleAgentRefresh}>Refresh</Button>
 			<Button onclick={() => handleAgentSave(agents)}>Save Changes</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

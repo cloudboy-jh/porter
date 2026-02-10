@@ -59,8 +59,16 @@
 	const recentCommands = $derived(getRecentCommands());
 	const repositoryLabel = $derived(repository || 'Select repository');
 	
-	const getAgentIcon = (domain?: string) =>
-		domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : '';
+	const agentDomains: Record<string, string> = {
+		opencode: 'opencode.ai',
+		'claude-code': 'claude.ai',
+		amp: 'ampcode.com'
+	};
+
+	const getAgentIcon = (name: string, domain?: string) => {
+		const iconDomain = agentDomains[name] ?? domain;
+		return iconDomain ? `https://www.google.com/s2/favicons?domain=${iconDomain}&sz=64` : '';
+	};
 
 	const getStatusTone = (status?: string) => {
 		switch (status) {
@@ -281,7 +289,7 @@
 							{#if agent.domain}
 								<img
 									class="h-9 w-9 rounded-md border border-border/60"
-									src={getAgentIcon(agent.domain)}
+											src={getAgentIcon(agent.name, agent.domain)}
 									alt={agent.name}
 								/>
 							{/if}

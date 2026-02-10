@@ -286,11 +286,10 @@
 	);
 
 	const highlightStatus = $derived(activeFilter === 'All' ? null : filterMap[activeFilter]);
-	const isCompactTaskFeed = $derived(filteredTasks.length >= 1 && filteredTasks.length <= 3);
 </script>
 
-	<div class={`flex min-h-full justify-center py-4 ${isCompactTaskFeed ? 'items-center' : 'items-start'}`}>
-		<div class="w-full max-w-[1200px] space-y-4">
+<main class="flex-1 overflow-y-auto">
+	<div class="mx-auto w-full max-w-[1600px] space-y-4 px-6 pt-8 pb-16">
 			{#if !isConnected}
 				<EmptyState 
 					icon={GithubLogo}
@@ -419,8 +418,8 @@
 					</TaskFeed>
 				{/if}
 			{/if}
-		</div>
 	</div>
+	</main>
 
 <CommandBar bind:open={showDispatch} agents={agentConfig} onsubmit={handleCommandSubmit} />
 <AgentSettingsDialog bind:open={showAgentSettings} agents={agentConfig} />

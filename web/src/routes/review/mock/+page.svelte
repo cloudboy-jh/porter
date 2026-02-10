@@ -1,12 +1,9 @@
 <script lang="ts">
 	import ReviewDiffMockComponent from '$lib/components/mock/ReviewDiffMockComponent.svelte';
-
-	const mockDiffFileCount = 1;
-	const isCompactReviewDiff = mockDiffFileCount >= 1 && mockDiffFileCount <= 3;
 </script>
 
-<div class={`flex min-h-full justify-center py-4 ${isCompactReviewDiff ? 'items-center' : 'items-start'}`}>
-	<div class="mx-auto w-full max-w-[1200px]">
+<main class="flex-1 overflow-y-auto">
+	<div class="mx-auto w-full max-w-[1600px] px-6 pt-8 pb-16">
 		<ReviewDiffMockComponent />
 	</div>
-</div>
+</main>

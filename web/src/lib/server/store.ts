@@ -25,6 +25,7 @@ const baseConfig: PorterConfig = {
 		}
 	},
 	credentials: {},
+	providerCredentials: {},
 	settings: {
 		maxRetries: 3,
 		taskTimeout: 90,
@@ -56,6 +57,57 @@ const normalizeCredentials = (credentials?: PorterConfig['credentials']) => {
 		}
 	}
 	return normalized;
+};
+
+const normalizeProviderCredentials = (providerCredentials?: PorterConfig['providerCredentials']) => {
+	const normalized: Record<string, Record<string, string>> = {};
+	for (const [providerId, values] of Object.entries(providerCredentials ?? {})) {
+		const nextValues: Record<string, string> = {};
+		for (const [envKey, rawValue] of Object.entries(values ?? {})) {
+			const value = normalizeCredential(rawValue);
+			if (value) {
+				nextValues[envKey] = value;
+			}
+		}
+		if (Object.keys(nextValues).length > 0) {
+			normalized[providerId] = nextValues;
+		}
+	}
+	return normalized;
+};
+
+const mapLegacyCredentialsToProviders = (credentials?: PorterConfig['credentials']) => {
+	const mapped: Record<string, Record<string, string>> = {};
+	const anthropic = normalizeCredential(credentials?.anthropic);
+	if (anthropic) {
+		mapped.anthropic = { ANTHROPIC_API_KEY: anthropic };
+	}
+	const openai = normalizeCredential(credentials?.openai);
+	if (openai) {
+		mapped.openai = { OPENAI_API_KEY: openai };
+	}
+	const amp = normalizeCredential(credentials?.amp);
+	if (amp) {
+		mapped.amp = { AMP_API_KEY: amp };
+	}
+	return mapped;
+};
+
+const mapProvidersToLegacyCredentials = (
+	providerCredentials?: PorterConfig['providerCredentials'],
+	fallback?: PorterConfig['credentials']
+) => {
+	const legacy = normalizeCredentials(fallback);
+	const anthropic = normalizeCredential(providerCredentials?.anthropic?.ANTHROPIC_API_KEY);
+	const openai = normalizeCredential(providerCredentials?.openai?.OPENAI_API_KEY);
+	const amp = normalizeCredential(providerCredentials?.amp?.AMP_API_KEY);
+	if (anthropic) legacy.anthropic = anthropic;
+	else delete legacy.anthropic;
+	if (openai) legacy.openai = openai;
+	else delete legacy.openai;
+	if (amp) legacy.amp = amp;
+	else delete legacy.amp;
+	return legacy;
 };
 
 const normalizeFlyToken = (token?: string) => normalizeCredential(token) ?? '';
@@ -183,10 +235,18 @@ export const getConfig = async (token: string): Promise<PorterConfig> => {
 			...baseConfig,
 			...(gistConfig as PorterConfig),
 			agents: normalizeAgentConfig((gistConfig as PorterConfig).agents ?? baseConfig.agents),
-			credentials: normalizeCredentials((gistConfig as PorterConfig).credentials),
+			providerCredentials: normalizeProviderCredentials(
+				Object.keys((gistConfig as PorterConfig).providerCredentials ?? {}).length
+					? (gistConfig as PorterConfig).providerCredentials
+					: mapLegacyCredentialsToProviders((gistConfig as PorterConfig).credentials)
+			),
 			flyToken: normalizeFlyToken((gistConfig as PorterConfig).flyToken),
 			flyAppName: normalizeFlyAppName((gistConfig as PorterConfig).flyAppName)
 		};
+		merged.credentials = mapProvidersToLegacyCredentials(
+			merged.providerCredentials,
+			(gistConfig as PorterConfig).credentials
+		);
 		configCache.set(token, merged);
 		configLoaded.add(token);
 		if (hasLegacyModal) {
@@ -200,10 +260,14 @@ export const updateConfig = async (token: string, next: PorterConfig): Promise<P
 	const normalized = {
 		...next,
 		agents: normalizeAgentConfig(next.agents ?? {}),
-		credentials: normalizeCredentials(next.credentials),
+		providerCredentials: normalizeProviderCredentials(next.providerCredentials),
 		flyToken: normalizeFlyToken(next.flyToken),
 		flyAppName: normalizeFlyAppName(next.flyAppName)
 	};
+	normalized.credentials = mapProvidersToLegacyCredentials(
+		normalized.providerCredentials,
+		next.credentials
+	);
 	configCache.set(token, normalized);
 	configLoaded.add(token);
 	await saveConfigToGist(token, normalized);
@@ -230,9 +294,26 @@ export const updateAgentSettings = async (token: string, agents: AgentConfig[]):
 export const updateCredentials = async (token: string, credentials: PorterConfig['credentials']) => {
 	const activeConfig = await getConfig(token);
 	const nextCredentials = { ...activeConfig.credentials, ...credentials };
+	const nextProviderCredentials = {
+		...activeConfig.providerCredentials,
+		...mapLegacyCredentialsToProviders(nextCredentials)
+	};
 	await updateConfig(token, {
 		...activeConfig,
-		credentials: nextCredentials
+		credentials: nextCredentials,
+		providerCredentials: nextProviderCredentials
+	});
+	return getConfig(token);
+};
+
+export const updateProviderCredentials = async (
+	token: string,
+	providerCredentials: PorterConfig['providerCredentials']
+) => {
+	const activeConfig = await getConfig(token);
+	await updateConfig(token, {
+		...activeConfig,
+		providerCredentials: providerCredentials ?? {}
 	});
 	return getConfig(token);
 };

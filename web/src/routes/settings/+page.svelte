@@ -1,16 +1,14 @@
 <script lang="ts">
-	import { GithubLogo, Robot, Stack, Gear, Key, GitBranch } from 'phosphor-svelte';
-	import EmptyState from '$lib/components/EmptyState.svelte';
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { Badge } from '$lib/components/ui/badge/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
-	import * as Sheet from '$lib/components/ui/sheet/index.js';
+	import { CheckCircle, GithubLogo, WarningCircle } from 'phosphor-svelte';
 	import AgentSettingsDialog from '$lib/components/AgentSettingsDialog.svelte';
-	import PageHeader from '$lib/components/PageHeader.svelte';
-	import type { PageData } from './$types';
+	import CredentialsModal from '$lib/components/CredentialsModal.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import { Input } from '$lib/components/ui/input/index.js';
 	import type { AgentConfig } from '$lib/types/agent';
+	import type { PageData } from './$types';
 
 	type AgentDisplay = AgentConfig & { readyState?: 'ready' | 'missing_credentials' | 'disabled' };
 	type Credentials = { anthropic?: string; openai?: string; amp?: string };
@@ -33,6 +31,7 @@
 		credentials?: Credentials;
 		flyToken?: string;
 		flyAppName?: string;
+		gistUrl?: string;
 		onboarding?: {
 			completed: boolean;
 			selectedRepos: Array<{
@@ -45,51 +44,164 @@
 			enabledAgents: string[];
 		};
 	};
+	type GithubSummary = {
+		user?: { login: string; avatarUrl?: string | null };
+		repositories?: Array<{ id: number }>;
+	};
+	type EditableField = 'flyToken' | 'flyAppName' | 'anthropic' | 'amp' | 'openai';
+	type RepoFilter = 'all' | 'selected' | 'unselected' | 'private' | 'public';
 
 	let { data } = $props<{ data: PageData }>();
+
 	let agentConfig = $state<AgentDisplay[]>([]);
 	let credentials = $state<Credentials>({});
 	let fly = $state<FlyCredentials>({});
 	let repositories = $state<RepoSummary[]>([]);
 	let selectedRepoIds = $state<number[]>([]);
 	let configSnapshot = $state<ConfigSnapshot | null>(null);
+	let gistUrl = $state<string | null>(null);
+	let githubSummary = $state<GithubSummary>({});
+
+	let editingField = $state<EditableField | null>(null);
+	let draftValue = $state('');
+
 	let credentialStatus = $state('');
-	let credentialSaving = $state(false);
 	let flyStatus = $state('');
+	let repoStatus = $state('');
+
+	let credentialSaving = $state(false);
 	let flySaving = $state(false);
 	let flyValidating = $state(false);
-	let flyValidation = $state<FlyValidation | null>(null);
-	let repoStatus = $state('');
 	let repoSaving = $state(false);
 	let repoLoading = $state(false);
-	let revealCredential = $state<Record<string, boolean>>({});
-	let showCredentials = $state(false);
-	let showRepos = $state(false);
-	let showAgents = $state(false);
 	let repoSearch = $state('');
-	const isConnected = $derived(Boolean(data?.session));
+	let repoFilter = $state<RepoFilter>('all');
+	let anthropicValidated = $state(false);
 
-	const enabledAgents = $derived(agentConfig.filter((agent) => agent.enabled).length);
+	let showAgents = $state(false);
+	let showCredentialsModal = $state(false);
+
+	const isConnected = $derived(Boolean(data?.session));
+	const githubHandle = $derived(data?.session?.user?.login ? `@${data.session.user.login}` : '');
+	const enabledAgents = $derived(agentConfig.filter((agent) => agent.enabled));
 	const readyAgents = $derived(
 		agentConfig.filter((agent) => (agent.readyState ? agent.readyState === 'ready' : agent.enabled))
 	);
-	const readyAgentCount = $derived(readyAgents.length);
-	const totalAgents = $derived(agentConfig.length);
-	const flyReady = $derived(Boolean(fly?.flyToken?.trim()) && Boolean(fly?.flyAppName?.trim()));
-	const flyValidationReady = $derived(Boolean(flyValidation?.ok));
-	const anthropicReady = $derived(Boolean(credentials?.anthropic?.trim()));
+	const flyValidationReady = $derived(Boolean(fly.validation?.ok));
 	const reposReady = $derived(selectedRepoIds.length > 0);
-	const runtimeReady = $derived(
-		isConnected && flyReady && flyValidationReady && anthropicReady && readyAgentCount > 0 && reposReady
-	);
-	const webhookReady = $derived(isConnected && flyValidationReady && readyAgentCount > 0);
+	const webhookReady = $derived(isConnected && flyValidationReady && readyAgents.length > 0);
+	const installedRepoCount = $derived(githubSummary.repositories?.length ?? repositories.length);
+
+	const matchesRepoFilter = (repo: RepoSummary) => {
+		switch (repoFilter) {
+			case 'selected':
+				return selectedRepoIds.includes(repo.id);
+			case 'unselected':
+				return !selectedRepoIds.includes(repo.id);
+			case 'private':
+				return repo.private;
+			case 'public':
+				return !repo.private;
+			default:
+				return true;
+		}
+	};
+
 	const filteredRepos = $derived(
-		repoSearch
-			? repositories.filter((repo) =>
-				repo.fullName.toLowerCase().includes(repoSearch.toLowerCase())
-			)
-			: repositories
+		repositories.filter((repo) => {
+			const matchesSearch = repoSearch
+				? repo.fullName.toLowerCase().includes(repoSearch.toLowerCase())
+				: true;
+			return matchesSearch && matchesRepoFilter(repo);
+		})
 	);
+
+	const sectionLabelClass =
+		'text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground';
+
+	const getAgentIcon = (agent: AgentDisplay) => {
+		const domainMap: Record<string, string> = {
+			opencode: 'opencode.ai',
+			'claude-code': 'claude.ai',
+			amp: 'ampcode.com'
+		};
+		return `https://www.google.com/s2/favicons?domain=${domainMap[agent.name] ?? 'github.com'}&sz=64`;
+	};
+
+	const getFieldValue = (field: EditableField) => {
+		switch (field) {
+			case 'flyToken':
+				return fly.flyToken ?? '';
+			case 'flyAppName':
+				return fly.flyAppName ?? '';
+			case 'anthropic':
+				return credentials.anthropic ?? '';
+			case 'amp':
+				return credentials.amp ?? '';
+			case 'openai':
+				return credentials.openai ?? '';
+		}
+	};
+
+	const getFieldLabel = (field: EditableField) => {
+		switch (field) {
+			case 'flyToken':
+				return 'Fly Token';
+			case 'flyAppName':
+				return 'Fly App Name';
+			case 'anthropic':
+				return 'Anthropic API Key';
+			case 'amp':
+				return 'Amp API Key';
+			case 'openai':
+				return 'OpenAI API Key';
+		}
+	};
+
+	const getFieldIcon = (field: EditableField) => {
+		switch (field) {
+			case 'flyToken':
+			case 'flyAppName':
+				return {
+					src: 'https://www.google.com/s2/favicons?domain=fly.io&sz=64',
+					alt: 'Fly logo'
+				};
+			case 'anthropic':
+				return {
+					src: 'https://www.google.com/s2/favicons?domain=anthropic.com&sz=64',
+					alt: 'Anthropic logo'
+				};
+			case 'amp':
+				return {
+					src: 'https://www.google.com/s2/favicons?domain=ampcode.com&sz=64',
+					alt: 'Amp logo'
+				};
+			case 'openai':
+				return {
+					src: 'https://www.google.com/s2/favicons?domain=openai.com&sz=64',
+					alt: 'OpenAI logo'
+				};
+		}
+	};
+
+	const isSecretField = (field: EditableField) => field !== 'flyAppName';
+
+	const formatFieldValue = (field: EditableField) => {
+		const value = getFieldValue(field).trim();
+		if (!value) return 'Not configured';
+		if (!isSecretField(field)) return value;
+		return '••••••••••';
+	};
+
+	const startEditField = (field: EditableField) => {
+		editingField = field;
+		draftValue = getFieldValue(field);
+	};
+
+	const cancelEditField = () => {
+		editingField = null;
+		draftValue = '';
+	};
 
 	const loadAgents = async (force = false) => {
 		try {
@@ -101,54 +213,11 @@
 				return;
 			}
 			if (!response.ok) return;
-			const data = await response.json();
-			agentConfig = data as AgentConfig[];
+			agentConfig = (await response.json()) as AgentConfig[];
 		} catch {
 			// ignore
 		}
 	};
-
-	const github = $derived({
-		connected: Boolean(data?.session),
-		handle: data?.session?.user?.login ? `@${data.session.user.login}` : 'Not connected',
-		lastSync: data?.session ? 'Just now' : '—'
-	});
-
-	const refreshRuntime = () => {
-		loadAgents(true);
-		loadConfig();
-		loadRepositories();
-		validateFly(false);
-	};
-
-	const credentialProviders = [
-		{
-			key: 'anthropic' as const,
-			label: 'Anthropic',
-			note: 'Used by Opencode and Claude Code.'
-		},
-		{
-			key: 'amp' as const,
-			label: 'Amp',
-			note: 'Required to run Amp tasks.'
-		},
-		{
-			key: 'openai' as const,
-			label: 'OpenAI',
-			note: 'Optional, reserved for future agents.'
-		}
-	];
-
-	const headerLabelClass =
-		'text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground';
-
-	onMount(() => {
-		loadAgents(true);
-		if (isConnected) {
-			loadConfig();
-			loadRepositories();
-		}
-	});
 
 	const loadConfig = async () => {
 		try {
@@ -158,14 +227,28 @@
 				return;
 			}
 			if (!response.ok) return;
-			const data = (await response.json()) as ConfigSnapshot;
-			credentials = data.credentials ?? {};
-			fly = { flyToken: data.flyToken, flyAppName: data.flyAppName };
-			configSnapshot = data;
-			selectedRepoIds = data.onboarding?.selectedRepos?.map((repo) => repo.id) ?? [];
-			if (data.flyToken && data.flyAppName) {
-				validateFly(false);
+			const payload = (await response.json()) as ConfigSnapshot;
+			credentials = payload.credentials ?? {};
+			fly = { flyToken: payload.flyToken, flyAppName: payload.flyAppName };
+			configSnapshot = payload;
+			gistUrl = payload.gistUrl ?? null;
+			selectedRepoIds = payload.onboarding?.selectedRepos?.map((repo) => repo.id) ?? [];
+			if ((payload.credentials?.anthropic ?? '').trim()) {
+				anthropicValidated = false;
 			}
+			if (payload.flyToken && payload.flyAppName) {
+				await validateFly(false);
+			}
+		} catch {
+			// ignore
+		}
+	};
+
+	const loadGithubSummary = async () => {
+		try {
+			const response = await fetch('/api/github/summary');
+			if (!response.ok) return;
+			githubSummary = (await response.json()) as GithubSummary;
 		} catch {
 			// ignore
 		}
@@ -199,111 +282,136 @@
 		}
 	};
 
-	const toggleReveal = (key: string) => {
-		revealCredential = { ...revealCredential, [key]: !revealCredential[key] };
-	};
-
-	const rotateCredential = (key: string) => {
-		credentials = { ...credentials, [key]: '' };
-		revealCredential = { ...revealCredential, [key]: true };
-	};
-
-	const updateCredential = (key: string, value: string) => {
-		credentials = { ...credentials, [key]: value };
-	};
-
-	const saveCredentials = async () => {
+	const saveCredentials = async (nextCredentials: Credentials) => {
 		credentialSaving = true;
 		credentialStatus = '';
 		try {
 			const response = await fetch('/api/config/credentials', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(credentials)
+				body: JSON.stringify(nextCredentials)
 			});
-			if (response.status === 401) {
-				window.location.href = '/auth';
-				return;
-			}
 			if (!response.ok) {
 				credentialStatus = 'Failed to save credentials.';
-				return;
+				return false;
 			}
-			const data = (await response.json()) as Credentials;
-			credentials = data ?? {};
+			credentials = (await response.json()) as Credentials;
 			credentialStatus = 'Credentials updated.';
-			loadAgents(true);
+			if ((credentials.anthropic ?? '').trim()) {
+				anthropicValidated = false;
+			}
+			await loadAgents(true);
+			return true;
 		} catch (error) {
 			console.error('Saving credentials failed:', error);
 			credentialStatus = 'Failed to save credentials.';
+			return false;
 		} finally {
 			credentialSaving = false;
 		}
 	};
 
-	const updateFlyToken = (value: string) => {
-		fly = { ...fly, flyToken: value };
-	};
-
-	const updateFlyAppName = (value: string) => {
-		fly = { ...fly, flyAppName: value };
-	};
-
-	const validateFly = async (showSuccess = true) => {
+	const validateFly = async (showMessage = true) => {
 		flyValidating = true;
-		if (showSuccess) {
-			flyStatus = '';
-		}
+		if (showMessage) flyStatus = '';
 		try {
 			const response = await fetch('/api/config/validate/fly');
-			const data = (await response.json()) as FlyValidation;
-			flyValidation = data;
-			if (showSuccess) {
-				flyStatus = data.message;
-			}
+			const payload = (await response.json()) as FlyValidation;
+			fly.validation = payload;
+			if (showMessage) flyStatus = payload.message;
 		} catch (error) {
 			console.error('Validating Fly credentials failed:', error);
-			flyValidation = {
+			fly.validation = {
 				ok: false,
 				status: 'error',
 				message: 'Failed to validate Fly credentials.',
 				appCreated: false
 			};
-			if (showSuccess) {
-				flyStatus = 'Failed to validate Fly credentials.';
-			}
+			if (showMessage) flyStatus = 'Failed to validate Fly credentials.';
 		} finally {
 			flyValidating = false;
 		}
 	};
 
-	const saveFly = async () => {
+	const saveFly = async (nextFly: FlyCredentials) => {
 		flySaving = true;
 		flyStatus = '';
 		try {
 			const response = await fetch('/api/config/fly', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ ...fly, validate: true })
+				body: JSON.stringify({ ...nextFly, validate: true })
 			});
-			if (response.status === 401) {
-				window.location.href = '/auth';
-				return;
-			}
 			if (!response.ok) {
 				flyStatus = 'Failed to save Fly settings.';
-				return;
+				return false;
 			}
-			const data = (await response.json()) as FlyCredentials;
-			fly = { flyToken: data.flyToken, flyAppName: data.flyAppName };
-			flyValidation = data.validation ?? null;
-			flyStatus = data.validation?.message ?? 'Fly settings updated.';
+			const payload = (await response.json()) as FlyCredentials;
+			fly = {
+				flyToken: payload.flyToken,
+				flyAppName: payload.flyAppName,
+				validation: payload.validation
+			};
+			flyStatus = payload.validation?.message ?? 'Fly settings updated.';
+			return true;
 		} catch (error) {
 			console.error('Saving Fly settings failed:', error);
 			flyStatus = 'Failed to save Fly settings.';
+			return false;
 		} finally {
 			flySaving = false;
 		}
+	};
+
+	const validateAnthropic = async () => {
+		try {
+			const response = await fetch('/api/config/validate/anthropic');
+			anthropicValidated = response.ok;
+		} catch {
+			anthropicValidated = false;
+		}
+	};
+
+	const saveField = async (field: EditableField) => {
+		const value = draftValue.trim();
+		if (field === 'flyToken' || field === 'flyAppName') {
+			const nextFly = { ...fly, [field]: value };
+			const ok = await saveFly(nextFly);
+			if (ok) cancelEditField();
+			return;
+		}
+
+		const nextCredentials = { ...credentials, [field]: value };
+		const ok = await saveCredentials(nextCredentials);
+		if (ok) {
+			if (field === 'anthropic') {
+				await validateAnthropic();
+			}
+			cancelEditField();
+		}
+	};
+
+	const getFieldStatus = (field: EditableField) => {
+		const value = getFieldValue(field).trim();
+		if (!value) {
+			return null;
+		}
+
+		if (field === 'flyToken' || field === 'flyAppName') {
+			if (fly.validation?.ok) {
+				return { ready: true, label: 'Validated' };
+			}
+			return { ready: false, label: 'Not tested' };
+		}
+
+		if (field === 'anthropic') {
+			if (anthropicValidated) {
+				return { ready: true, label: 'Validated' };
+			}
+			return { ready: false, label: 'Not tested' };
+		}
+
+		return { ready: false, label: 'Not tested' };
 	};
 
 	const toggleRepoSelection = (id: number) => {
@@ -342,16 +450,11 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(nextConfig)
 			});
-			if (response.status === 401) {
-				window.location.href = '/auth';
-				return;
-			}
 			if (!response.ok) {
 				repoStatus = 'Failed to save repositories.';
 				return;
 			}
-			const updated = (await response.json()) as ConfigSnapshot;
-			configSnapshot = updated;
+			configSnapshot = (await response.json()) as ConfigSnapshot;
 			repoStatus = 'Repositories updated.';
 		} catch (error) {
 			console.error('Saving repositories failed:', error);
@@ -360,394 +463,267 @@
 			repoSaving = false;
 		}
 	};
+
+	const handleDisconnect = async () => {
+		try {
+			await fetch('/api/auth/logout', { method: 'POST' });
+		} catch (error) {
+			console.error('Disconnect failed:', error);
+		}
+		await goto('/auth');
+	};
+
+	onMount(() => {
+		loadAgents(true);
+		if (isConnected) {
+			loadConfig();
+			loadRepositories();
+			loadGithubSummary();
+		}
+	});
 </script>
 
+<main class="flex-1 overflow-y-auto">
+	<div class="mx-auto w-full max-w-[1600px] px-6 pt-8 pb-16">
+		{#if !isConnected}
+			<EmptyState
+				icon={GithubLogo}
+				title="Connect GitHub to unlock settings"
+				description="Authorize Porter to configure credentials, repos, and runtime defaults."
+				actionLabel="Connect GitHub"
+				actionHref="/api/auth/github"
+				variant="hero"
+			/>
+		{:else}
+			<div class="space-y-8">
+				<h1 class="text-2xl font-semibold text-foreground">Settings</h1>
 
-<div class="w-full max-w-[1200px] mx-auto space-y-6">
-	{#if !isConnected}
-		<EmptyState 
-			icon={GithubLogo}
-			title="Connect GitHub to unlock settings"
-			description="Authorize Porter to configure agents, repos, and runtime preferences."
-			actionLabel="Connect GitHub"
-			actionHref="/api/auth/github"
-			variant="hero"
-		/>
-	{/if}
-	{#if isConnected}
-		<div class="overflow-y-auto lg:h-[calc(100vh-190px)] lg:overflow-hidden">
-			<div class="grid gap-4 lg:grid-cols-12 lg:auto-rows-[minmax(0,1fr)] lg:h-full">
-				<Card.Root class="lg:col-span-8 border border-border/60 bg-card/70 shadow-lg backdrop-blur">
-					<Card.Header class="pb-3">
-						<div class="flex items-start justify-between gap-4">
-							<div class="flex items-start gap-4">
-								<div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-muted/70">
-									<div class="relative h-5 w-5">
-										<span class="absolute left-0 top-0 h-3.5 w-3.5 rounded-md bg-foreground/80"></span>
-										<span class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-primary"></span>
-									</div>
+				<div class="grid gap-12 lg:grid-cols-[minmax(0,1.65fr)_minmax(320px,1fr)]">
+					<div class="space-y-12">
+						<section id="credentials" class="space-y-4 border-b border-border/20 pb-10">
+							<div class="flex items-start justify-between gap-3">
+								<div>
+									<p class={sectionLabelClass}>Credentials</p>
+									<p class="mt-1 text-sm text-muted-foreground">API keys and tokens stored in your private GitHub Gist.</p>
 								</div>
-								<div class="space-y-1">
-									<p class={headerLabelClass}>Runtime</p>
-									<h2 class="text-lg font-semibold text-foreground">Readiness Status</h2>
-									<p class="text-xs text-muted-foreground">
-										Cloud runtime readiness for Porter tasks.
-									</p>
-									<p class="text-xs text-muted-foreground">
-										Webhook mentions: {webhookReady ? 'ready' : 'blocked'}
-									</p>
-								</div>
+								<Button size="sm" onclick={() => (showCredentialsModal = true)}>Manage Credentials</Button>
 							</div>
-							<div class="flex items-center gap-2">
-								<Badge variant={runtimeReady ? 'secondary' : 'outline'} class="text-xs">
-									{runtimeReady ? 'Ready' : 'Not ready'}
-								</Badge>
-								<Button variant="ghost" size="sm" type="button" onclick={refreshRuntime}>
-									Refresh
-								</Button>
-							</div>
-						</div>
-					</Card.Header>
-					<Card.Content class="grid gap-3 pt-0 sm:grid-cols-2 lg:grid-cols-4">
-						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-							<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">GitHub</p>
-							<p class="mt-2 text-sm font-medium text-foreground">Connected</p>
-							<p class="text-xs text-muted-foreground">{github.handle}</p>
-						</div>
-						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-						<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Fly</p>
-						<p class="mt-2 text-sm font-medium text-foreground">
-							{flyValidationReady ? 'Token + app ready' : flyReady ? 'Validation needed' : 'Missing token/app'}
-						</p>
-						<p class="text-xs text-muted-foreground">{fly?.flyAppName || 'No Fly app selected'}</p>
-					</div>
-						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-							<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">LLM</p>
-							<p class="mt-2 text-sm font-medium text-foreground">
-								{anthropicReady ? 'Anthropic ready' : 'Missing Anthropic key'}
-							</p>
-							<p class="text-xs text-muted-foreground">Required for agents</p>
-						</div>
-						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-							<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Repos</p>
-							<p class="mt-2 text-sm font-medium text-foreground">
-								{selectedRepoIds.length} selected
-							</p>
-							<p class="text-xs text-muted-foreground">Active scope</p>
-						</div>
-					</Card.Content>
-				</Card.Root>
 
-				<Card.Root class="lg:col-span-4 border border-border/60 bg-card/70 shadow-lg backdrop-blur">
-					<Card.Header class="pb-3">
-						<div class="flex items-start justify-between gap-4">
-							<div class="flex items-start gap-4">
-								<div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-muted/70 text-muted-foreground">
-									<Robot size={18} weight="bold" />
-								</div>
-								<div class="space-y-1">
-									<p class={headerLabelClass}>Credentials</p>
-							<h2 class="text-lg font-semibold text-foreground">Fly + LLM Keys</h2>
-								</div>
-							</div>
-							<Button size="sm" variant="secondary" onclick={() => (showCredentials = true)}>
-								Manage
-							</Button>
-						</div>
-					</Card.Header>
-					<Card.Content class="grid gap-3 pt-0">
-						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-						<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Fly</p>
-						<p class="mt-2 text-sm font-medium text-foreground">
-							{flyValidationReady ? 'Configured' : flyReady ? 'Needs validation' : 'Missing setup'}
-						</p>
-						<p class="text-xs text-muted-foreground">Cloud execution token</p>
-					</div>
-						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-							<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Anthropic</p>
-							<p class="mt-2 text-sm font-medium text-foreground">
-								{anthropicReady ? 'Ready' : 'Missing key'}
-							</p>
-							<p class="text-xs text-muted-foreground">Required for agents</p>
-						</div>
-					</Card.Content>
-				</Card.Root>
-
-				<Card.Root class="lg:col-span-6 border border-border/60 bg-card/70 shadow-lg backdrop-blur">
-					<Card.Header class="pb-3">
-						<div class="flex items-start justify-between gap-4">
-							<div class="flex items-start gap-4">
-								<div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-muted/70 text-muted-foreground">
-									<GithubLogo size={18} weight="bold" />
-								</div>
-								<div class="space-y-1">
-									<p class={headerLabelClass}>Repositories</p>
-									<h2 class="text-lg font-semibold text-foreground">Scope</h2>
-								</div>
-							</div>
-							<Button size="sm" variant="secondary" onclick={() => (showRepos = true)}>
-								Manage
-							</Button>
-						</div>
-					</Card.Header>
-					<Card.Content class="space-y-3 pt-0">
-						<Input
-							placeholder="Search repositories"
-							class="h-10"
-							bind:value={repoSearch}
-						/>
-						<div class="max-h-[240px] space-y-2 overflow-y-auto pr-1">
-							{#if repoLoading}
-								<div class="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-									Loading repositories...
-								</div>
-							{:else if filteredRepos.length === 0}
-								<div class="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-									No repositories match that search.
-								</div>
-							{:else}
-								{#each filteredRepos as repo}
-									<div class="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-xs">
-										<div>
-											<p class="text-sm font-medium text-foreground">{repo.fullName}</p>
-											{#if repo.description}
-												<p class="text-xs text-muted-foreground">{repo.description}</p>
-											{/if}
+							<div class="divide-y divide-border/30 rounded-xl border border-border/50 bg-card/30">
+								{#each ['flyToken', 'flyAppName', 'anthropic', 'amp', 'openai'] as field}
+									{@const fieldStatus = getFieldStatus(field as EditableField)}
+									<div class="space-y-2 px-4 py-3">
+										<div class="flex flex-wrap items-center gap-3">
+											<div class="min-w-[180px]">
+												<div class="flex items-center gap-2 text-sm font-medium text-foreground">
+													<img src={getFieldIcon(field as EditableField).src} alt={getFieldIcon(field as EditableField).alt} class="h-4 w-4 rounded-sm" />
+													<span>{getFieldLabel(field as EditableField)}</span>
+												</div>
+											</div>
+											<div class="min-w-0 flex-1">
+												{#if editingField === field}
+													<Input
+														value={draftValue}
+														type={isSecretField(field as EditableField) ? 'password' : 'text'}
+														oninput={(event) => (draftValue = (event.target as HTMLInputElement).value)}
+													/>
+												{:else}
+													{#if getFieldValue(field as EditableField).trim()}
+														<p class="text-sm text-muted-foreground">{formatFieldValue(field as EditableField)}</p>
+													{:else}
+														<div class="flex items-center gap-2 text-sm text-muted-foreground" title="Not configured">
+															<span class="h-2 w-2 rounded-full bg-amber-500"></span>
+															<span>Not configured</span>
+														</div>
+													{/if}
+												{/if}
+											</div>
+											<div class="flex items-center gap-2">
+												{#if editingField === field}
+													<Button size="sm" onclick={() => saveField(field as EditableField)} disabled={credentialSaving || flySaving}>
+														Save
+													</Button>
+													<Button variant="ghost" size="sm" onclick={cancelEditField}>Cancel</Button>
+												{:else}
+													<Button variant="outline" size="sm" onclick={() => startEditField(field as EditableField)}>
+														{getFieldValue(field as EditableField).trim() ? 'Edit' : 'Add'}
+													</Button>
+												{/if}
+											</div>
 										</div>
-										<Badge variant={selectedRepoIds.includes(repo.id) ? 'secondary' : 'outline'} class="text-xs">
-											{selectedRepoIds.includes(repo.id) ? 'Selected' : 'Not selected'}
-										</Badge>
-									</div>
-								{/each}
-							{/if}
-						</div>
-					</Card.Content>
-				</Card.Root>
-
-				<Card.Root class="lg:col-span-4 border border-border/60 bg-card/70 shadow-lg backdrop-blur">
-					<Card.Header class="pb-3">
-						<div class="flex items-start justify-between gap-4">
-							<div class="flex items-start gap-4">
-								<div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-muted/70 text-muted-foreground">
-									<Stack size={18} weight="bold" />
-								</div>
-								<div class="space-y-1">
-									<p class={headerLabelClass}>Agents</p>
-									<h2 class="text-lg font-semibold text-foreground">Agent Control</h2>
-								</div>
-							</div>
-							<Button size="sm" variant="secondary" onclick={() => (showAgents = true)}>
-								Manage
-							</Button>
-						</div>
-					</Card.Header>
-					<Card.Content class="grid gap-3 pt-0">
-						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-							<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Enabled</p>
-							<p class="mt-2 text-sm font-medium text-foreground">{enabledAgents} active</p>
-							<p class="text-xs text-muted-foreground">{readyAgentCount} ready</p>
-						</div>
-						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-							<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Coverage</p>
-							<p class="mt-2 text-sm font-medium text-foreground">{readyAgentCount}/{totalAgents}</p>
-							<p class="text-xs text-muted-foreground">Agents available</p>
-						</div>
-					</Card.Content>
-				</Card.Root>
-
-				<Card.Root class="lg:col-span-2 border border-border/60 bg-card/70 shadow-lg backdrop-blur">
-					<Card.Header class="pb-3">
-						<div class="flex items-start gap-4">
-							<div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-muted/70 text-muted-foreground">
-								<GithubLogo size={18} weight="bold" />
-							</div>
-							<div class="space-y-1">
-								<p class={headerLabelClass}>GitHub</p>
-								<h2 class="text-lg font-semibold text-foreground">Connection</h2>
-							</div>
-						</div>
-					</Card.Header>
-					<Card.Content class="space-y-3 pt-0">
-						<div class="rounded-lg border border-border/60 bg-background/80 p-3">
-							<p class="text-xs text-muted-foreground">Signed in as</p>
-							<p class="mt-2 text-sm font-medium text-foreground">{github.handle}</p>
-						</div>
-						<Button size="sm" variant="secondary" href="/api/auth/github">
-							Reconnect
-						</Button>
-					</Card.Content>
-				</Card.Root>
-			</div>
-		</div>
-
-		<AgentSettingsDialog bind:open={showAgents} bind:agents={agentConfig} />
-
-		<Sheet.Root bind:open={showCredentials}>
-			<Sheet.Content side="right" class="sm:max-w-xl">
-				<Sheet.Header class="border-b border-border/40 px-6 pb-4 pt-6">
-					<PageHeader
-						icon={Key}
-						label="Credentials"
-						title="Fly + Provider Keys"
-						description="Stored in your private GitHub Gist and used for cloud execution."
-					/>
-					<Sheet.Title class="sr-only">Fly + Provider Keys</Sheet.Title>
-					<Sheet.Description class="sr-only">Manage runtime credentials and provider keys.</Sheet.Description>
-				</Sheet.Header>
-				<div class="flex-1 overflow-y-auto px-6 pb-6 pt-4 space-y-6">
-					<div class="rounded-xl border border-border/60 bg-background/80 p-4 space-y-3">
-					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Fly</p>
-					<div class="space-y-3">
-						<div class="space-y-2">
-							<p class="text-sm font-medium text-foreground">Fly API Token</p>
-							<div class="flex flex-wrap gap-2">
-								<Input
-									value={fly?.flyToken ?? ''}
-									type={revealCredential.flyToken ? 'text' : 'password'}
-									placeholder="fly_..."
-									class="min-w-[220px] flex-1"
-									oninput={(event) => updateFlyToken((event.target as HTMLInputElement).value)}
-								/>
-								<Button variant="secondary" size="sm" type="button" onclick={() => toggleReveal('flyToken')}>
-									{revealCredential.flyToken ? 'Hide' : 'Reveal'}
-								</Button>
-							</div>
-						</div>
-						<div class="space-y-2">
-							<p class="text-sm font-medium text-foreground">Fly App Name</p>
-							<Input
-								value={fly?.flyAppName ?? ''}
-								type="text"
-								placeholder="porter-yourname"
-								class="min-w-[220px]"
-								oninput={(event) => updateFlyAppName((event.target as HTMLInputElement).value)}
-							/>
-						</div>
-					</div>
-					{#if flyStatus}
-						<div class="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-							{flyStatus}
-						</div>
-					{/if}
-				</div>
-					<div class="rounded-xl border border-border/60 bg-background/80 p-4 space-y-3">
-						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Provider Keys</p>
-						<div class="space-y-3">
-							{#each credentialProviders as provider}
-								<div class="rounded-lg border border-border/60 bg-background/70 p-3">
-									<div class="flex items-start justify-between gap-3">
-										<div>
-											<p class="text-sm font-medium text-foreground">{provider.label} API key</p>
-											<p class="mt-1 text-xs text-muted-foreground">{provider.note}</p>
-										</div>
-										<Badge variant={credentials?.[provider.key] ? 'secondary' : 'outline'} class="text-xs">
-											{credentials?.[provider.key] ? 'Stored' : 'Missing'}
-										</Badge>
-									</div>
-									<div class="mt-3 flex flex-wrap gap-2">
-										<Input
-											value={credentials?.[provider.key] ?? ''}
-											type={revealCredential[provider.key] ? 'text' : 'password'}
-											placeholder={`Enter ${provider.label} key`}
-											class="min-w-[220px] flex-1"
-											oninput={(event) =>
-												updateCredential(provider.key, (event.target as HTMLInputElement).value)
-											}
-										/>
-										<Button variant="secondary" size="sm" type="button" onclick={() => toggleReveal(provider.key)}>
-											{revealCredential[provider.key] ? 'Hide' : 'Reveal'}
-										</Button>
-										<Button
-											variant="outline"
-											size="sm"
-											type="button"
-											onclick={() => rotateCredential(provider.key)}
-										>
-											Rotate
-										</Button>
-									</div>
-								</div>
-							{/each}
-						</div>
-						{#if credentialStatus}
-							<div class="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-								{credentialStatus}
-							</div>
-						{/if}
-					</div>
-				</div>
-				<Sheet.Footer class="border-t border-border/40 px-6 pb-6 pt-4">
-					<div class="flex flex-wrap justify-end gap-2">
-						<Button type="button" variant="outline" onclick={() => validateFly(true)} disabled={flyValidating}>
-							{flyValidating ? 'Validating...' : 'Validate Fly'}
-						</Button>
-						<Button type="button" variant="secondary" onclick={saveFly} disabled={flySaving}>
-							{flySaving ? 'Saving...' : 'Save Fly settings'}
-						</Button>
-						<Button type="button" onclick={saveCredentials} disabled={credentialSaving}>
-							{credentialSaving ? 'Saving...' : 'Save Provider Keys'}
-						</Button>
-					</div>
-				</Sheet.Footer>
-			</Sheet.Content>
-		</Sheet.Root>
-
-		<Sheet.Root bind:open={showRepos}>
-			<Sheet.Content side="right" class="sm:max-w-xl">
-				<Sheet.Header class="border-b border-border/40 px-6 pb-4 pt-6">
-					<PageHeader
-						icon={GitBranch}
-						label="Repositories"
-						title="Repository Scope"
-						description="Select which repositories Porter should monitor."
-					/>
-					<Sheet.Title class="sr-only">Repository Scope</Sheet.Title>
-					<Sheet.Description class="sr-only">Manage repository selection scope.</Sheet.Description>
-				</Sheet.Header>
-				<div class="flex-1 overflow-y-auto px-6 pb-6 pt-4 space-y-4">
-					<Input placeholder="Search repositories" class="h-10" bind:value={repoSearch} />
-					{#if repoLoading}
-						<div class="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-							Loading repositories...
-						</div>
-					{:else if filteredRepos.length === 0}
-						<div class="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-							No repositories match that search.
-						</div>
-					{:else}
-						<div class="space-y-2">
-							{#each filteredRepos as repo}
-								<label class="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-xs">
-									<div>
-										<p class="text-sm font-medium text-foreground">{repo.fullName}</p>
-										{#if repo.description}
-											<p class="text-xs text-muted-foreground">{repo.description}</p>
+										{#if fieldStatus}
+											<div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+												{#if fieldStatus.ready}
+													<CheckCircle size={14} weight="fill" class="text-emerald-500" />
+												{:else}
+													<WarningCircle size={14} weight="fill" class="text-amber-500" />
+												{/if}
+												<span>{fieldStatus.label}</span>
+											</div>
 										{/if}
 									</div>
-									<input
-										class="h-4 w-4 accent-primary"
-										type="checkbox"
-										checked={selectedRepoIds.includes(repo.id)}
-										onchange={() => toggleRepoSelection(repo.id)}
-									/>
-								</label>
-							{/each}
-						</div>
-					{/if}
-					{#if repoStatus}
-						<div class="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-							{repoStatus}
-						</div>
-					{/if}
-				</div>
-				<Sheet.Footer class="border-t border-border/40 px-6 pb-6 pt-4">
-					<div class="flex justify-end">
-						<Button type="button" onclick={saveRepos} disabled={repoSaving}>
-							{repoSaving ? 'Saving...' : 'Save Repositories'}
-						</Button>
+								{/each}
+							</div>
+
+							<div class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+								{#if gistUrl}
+									<a href={gistUrl} target="_blank" rel="noreferrer" class="font-medium text-primary hover:text-primary/80">
+										View Gist ↗
+									</a>
+								{:else}
+									<span>View Gist unavailable</span>
+								{/if}
+								<span>Need another provider? Use Manage Credentials.</span>
+								{#if credentialStatus}<span>{credentialStatus}</span>{/if}
+								{#if flyStatus}<span>{flyStatus}</span>{/if}
+								{#if flyValidating}<span>Validating Fly...</span>{/if}
+							</div>
+						</section>
+
+						<section class="space-y-4">
+							<div>
+								<p class={sectionLabelClass}>Repositories</p>
+								<p class="mt-1 text-sm text-muted-foreground">Select which repos Porter can operate on.</p>
+							</div>
+
+							<Input placeholder="Search repositories" bind:value={repoSearch} class="h-10" />
+
+							<div class="flex flex-wrap gap-2">
+								{#each [
+									{ key: 'all', label: 'All' },
+									{ key: 'selected', label: 'Selected' },
+									{ key: 'unselected', label: 'Unselected' },
+									{ key: 'private', label: 'Private' },
+									{ key: 'public', label: 'Public' }
+								] as Array<{ key: RepoFilter; label: string }> as filter}
+									<Button
+										variant={repoFilter === filter.key ? 'secondary' : 'outline'}
+										size="sm"
+										onclick={() => (repoFilter = filter.key)}
+									>
+										{filter.label}
+									</Button>
+								{/each}
+							</div>
+
+							<div class="custom-scrollbar max-h-[350px] space-y-2 overflow-y-auto pr-1">
+								{#if repoLoading}
+									<div class="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Loading repositories...</div>
+								{:else if filteredRepos.length === 0}
+									<div class="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">No repositories match that search.</div>
+								{:else}
+									{#each filteredRepos as repo}
+										<label class={`flex cursor-pointer items-start justify-between gap-3 rounded-lg border px-3 py-2.5 transition ${selectedRepoIds.includes(repo.id) ? 'border-primary/35 bg-primary/10' : 'border-border/60 bg-background/70 hover:border-border'}`}>
+											<div>
+												<p class="text-sm font-medium text-foreground">{repo.fullName}</p>
+												{#if repo.description}
+													<p class="mt-0.5 text-xs text-muted-foreground">{repo.description}</p>
+												{/if}
+											</div>
+											<input
+												type="checkbox"
+												class="mt-1 h-4 w-4 accent-primary"
+												checked={selectedRepoIds.includes(repo.id)}
+												onchange={() => toggleRepoSelection(repo.id)}
+											/>
+										</label>
+									{/each}
+								{/if}
+							</div>
+
+							<div class="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+								<span>{selectedRepoIds.length} of {repositories.length} selected</span>
+								{#if repoStatus}<span>{repoStatus}</span>{/if}
+								<Button size="sm" onclick={saveRepos} disabled={repoSaving}>{repoSaving ? 'Saving...' : 'Save Repositories'}</Button>
+							</div>
+						</section>
 					</div>
-				</Sheet.Footer>
-			</Sheet.Content>
-		</Sheet.Root>
-	{/if}
-</div>
+
+					<div class="space-y-10">
+						<section class="space-y-3 border-b border-border/20 pb-8">
+							<p class={sectionLabelClass}>Status</p>
+							<div class="space-y-2">
+								<div class="flex items-center justify-between text-sm">
+									<span class="flex items-center gap-2">
+										{#if isConnected}<CheckCircle size={16} weight="fill" class="text-emerald-500" />{:else}<WarningCircle size={16} weight="fill" class="text-amber-500" />{/if}
+										GitHub
+									</span>
+									<span class="text-muted-foreground">{isConnected ? 'Connected' : 'Missing auth'}</span>
+								</div>
+								<div class="flex items-center justify-between text-sm">
+									<span class="flex items-center gap-2">
+										{#if flyValidationReady}<CheckCircle size={16} weight="fill" class="text-emerald-500" />{:else}<WarningCircle size={16} weight="fill" class="text-amber-500" />{/if}
+										Fly
+									</span>
+									<span class="text-muted-foreground">{flyValidationReady ? 'Connected' : 'Missing token/app'}</span>
+								</div>
+								<div class="flex items-center justify-between text-sm">
+									<span class="flex items-center gap-2">
+										{#if (credentials.anthropic ?? '').trim()}<CheckCircle size={16} weight="fill" class="text-emerald-500" />{:else}<WarningCircle size={16} weight="fill" class="text-amber-500" />{/if}
+										LLM Keys
+									</span>
+									<span class="text-muted-foreground">{(credentials.anthropic ?? '').trim() ? 'Anthropic configured' : 'Missing Anthropic key'}</span>
+								</div>
+								<div class="flex items-center justify-between text-sm">
+									<span class="flex items-center gap-2">
+										{#if reposReady}<CheckCircle size={16} weight="fill" class="text-emerald-500" />{:else}<WarningCircle size={16} weight="fill" class="text-amber-500" />{/if}
+										Repositories
+									</span>
+									<span class="text-muted-foreground">{selectedRepoIds.length} selected</span>
+								</div>
+								<div class="flex items-center justify-between text-sm">
+									<span class="flex items-center gap-2">
+										{#if webhookReady}<CheckCircle size={16} weight="fill" class="text-emerald-500" />{:else}<WarningCircle size={16} weight="fill" class="text-amber-500" />{/if}
+										Webhook
+									</span>
+									<span class="text-muted-foreground">{webhookReady ? 'Active' : 'Blocked'}</span>
+								</div>
+							</div>
+						</section>
+
+						<section class="space-y-3 border-b border-border/20 pb-8">
+							<p class={sectionLabelClass}>GitHub</p>
+							<div class="flex items-center gap-3">
+								{#if githubSummary.user?.avatarUrl}
+									<img src={githubSummary.user.avatarUrl} alt="GitHub avatar" class="h-9 w-9 rounded-full border border-border/60" />
+								{:else}
+									<div class="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-muted/60">
+										<GithubLogo size={16} weight="bold" class="text-muted-foreground" />
+									</div>
+								{/if}
+								<div>
+									<p class="text-sm font-medium text-foreground">Signed in as {githubHandle}</p>
+									<p class="text-xs text-muted-foreground">App installed on {installedRepoCount} repositories</p>
+								</div>
+							</div>
+							<div class="flex flex-wrap gap-2">
+								<Button variant="secondary" href="/api/auth/github">Reconnect</Button>
+								<Button variant="outline" class="text-destructive hover:text-destructive" onclick={handleDisconnect}>Disconnect</Button>
+							</div>
+						</section>
+
+						<section class="space-y-3">
+							<p class={sectionLabelClass}>Agents</p>
+							<p class="text-sm text-foreground">{enabledAgents.length} of {agentConfig.length} agents enabled</p>
+							<div class="space-y-2">
+								{#each agentConfig as agent}
+									<div class="flex items-center justify-between text-sm">
+										<span class="flex items-center gap-2">
+											<img src={getAgentIcon(agent)} alt={agent.name} class="h-4 w-4 rounded-sm" />
+											{agent.displayName ?? agent.name}
+										</span>
+										<span class={`h-2 w-2 rounded-full ${agent.enabled ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`}></span>
+									</div>
+								{/each}
+							</div>
+							<Button class="w-full" onclick={() => (showAgents = true)}>Configure Agents</Button>
+						</section>
+					</div>
+				</div>
+			</div>
+
+			<AgentSettingsDialog bind:open={showAgents} bind:agents={agentConfig} />
+			<CredentialsModal bind:open={showCredentialsModal} onsaved={loadConfig} />
+		{/if}
+	</div>
+</main>

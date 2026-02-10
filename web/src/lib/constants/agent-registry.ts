@@ -30,7 +30,7 @@ export const AGENT_REGISTRY: AgentRegistryEntry[] = [
 		provider: 'Anthropic',
 		requiredKeys: ['amp'],
 		description: 'High throughput agent for rapid iteration.',
-		docsUrl: 'https://www.anthropic.com'
+		docsUrl: 'https://ampcode.com'
 	}
 ];
 

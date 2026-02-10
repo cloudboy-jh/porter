@@ -35,7 +35,7 @@
 	const agentDomains: Record<string, string> = {
 		opencode: 'opencode.ai',
 		'claude-code': 'claude.ai',
-		amp: 'anthropic.com'
+		amp: 'ampcode.com'
 	};
 
 	const getAgentIcon = (agent: string) =>
@@ -118,7 +118,7 @@
 		showStatusActions && (task.status === 'running' || task.status === 'queued');
 </script>
 
-<div class="mx-auto w-full max-w-[1200px] rounded-2xl border border-border/60 bg-card/70">
+<div class="w-full rounded-2xl border border-border/60 bg-card/70">
 	<div class="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 px-4 py-3 sm:px-5">
 		<PageHeader icon={headerIcon ?? undefined} label={headerLabel} title={title} titleClass="font-mono" />
 		<div class="flex flex-wrap items-center gap-2">
@@ -126,7 +126,7 @@
 		</div>
 	</div>
 	<div class="max-h-[74vh] overflow-y-auto p-4 hide-scrollbar sm:p-5">
-		<div class="relative">
+		<div class={`relative mx-auto w-full ${layout === 'timeline' ? 'max-w-[932px]' : 'max-w-[900px]'}`}>
 			{#if tasks.length === 0}
 				<EmptyState 
 					title={emptyTitle}
@@ -151,7 +151,7 @@
 								</div>
 							{/if}
 							<Card.Root
-								class={`group task-card task-card--${task.status} rounded-2xl border border-border/60 bg-card/75 ${task.expanded ? 'is-expanded' : ''}`}
+								class={`group w-full task-card task-card--${task.status} rounded-2xl border border-border/60 bg-card/75 ${task.expanded ? 'is-expanded' : ''}`}
 								style={`--task-progress: ${task.progress}%`}
 								role="button"
 								tabindex={0}
@@ -244,7 +244,7 @@
 							</Card.Root>
 
 							{#if task.expanded}
-								<Card.Root class="border border-border/60 bg-background/70">
+								<Card.Root class="w-full border border-border/60 bg-background/70">
 									<Card.Content class="space-y-4 p-4">
 										<div class="grid gap-4 md:grid-cols-6">
 											<div>

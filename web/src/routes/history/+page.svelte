@@ -34,7 +34,7 @@
 	const agentDomains: Record<string, string> = {
 		opencode: 'opencode.ai',
 		'claude-code': 'claude.ai',
-		amp: 'anthropic.com'
+		amp: 'ampcode.com'
 	};
 
 	const getAgentIcon = (agent: string) =>

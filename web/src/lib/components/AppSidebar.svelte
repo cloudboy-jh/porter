@@ -25,8 +25,16 @@
 	const activeAgents = $derived(agents.filter((agent) => agent.count > 0));
 	const collapsedAgents = $derived((activeAgents.length ? activeAgents : agents).slice(0, 2));
 
-	const getAgentIcon = (domain: string) =>
-		`https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+	const agentDomains: Record<string, string> = {
+		opencode: 'opencode.ai',
+		'claude-code': 'claude.ai',
+		amp: 'ampcode.com'
+	};
+
+	const getAgentIcon = (name: string, domain?: string) => {
+		const iconDomain = agentDomains[name] ?? domain ?? 'github.com';
+		return `https://www.google.com/s2/favicons?domain=${iconDomain}&sz=64`;
+	};
 
 	const stats: Array<{ label: string; value: string; detail: string }> = [];
 
@@ -116,7 +124,7 @@
 								class:opacity-50={agent.count === 0}
 								class:cursor-not-allowed={agent.count === 0}
 							>
-								<img class="h-7 w-7 rounded-lg border border-sidebar-border/60" src={getAgentIcon(agent.domain)} alt="" />
+								<img class="h-7 w-7 rounded-lg border border-sidebar-border/60" src={getAgentIcon(agent.name, agent.domain)} alt="" />
 								<span class="flex-1 font-mono text-left capitalize text-sidebar-foreground/80">
 									{agent.name}
 								</span>
@@ -142,7 +150,7 @@
 								class:opacity-60={agent.count === 0}
 								class:cursor-not-allowed={agent.count === 0}
 							>
-								<img class="h-7 w-7 rounded-lg border border-sidebar-border/60" src={getAgentIcon(agent.domain)} alt="" />
+								<img class="h-7 w-7 rounded-lg border border-sidebar-border/60" src={getAgentIcon(agent.name, agent.domain)} alt="" />
 								<span class="flex-1 font-mono text-left capitalize text-sidebar-foreground/75">
 									{agent.name}
 								</span>
@@ -200,7 +208,7 @@
 		<Dialog.Header>
 			<Dialog.Title class="flex items-center gap-2">
 				{#if selectedAgent}
-					<img class="h-6 w-6 rounded-full" src={getAgentIcon(selectedAgent.domain)} alt="" />
+					<img class="h-6 w-6 rounded-full" src={getAgentIcon(selectedAgent.name, selectedAgent.domain)} alt="" />
 					<span class="capitalize">{selectedAgent.name}</span>
 					<Badge variant="outline" class="text-[0.65rem] uppercase tracking-[0.18em]">
 						{selectedAgent.count} task{selectedAgent.count !== 1 ? 's' : ''}

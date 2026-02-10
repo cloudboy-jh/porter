@@ -1,21 +1,9 @@
-<!--
-	AgentSettings - Agent Configuration Form Component
-	
-	This is a reusable form component for managing agent configuration.
-	It displays agent status, enable/disable toggles, and cloud defaults.
-	
-	Used in:
-	- AgentSettingsDialog (Dashboard "Agents" button)
-	- /settings page (full settings page)
--->
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
-	import { Separator } from '$lib/components/ui/separator/index.js';
 	import type { AgentConfig } from '$lib/types/agent';
-	import { Clock, Target, TrendUp } from 'phosphor-svelte';
 
 	type AgentDisplay = AgentConfig & {
 		readyState?: 'ready' | 'missing_credentials' | 'disabled';
@@ -28,18 +16,33 @@
 		agents = $bindable([] as AgentDisplay[]),
 		onrefresh,
 		onsave,
+		onopencredentials,
 		framed = true,
 		mode = 'full'
 	}: {
 		agents?: AgentDisplay[];
 		onrefresh?: () => void;
 		onsave?: (config: AgentDisplay[]) => void;
+		onopencredentials?: () => void;
 		framed?: boolean;
 		mode?: 'full' | 'quick';
 	} = $props();
 
-	const getAgentIcon = (domain?: string) =>
-		domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : '';
+	const agentDomains: Record<string, string> = {
+		opencode: 'opencode.ai',
+		'claude-code': 'claude.ai',
+		amp: 'ampcode.com'
+	};
+
+	const getAgentIcon = (name: string, domain?: string) => {
+		const iconDomain = agentDomains[name] ?? domain;
+		return iconDomain ? `https://www.google.com/s2/favicons?domain=${iconDomain}&sz=64` : '';
+	};
+
+	const isReady = (agent: AgentDisplay) => agent.readyState === 'ready';
+	const needsCredentials = (agent: AgentDisplay) => agent.readyState === 'missing_credentials';
+	const getAgentLabel = (agent: AgentDisplay) => agent.displayName ?? agent.name;
+	const getProviderLabel = (agent: AgentDisplay) => agent.provider ?? 'Provider';
 
 	const toggleAgent = (name: string) => {
 		agents = agents.map((agent) =>
@@ -47,548 +50,152 @@
 		);
 	};
 
-	const updatePriority = (name: string, priority: AgentDisplay['priority']) => {
-		agents = agents.map((agent) => (agent.name === name ? { ...agent, priority } : agent));
-	};
-
 	const updatePrompt = (name: string, customPrompt: string) => {
 		agents = agents.map((agent) => (agent.name === name ? { ...agent, customPrompt } : agent));
 	};
 
-	let expandedPrompts = $state<Record<string, boolean>>({});
-
-	const isPromptExpanded = (name: string) => expandedPrompts[name] ?? false;
-
-	const togglePrompt = (name: string) => {
-		expandedPrompts = { ...expandedPrompts, [name]: !isPromptExpanded(name) };
+	const autoResizeTextarea = (event: Event) => {
+		const target = event.target as HTMLTextAreaElement;
+		target.style.height = 'auto';
+		const lineHeight = 20;
+		const maxHeight = lineHeight * 6 + 16;
+		target.style.height = `${Math.min(target.scrollHeight, maxHeight)}px`;
+		target.style.overflowY = target.scrollHeight > maxHeight ? 'auto' : 'hidden';
 	};
 
-	const handleSave = () => {
-		onsave?.(agents);
-	};
-
-	const handleRefresh = () => {
-		onrefresh?.();
-	};
-
-	const getStatusColor = (status: string, installed?: boolean) => {
-		if (installed === false) return 'text-destructive bg-destructive/15';
-		switch (status) {
-			case 'idle':
-				return 'text-emerald-600 bg-emerald-500/15';
-			case 'active':
-				return 'text-amber-600 bg-amber-500/15';
-			case 'error':
-				return 'text-destructive bg-destructive/15';
-			case 'disabled':
-				return 'text-muted-foreground bg-muted';
-			default:
-				return 'text-muted-foreground bg-muted';
+	const handleOpenCredentials = async () => {
+		if (onopencredentials) {
+			onopencredentials();
+			return;
 		}
+		await goto('/settings#credentials');
 	};
 
-	const contentClass = framed ? 'space-y-3' : 'space-y-4';
-	const isReady = (agent: AgentDisplay) => agent.readyState === 'ready';
-	const needsCredentials = (agent: AgentDisplay) => agent.readyState === 'missing_credentials';
-	const getAgentLabel = (agent: AgentDisplay) => agent.displayName ?? agent.name;
-	const getProviderLabel = (agent: AgentDisplay) => agent.provider ?? 'Provider';
-	const isQuick = mode === 'quick';
+	const handleSave = () => onsave?.(agents);
+	const handleRefresh = () => onrefresh?.();
 </script>
 
-{#if isQuick}
-	<div class="space-y-3">
-		{#if agents.length === 0}
-			<div class="rounded-2xl border border-dashed border-border/60 bg-card/50 p-8 text-center">
-				<p class="text-sm text-muted-foreground">No agents detected</p>
-				<Button variant="outline" size="sm" class="mt-3" onclick={handleRefresh}>
-					Scan for Agents
-				</Button>
-			</div>
-		{:else}
-			<div class="space-y-3">
-				{#each agents as agent}
-					<div class="rounded-2xl border border-border/60 bg-card/70 p-4 shadow-sm">
-						<div class="flex flex-wrap items-center justify-between gap-4">
-							<div class="flex items-center gap-3">
-								{#if agent.domain}
-									<img
-										class="h-9 w-9 rounded-xl border border-border/60 bg-background/80"
-										src={getAgentIcon(agent.domain)}
-										alt={getAgentLabel(agent)}
-									/>
-								{/if}
-								<div>
-									<p class="text-[0.6rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-										Agent
-									</p>
-									<h4 class="text-sm font-semibold capitalize text-foreground">{getAgentLabel(agent)}</h4>
-									<p class="text-xs text-muted-foreground">{getProviderLabel(agent)} provider</p>
-								</div>
-							</div>
-							<div class="flex items-center gap-2">
-								<Badge
-									variant="outline"
-									class={getStatusColor(agent.status, isReady(agent) ? undefined : false)}
-								>
-									{needsCredentials(agent) ? 'missing keys' : agent.status}
-								</Badge>
-								<Button
-									variant={agent.enabled ? 'secondary' : 'default'}
-									size="sm"
-									type="button"
-									onclick={() => toggleAgent(agent.name)}
-								>
-									{agent.enabled ? 'Disable' : 'Enable'}
-								</Button>
-							</div>
-						</div>
-
-						{#if agent.enabled && needsCredentials(agent)}
-							<div class="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-								Missing credentials for {getProviderLabel(agent)}. Add keys in
-								<a href="/settings" class="ml-1 font-semibold underline">Settings</a>.
-							</div>
-						{/if}
-						<div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-							<div class="space-y-2">
-								<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-									Priority
-								</p>
-								<RadioGroup.Root
-									value={agent.priority}
-									onValueChange={(value) =>
-										updatePriority(agent.name, value as AgentConfig['priority'])
-									}
-									class="grid grid-cols-3 gap-1 rounded-xl border border-border/60 bg-muted/40 p-1"
-									disabled={!agent.enabled}
-								>
-									<label class="flex-1 cursor-pointer">
-										<RadioGroup.Item value="low" class="peer sr-only" />
-										<div
-											class="rounded-lg px-3 py-2 text-center text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
-										>
-											Low
-										</div>
-									</label>
-									<label class="flex-1 cursor-pointer">
-										<RadioGroup.Item value="normal" class="peer sr-only" />
-										<div
-											class="rounded-lg px-3 py-2 text-center text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
-										>
-											Normal
-										</div>
-									</label>
-									<label class="flex-1 cursor-pointer">
-										<RadioGroup.Item value="high" class="peer sr-only" />
-										<div
-											class="rounded-lg px-3 py-2 text-center text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
-										>
-											High
-										</div>
-									</label>
-								</RadioGroup.Root>
-						</div>
-						<div class="space-y-2">
-							<div class="flex items-center justify-between">
-								<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-									Prompt Guidance
-								</p>
-								<button
-									type="button"
-									class="text-xs font-semibold text-foreground/70 transition hover:text-foreground"
-									onclick={() => togglePrompt(agent.name)}
-									disabled={!agent.enabled}
-								>
-									{isPromptExpanded(agent.name) ? 'Collapse' : 'Expand'}
-								</button>
-							</div>
-							{#if isPromptExpanded(agent.name)}
-								<textarea
-									value={agent.customPrompt ?? ''}
-									placeholder="Add default instructions for this agent..."
-									rows="3"
-									class="w-full resize-none rounded-xl border border-border/70 bg-background/80 px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
-									oninput={(event) =>
-										updatePrompt(agent.name, (event.target as HTMLTextAreaElement).value)
-									}
-									disabled={!agent.enabled}
-								></textarea>
-							{:else}
-								<input
-									value={agent.customPrompt ?? ''}
-									placeholder="Add default instructions..."
-									class="w-full rounded-xl border border-border/70 bg-background/80 px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
-									oninput={(event) =>
-										updatePrompt(agent.name, (event.target as HTMLInputElement).value)
-									}
-									disabled={!agent.enabled}
-								/>
-							{/if}
-						</div>
-					</div>
-				</div>
-				{/each}
-			</div>
-		{/if}
-	</div>
-{:else if framed}
+{#if framed}
 	<Card.Root>
 		<Card.Header class="pb-3">
 			<div class="flex items-center justify-between">
-				<div>
-					<Card.Title class="text-sm">Agent Configuration</Card.Title>
-				</div>
-				<Button variant="secondary" size="sm" type="button" onclick={handleRefresh}>
-					Refresh
-				</Button>
+				<Card.Title class="text-sm">Agent Configuration</Card.Title>
+				<Button variant="secondary" size="sm" type="button" onclick={handleRefresh}>Refresh</Button>
 			</div>
 		</Card.Header>
-		<Card.Content class={contentClass}>
+		<Card.Content class="space-y-3">
 			{#if agents.length === 0}
 				<div class="rounded-lg border border-dashed border-border p-8 text-center">
 					<p class="text-sm text-muted-foreground">No agents detected</p>
-					<Button variant="outline" size="sm" class="mt-3" onclick={handleRefresh}>
-						Scan for Agents
-					</Button>
+					<Button variant="outline" size="sm" class="mt-3" onclick={handleRefresh}>Scan for Agents</Button>
 				</div>
 			{:else}
-				<div class={contentClass}>
+				<div class="space-y-3">
 					{#each agents as agent}
-						<div class="rounded-lg border border-border/60 bg-background/70 p-4">
-							<div class="flex flex-wrap items-center justify-between gap-4">
-								<div class="flex items-center gap-3">
-									{#if agent.domain}
-										<img
-											class="h-10 w-10 rounded-lg border border-border"
-											src={getAgentIcon(agent.domain)}
-										alt={getAgentLabel(agent)}
-										/>
+						<div class="rounded-xl border border-border/60 bg-background/70 p-3">
+							<div class="flex flex-wrap items-start justify-between gap-3">
+								<div class="flex min-w-0 items-center gap-3">
+									{#if agent.domain || agent.name}
+										<img class="h-8 w-8 rounded-lg border border-border/60" src={getAgentIcon(agent.name, agent.domain)} alt={getAgentLabel(agent)} />
 									{/if}
-									<div>
+									<div class="min-w-0">
 										<div class="flex items-center gap-2">
-											<h4 class="font-medium capitalize">{getAgentLabel(agent)}</h4>
-											<Badge
-												variant="outline"
-												class={getStatusColor(agent.status, isReady(agent) ? undefined : false)}
-											>
-												{needsCredentials(agent) ? 'missing keys' : agent.status}
+											<h4 class="truncate text-sm font-semibold capitalize">{getAgentLabel(agent)}</h4>
+											<Badge variant="outline" class={isReady(agent) ? 'text-emerald-600 bg-emerald-500/15' : 'text-muted-foreground bg-muted'}>
+												{needsCredentials(agent) ? 'Missing keys' : agent.status}
 											</Badge>
 										</div>
-										{#if agent.version}
-											<p class="mt-0.5 text-xs text-muted-foreground">Version {agent.version}</p>
-										{:else if needsCredentials(agent)}
-											<p class="mt-0.5 text-xs text-destructive">
-												Add {getProviderLabel(agent)} credentials to run this agent.
+										<p class="text-xs text-muted-foreground">{getProviderLabel(agent)} provider</p>
+										{#if needsCredentials(agent)}
+											<p class="mt-1 text-xs text-amber-600">
+												⚠ Missing {getProviderLabel(agent)} key ·
+												<button type="button" class="font-semibold hover:underline" onclick={handleOpenCredentials}>Settings →</button>
 											</p>
 										{/if}
 									</div>
 								</div>
-								<div class="flex items-center gap-2">
-									<Button
-										variant={agent.enabled ? 'secondary' : 'default'}
-										size="sm"
-										type="button"
-										onclick={() => toggleAgent(agent.name)}
-									>
-										{agent.enabled ? 'Disable' : 'Enable'}
-									</Button>
-								</div>
+								<Button variant={agent.enabled ? 'secondary' : 'default'} size="sm" type="button" onclick={() => toggleAgent(agent.name)}>
+									{agent.enabled ? 'Disable' : 'Enable'}
+								</Button>
 							</div>
-
-							{#if agent.enabled && (agent.taskCount || agent.successRate || agent.lastUsed)}
-								<Separator class="my-3" />
-								<div class="grid grid-cols-3 gap-4 text-sm">
-									{#if agent.taskCount !== undefined}
-										<div class="flex items-center gap-2">
-										<Target size={14} weight="bold" class="text-muted-foreground" />
-											<div>
-												<p class="text-xs text-muted-foreground">Tasks</p>
-												<p class="font-medium font-mono">{agent.taskCount}</p>
-											</div>
-										</div>
-									{/if}
-									{#if agent.successRate !== undefined}
-										<div class="flex items-center gap-2">
-										<TrendUp size={14} class="text-emerald-600" />
-											<div>
-												<p class="text-xs text-muted-foreground">Success</p>
-												<p class="font-medium font-mono text-emerald-600">
-													{agent.successRate}%
-												</p>
-											</div>
-										</div>
-									{/if}
-									{#if agent.lastUsed}
-										<div class="flex items-center gap-2">
-										<Clock size={14} weight="bold" class="text-muted-foreground" />
-											<div>
-												<p class="text-xs text-muted-foreground">Last Used</p>
-												<p class="font-medium">{agent.lastUsed}</p>
-											</div>
-										</div>
-									{/if}
-								</div>
-							{/if}
-
-							<Separator class="my-3" />
-							<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-								<div class="space-y-2">
-									<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-										Default Priority
-									</p>
-									<RadioGroup.Root
-										value={agent.priority}
-										onValueChange={(value) =>
-											updatePriority(agent.name, value as AgentConfig['priority'])
-										}
-										class="grid grid-cols-3 gap-1 rounded-lg border border-border/60 bg-muted/40 p-1"
+							<div class="mt-3 space-y-1.5">
+									<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Prompt Guidance</p>
+									<textarea
+										value={agent.customPrompt ?? ''}
+										placeholder="Add default instructions..."
+										rows="2"
+										class="min-h-[56px] w-full resize-none rounded-lg border border-border/70 bg-background px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
+										onfocus={autoResizeTextarea}
+										oninput={(event) => {
+											autoResizeTextarea(event);
+											updatePrompt(agent.name, (event.target as HTMLTextAreaElement).value);
+										}}
 										disabled={!agent.enabled}
-									>
-										<label class="flex-1 cursor-pointer">
-											<RadioGroup.Item value="low" class="peer sr-only" />
-											<div
-												class="rounded-md px-3 py-2 text-center text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
-											>
-												Low
-											</div>
-										</label>
-										<label class="flex-1 cursor-pointer">
-											<RadioGroup.Item value="normal" class="peer sr-only" />
-											<div
-												class="rounded-md px-3 py-2 text-center text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
-											>
-												Normal
-											</div>
-										</label>
-										<label class="flex-1 cursor-pointer">
-											<RadioGroup.Item value="high" class="peer sr-only" />
-											<div
-												class="rounded-md px-3 py-2 text-center text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
-											>
-												High
-											</div>
-										</label>
-									</RadioGroup.Root>
-								</div>
-								<div class="space-y-2">
-									<div class="flex items-center justify-between">
-										<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-											Custom Prompt
-										</p>
-										<button
-											type="button"
-											class="text-xs font-semibold text-foreground/70 transition hover:text-foreground"
-											onclick={() => togglePrompt(agent.name)}
-											disabled={!agent.enabled}
-										>
-											{isPromptExpanded(agent.name) ? 'Collapse' : 'Expand'}
-										</button>
-									</div>
-									{#if isPromptExpanded(agent.name)}
-										<textarea
-											value={agent.customPrompt ?? ''}
-											placeholder="Add default instructions for this agent..."
-											rows="3"
-											class="w-full resize-none rounded-lg border border-border/70 bg-background px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
-											oninput={(event) =>
-												updatePrompt(agent.name, (event.target as HTMLTextAreaElement).value)
-											}
-											disabled={!agent.enabled}
-										></textarea>
-									{:else}
-										<input
-											value={agent.customPrompt ?? ''}
-											placeholder="Add default instructions..."
-											class="w-full rounded-lg border border-border/70 bg-background px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
-											oninput={(event) =>
-												updatePrompt(agent.name, (event.target as HTMLInputElement).value)
-											}
-											disabled={!agent.enabled}
-										/>
-									{/if}
-								</div>
+									></textarea>
 							</div>
 						</div>
-				{/each}
-			</div>
+					{/each}
+				</div>
 			{/if}
 		</Card.Content>
-		<Card.Footer class="flex items-center justify-between">
-			<Button variant="ghost" size="sm" type="button" onclick={handleRefresh}>
-				Refresh
-			</Button>
+		<Card.Footer class="justify-end">
 			<Button type="button" onclick={handleSave}>Save Changes</Button>
 		</Card.Footer>
 	</Card.Root>
 {:else}
-	<div class={contentClass}>
+<div class={mode === 'quick' ? 'space-y-2.5' : 'space-y-3'}>
 		{#if agents.length === 0}
-			<div class="rounded-lg border border-dashed border-border p-8 text-center">
+			<div class="rounded-xl border border-dashed border-border/60 bg-card/50 p-8 text-center">
 				<p class="text-sm text-muted-foreground">No agents detected</p>
-				<Button variant="outline" size="sm" class="mt-3" onclick={handleRefresh}>
-					Scan for Agents
-				</Button>
+				<Button variant="outline" size="sm" class="mt-3" onclick={handleRefresh}>Scan for Agents</Button>
 			</div>
 		{:else}
-			<div class={contentClass}>
-				{#each agents as agent}
-					<div class="rounded-lg border border-border/60 bg-background/70 p-4">
-						<div class="flex flex-wrap items-center justify-between gap-4">
-							<div class="flex items-center gap-3">
-								{#if agent.domain}
-									<img
-										class="h-10 w-10 rounded-lg border border-border"
-										src={getAgentIcon(agent.domain)}
-										alt={getAgentLabel(agent)}
-									/>
-								{/if}
-								<div>
-									<div class="flex items-center gap-2">
-										<h4 class="font-medium capitalize">{getAgentLabel(agent)}</h4>
-										<Badge
-											variant="outline"
-											class={getStatusColor(agent.status, isReady(agent) ? undefined : false)}
-										>
-											{needsCredentials(agent) ? 'missing keys' : agent.status}
-										</Badge>
-									</div>
-									{#if agent.version}
-										<p class="mt-0.5 text-xs text-muted-foreground">Version {agent.version}</p>
-									{:else if needsCredentials(agent)}
-										<p class="mt-0.5 text-xs text-destructive">
-											Add {getProviderLabel(agent)} credentials to run this agent.
-										</p>
-									{/if}
+			{#each agents as agent}
+				<div class="rounded-xl border border-border/60 bg-card/70 p-3">
+					<div class="flex flex-wrap items-start justify-between gap-3">
+						<div class="flex min-w-0 items-center gap-3">
+							{#if agent.domain || agent.name}
+								<img class="h-8 w-8 rounded-lg border border-border/60 bg-background/80" src={getAgentIcon(agent.name, agent.domain)} alt={getAgentLabel(agent)} />
+							{/if}
+							<div class="min-w-0">
+								<p class="text-[0.6rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Agent</p>
+								<div class="flex items-center gap-2">
+									<h4 class="truncate text-sm font-semibold capitalize text-foreground">{getAgentLabel(agent)}</h4>
+									<Badge variant="outline" class={isReady(agent) ? 'text-emerald-600 bg-emerald-500/15' : 'text-muted-foreground bg-muted'}>
+										{needsCredentials(agent) ? 'Missing keys' : agent.status}
+									</Badge>
 								</div>
-							</div>
-							<div class="flex items-center gap-2">
-								<Button
-									variant={agent.enabled ? 'secondary' : 'default'}
-									size="sm"
-									type="button"
-									onclick={() => toggleAgent(agent.name)}
-								>
-									{agent.enabled ? 'Disable' : 'Enable'}
-								</Button>
-							</div>
-						</div>
-
-						{#if agent.enabled && (agent.taskCount || agent.successRate || agent.lastUsed)}
-							<Separator class="my-3" />
-							<div class="grid grid-cols-3 gap-4 text-sm">
-								{#if agent.taskCount !== undefined}
-									<div class="flex items-center gap-2">
-										<Target size={14} weight="bold" class="text-muted-foreground" />
-										<div>
-											<p class="text-xs text-muted-foreground">Tasks</p>
-											<p class="font-medium font-mono">{agent.taskCount}</p>
-										</div>
-									</div>
-								{/if}
-								{#if agent.successRate !== undefined}
-									<div class="flex items-center gap-2">
-										<TrendUp size={14} weight="bold" class="text-emerald-600" />
-										<div>
-											<p class="text-xs text-muted-foreground">Success</p>
-											<p class="font-medium font-mono text-emerald-600">
-												{agent.successRate}%
-											</p>
-										</div>
-									</div>
-								{/if}
-								{#if agent.lastUsed}
-									<div class="flex items-center gap-2">
-										<Clock size={14} weight="bold" class="text-muted-foreground" />
-										<div>
-											<p class="text-xs text-muted-foreground">Last Used</p>
-											<p class="font-medium">{agent.lastUsed}</p>
-										</div>
-									</div>
-								{/if}
-							</div>
-						{/if}
-
-						<Separator class="my-3" />
-						<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-							<div class="space-y-2">
-								<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-									Default Priority
-								</p>
-								<RadioGroup.Root
-									value={agent.priority}
-									onValueChange={(value) =>
-										updatePriority(agent.name, value as AgentConfig['priority'])
-									}
-									class="grid grid-cols-3 gap-1 rounded-lg border border-border/60 bg-muted/40 p-1"
-									disabled={!agent.enabled}
-								>
-									<label class="flex-1 cursor-pointer">
-										<RadioGroup.Item value="low" class="peer sr-only" />
-										<div
-											class="rounded-md px-3 py-2 text-center text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
-										>
-											Low
-										</div>
-									</label>
-									<label class="flex-1 cursor-pointer">
-										<RadioGroup.Item value="normal" class="peer sr-only" />
-										<div
-											class="rounded-md px-3 py-2 text-center text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
-										>
-											Normal
-										</div>
-									</label>
-									<label class="flex-1 cursor-pointer">
-										<RadioGroup.Item value="high" class="peer sr-only" />
-										<div
-											class="rounded-md px-3 py-2 text-center text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition peer-data-[state=checked]:bg-background peer-data-[state=checked]:text-foreground peer-data-[state=checked]:shadow-[0_1px_2px_rgba(20,19,18,0.08)]"
-										>
-											High
-										</div>
-									</label>
-								</RadioGroup.Root>
-							</div>
-							<div class="space-y-2">
-								<div class="flex items-center justify-between">
-									<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-										Custom Prompt
+								<p class="text-xs text-muted-foreground">{getProviderLabel(agent)} provider</p>
+								{#if needsCredentials(agent)}
+									<p class="mt-1 text-xs text-amber-600">
+										⚠ Missing {getProviderLabel(agent)} key ·
+										<button type="button" class="font-semibold hover:underline" onclick={handleOpenCredentials}>Settings →</button>
 									</p>
-									<button
-										type="button"
-										class="text-xs font-semibold text-foreground/70 transition hover:text-foreground"
-										onclick={() => togglePrompt(agent.name)}
-										disabled={!agent.enabled}
-									>
-										{isPromptExpanded(agent.name) ? 'Collapse' : 'Expand'}
-									</button>
-								</div>
-								{#if isPromptExpanded(agent.name)}
-									<textarea
-										value={agent.customPrompt ?? ''}
-										placeholder="Add default instructions for this agent..."
-										rows="3"
-										class="w-full resize-none rounded-lg border border-border/70 bg-background px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
-										oninput={(event) =>
-											updatePrompt(agent.name, (event.target as HTMLTextAreaElement).value)
-										}
-										disabled={!agent.enabled}
-									></textarea>
-								{:else}
-									<input
-										value={agent.customPrompt ?? ''}
-										placeholder="Add default instructions..."
-										class="w-full rounded-lg border border-border/70 bg-background px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
-										oninput={(event) =>
-											updatePrompt(agent.name, (event.target as HTMLInputElement).value)
-										}
-										disabled={!agent.enabled}
-									/>
 								{/if}
 							</div>
 						</div>
+						<Button variant={agent.enabled ? 'secondary' : 'default'} size="sm" type="button" onclick={() => toggleAgent(agent.name)}>
+							{agent.enabled ? 'Disable' : 'Enable'}
+						</Button>
 					</div>
-				{/each}
-			</div>
+
+					<div class="mt-3 space-y-1.5">
+							<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Prompt Guidance</p>
+							<textarea
+								value={agent.customPrompt ?? ''}
+								placeholder="Add default instructions..."
+								rows="2"
+								class="min-h-[56px] w-full resize-none rounded-lg border border-border/70 bg-background/80 px-3 py-2 text-sm shadow-[0_1px_2px_rgba(20,19,18,0.06)] focus:outline-none focus:ring-2 focus:ring-ring/40"
+								onfocus={autoResizeTextarea}
+								oninput={(event) => {
+									autoResizeTextarea(event);
+									updatePrompt(agent.name, (event.target as HTMLTextAreaElement).value);
+								}}
+								disabled={!agent.enabled}
+							></textarea>
+					</div>
+				</div>
+			{/each}
 		{/if}
 	</div>
 {/if}

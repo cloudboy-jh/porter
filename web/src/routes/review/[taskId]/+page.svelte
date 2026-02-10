@@ -48,11 +48,10 @@
 		document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 	};
 
-	const isCompactReviewDiff = $derived(data.files.length >= 1 && data.files.length <= 3);
 </script>
 
-<div class={`flex min-h-full justify-center py-4 ${isCompactReviewDiff ? 'items-center' : 'items-start'}`}>
-	<div class="w-full max-w-[1200px] space-y-6">
+<main class="flex-1 overflow-y-auto">
+	<div class="mx-auto w-full max-w-[1600px] space-y-6 px-6 pt-8 pb-16">
 		<Card.Root class="border border-border/60 bg-card/70">
 		<Card.Content class="space-y-4 p-6">
 			<div class="flex flex-wrap items-start justify-between gap-4">
@@ -184,7 +183,7 @@
 		</Card.Content>
 		</Card.Root>
 	</div>
-</div>
+</main>
 
 <Dialog.Root bind:open={confirmOpen}>
 	<Dialog.Content class="sm:max-w-md">

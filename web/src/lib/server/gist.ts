@@ -175,6 +175,14 @@ export const saveConfigToGist = async (token: string, config: PorterConfig): Pro
 	return response.ok;
 };
 
+export const getConfigGistUrl = async (token: string): Promise<string | null> => {
+	const gist = await findConfigGist(token);
+	if (!gist?.id) return null;
+	if (gist.html_url) return gist.html_url;
+	const full = await fetchGist(token, gist.id);
+	return full?.html_url ?? null;
+};
+
 export const clearGistCache = (token: string) => {
 	const cacheKey = `gists:configId:${token.slice(-8)}`;
 	githubCache.delete(cacheKey);
