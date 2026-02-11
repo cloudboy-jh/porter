@@ -6,6 +6,7 @@ export type Task = {
 	technicalSummary?: string;
 	repoOwner?: string;
 	repo: string;
+	issueNumber?: number;
 	branch?: string;
 	issue: string;
 	agent: string;

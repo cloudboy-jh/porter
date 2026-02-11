@@ -38,6 +38,7 @@
 			title: task.issueTitle,
 			repoOwner: task.repoOwner,
 			repo: task.repoName,
+			issueNumber: task.issueNumber,
 			branch: task.branch ?? 'main',
 			issue: `#${task.issueNumber}`,
 			issueUrl: task.issueUrl,
@@ -56,7 +57,7 @@
 	const showMockReviewData = true;
 	let feedLayout = $state<'timeline' | 'stacked'>('timeline');
 
-	const tasks = $derived((showMockReviewData ? [...mockReviewTasks, ...liveTasks] : liveTasks));
+	const tasks = $derived(showMockReviewData ? [...mockReviewTasks, ...liveTasks] : liveTasks);
 
 	const handleReview = (id: string) => {
 		if (id.startsWith('mock-review-')) {

@@ -1,25 +1,24 @@
 import { json } from '@sveltejs/kit';
 import {
+	addIssueComment,
+	buildPorterComment,
+	buildPorterLabels,
 	buildTaskFromIssue,
 	fetchIssue,
-	fetchRepo,
 	getLatestPorterMetadata,
+	getPorterAgent,
+	getPorterPriority,
 	isGitHubAuthError,
 	listInstallationRepos,
 	listIssueComments,
 	listIssuesWithLabel,
-	mergePullRequest
+	updateIssueLabels,
+	type PorterTaskMetadata
 } from '$lib/server/github';
 import { clearSession } from '$lib/server/auth';
-import type { RequestHandler } from './$types';
+import { githubCache } from '$lib/server/cache';
 
-const parsePRNumberFromUrl = (prUrl?: string) => {
-	if (!prUrl) return null;
-	const match = prUrl.match(/\/pull\/(\d+)(?:$|[/?#])/);
-	if (!match) return null;
-	const value = Number.parseInt(match[1], 10);
-	return Number.isFinite(value) ? value : null;
-};
+const DEFAULT_REJECTION_SUMMARY = 'Rejected in review. Please revise and resubmit.';
 
 const findTaskById = async (token: string, taskId: string) => {
 	const { repositories } = await listInstallationRepos(token);
@@ -51,7 +50,58 @@ const findTaskByIssue = async (
 	return buildTaskFromIssue(issue, repoOwner, repoName, metadata);
 };
 
-export const POST: RequestHandler = async ({ request, locals, cookies }) => {
+const applyRejectedStatus = async (
+	token: string,
+	repoOwner: string,
+	repoName: string,
+	issueNumber: number,
+	summary: string
+) => {
+	const issue = await fetchIssue(token, repoOwner, repoName, issueNumber);
+	const agent = getPorterAgent(issue.labels);
+	const priority = getPorterPriority(issue.labels);
+	const existingLabels = issue.labels.map((label) => label.name);
+	const porterLabels = buildPorterLabels('failed', agent, priority);
+	const cleanedLabels = existingLabels.filter((label) => {
+		const lower = label.toLowerCase();
+		if (lower === 'porter:task') return false;
+		if (lower.startsWith('porter:agent:')) return false;
+		if (lower.startsWith('porter:priority:')) return false;
+		if (lower.startsWith('porter:queued')) return false;
+		if (lower.startsWith('porter:running')) return false;
+		if (lower.startsWith('porter:success')) return false;
+		if (lower.startsWith('porter:failed')) return false;
+		return true;
+	});
+
+	const labels = Array.from(new Set([...cleanedLabels, ...porterLabels]));
+	await updateIssueLabels(token, repoOwner, repoName, issueNumber, labels);
+
+	const metadata: PorterTaskMetadata = {
+		taskId: `${repoOwner}/${repoName}#${issueNumber}`,
+		agent,
+		priority,
+		status: 'failed',
+		progress: 100,
+		createdAt: issue.created_at,
+		updatedAt: new Date().toISOString(),
+		summary,
+		failureStage: 'pr'
+	};
+
+	await addIssueComment(token, repoOwner, repoName, issueNumber, buildPorterComment(summary, metadata));
+	githubCache.clearPattern(`issues:${repoOwner}/${repoName}`);
+};
+
+export const POST = async ({
+	request,
+	locals,
+	cookies
+}: {
+	request: Request;
+	locals: App.Locals;
+	cookies: import('@sveltejs/kit').Cookies;
+}) => {
 	const session = locals.session;
 	if (!session) {
 		return json({ error: 'unauthorized' }, { status: 401 });
@@ -63,7 +113,7 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 			repoOwner?: string;
 			repoName?: string;
 			issueNumber?: number;
-			prNumber?: number;
+			summary?: string;
 		};
 		const issueNumber = payload.issueNumber ? Number(payload.issueNumber) : null;
 		const hasDirectTarget = Boolean(payload.repoOwner && payload.repoName && issueNumber);
@@ -82,39 +132,27 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 					issueNumber as number
 				)
 			: await findTaskById(session.token, payload.taskId as string);
+
 		if (!task || !task.prUrl) {
 			return json({ error: 'task not reviewable' }, { status: 400 });
 		}
 
-		const prNumber = payload.prNumber ? Number(payload.prNumber) : task.prNumber ?? parsePRNumberFromUrl(task.prUrl);
-		if (!prNumber) {
-			return json({ error: 'pull request number missing' }, { status: 400 });
-		}
-
-		const repoInfo = await fetchRepo(session.token, task.repoOwner, task.repoName);
-		const canMerge = Boolean(repoInfo.permissions?.push || repoInfo.permissions?.admin);
-		if (!canMerge) {
-			return json({ error: 'missing merge permissions' }, { status: 403 });
-		}
-
-		const mergeResult = await mergePullRequest(
+		const summary = payload.summary?.trim() || DEFAULT_REJECTION_SUMMARY;
+		await applyRejectedStatus(
 			session.token,
 			task.repoOwner,
 			task.repoName,
-			prNumber
+			task.issueNumber,
+			summary
 		);
 
-		if (!mergeResult.merged) {
-			return json({ error: mergeResult.message ?? 'merge failed' }, { status: 500 });
-		}
-
-		return json({ merged: true, sha: mergeResult.sha });
+		return json({ rejected: true });
 	} catch (error) {
 		if (isGitHubAuthError(error)) {
 			clearSession(cookies);
 			return json({ error: 'unauthorized', action: 'reauth' }, { status: 401 });
 		}
-		console.error('Failed to merge PR:', error);
-		return json({ error: 'merge failed' }, { status: 500 });
+		console.error('Failed to reject review task:', error);
+		return json({ error: 'reject failed' }, { status: 500 });
 	}
 };

@@ -17,6 +17,14 @@
 	import type { Task } from '$lib/types/task';
 
 	type TaskWithLinks = Task & { repoOwner?: string; issueUrl?: string };
+	type TaskAction = {
+		id: string;
+		label: string;
+		variant?: 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive';
+		disabled?: boolean;
+		className?: string;
+		onclick: (task: TaskWithLinks) => void;
+	};
 
 	export let title: string;
 	export let tasks: TaskWithLinks[] = [];
@@ -26,6 +34,7 @@
 	export let highlightStatus: Task['status'] | null = null;
 	export let primaryActionLabel = 'View';
 	export let showStatusActions = true;
+	export let getTaskActions: ((task: TaskWithLinks) => TaskAction[]) | null = null;
 	export let layout: 'timeline' | 'stacked' = 'timeline';
 	export let headerIcon: typeof ListChecks | null = null;
 	export let headerLabel: string | null = null;
@@ -68,6 +77,11 @@
 	const handleRestartClick = (event: MouseEvent, id: string) => {
 		event.stopPropagation();
 		onRestart(id);
+	};
+
+	const handleTaskActionClick = (event: MouseEvent, task: TaskWithLinks, action: TaskAction) => {
+		event.stopPropagation();
+		action.onclick(task);
 	};
 
 	const nodeStyles: Record<Task['status'], string> = {
@@ -116,6 +130,7 @@
 	const showRetry = (task: TaskWithLinks) => showStatusActions && task.status === 'failed';
 	const showCancel = (task: TaskWithLinks) =>
 		showStatusActions && (task.status === 'running' || task.status === 'queued');
+	const resolveTaskActions = (task: TaskWithLinks) => (getTaskActions ? getTaskActions(task) : []);
 </script>
 
 <div class="w-full rounded-2xl border border-border/60 bg-card/70">
@@ -193,7 +208,23 @@
 											</div>
 										</div>
 										<div class="flex items-center gap-1.5">
-											<Button variant="ghost" size="sm" onclick={(event: MouseEvent) => handleViewClick(event, task.id)}>
+											{#each resolveTaskActions(task) as action (action.id)}
+												<Button
+													variant={action.variant ?? 'secondary'}
+													size="sm"
+													class={action.className}
+													onclick={(event: MouseEvent) => handleTaskActionClick(event, task, action)}
+													disabled={action.disabled}
+												>
+													{action.label}
+												</Button>
+											{/each}
+											<Button
+												variant="ghost"
+												size="sm"
+												class="h-8 px-3 py-1.5 text-xs text-foreground/90 transition-colors duration-150 hover:text-foreground"
+												onclick={(event: MouseEvent) => handleViewClick(event, task.id)}
+											>
 												{primaryActionLabel}
 											</Button>
 											{#if showRetry(task)}

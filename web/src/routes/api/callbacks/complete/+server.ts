@@ -58,6 +58,7 @@ export const POST = async ({ request }: { request: Request }) => {
 
 	const isSuccess = payload.status === 'complete' || payload.status === 'success';
 	const summary = payload.summary ?? (isSuccess ? 'Task complete.' : payload.error ?? 'Task failed.');
+	const trimmedSummary = summary.trim();
 	const branchName = payload.branch_name?.trim() || execution.branchName;
 	const commitHash = payload.commit_hash?.trim() || undefined;
 	const callbackAttempts = toPositiveInt(payload.callback_attempt);
@@ -111,7 +112,13 @@ export const POST = async ({ request }: { request: Request }) => {
 	}
 
 	const formattedPrError = formatError(prError);
-	const successSummary = prUrl ? `Task complete. PR created: ${prUrl}` : `Task complete, but PR creation failed: ${formattedPrError}`;
+	const successSummary = prUrl
+		? trimmedSummary
+			? `${trimmedSummary}\n\nPR created: ${prUrl}`
+			: `PR created: ${prUrl}`
+		: trimmedSummary
+			? `${trimmedSummary}\n\nPR creation failed: ${formattedPrError}`
+			: `Task complete, but PR creation failed: ${formattedPrError}`;
 	const status: PorterTaskMetadata['status'] = prUrl ? 'success' : 'failed';
 	const metadata: PorterTaskMetadata = {
 		taskId: `${execution.owner}/${execution.repo}#${execution.issueNumber}`,
