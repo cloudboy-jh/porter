@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import SignInForm from '$lib/components/SignInForm.svelte';
 	import type { PageData } from './$types';
 
 	let { data } = $props<{ data: PageData }>();
 	const isConnected = $derived(Boolean(data?.session));
 	const githubHandle = $derived(data?.session?.user?.login ?? '');
+	const authErrorCode = $derived($page.url.searchParams.get('error') ?? '');
+	const githubAppInstallUrl = $derived(data?.githubAppInstallUrl ?? null);
 	let canvasEl: HTMLCanvasElement | null = $state(null);
 	let isSigningOut = $state(false);
 
@@ -93,6 +96,8 @@
 					{isConnected} 
 					{githubHandle} 
 					{isSigningOut} 
+					{authErrorCode}
+					{githubAppInstallUrl}
 					onSignOut={signOut} 
 				/>
 			</div>

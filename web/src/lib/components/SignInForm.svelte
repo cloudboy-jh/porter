@@ -7,10 +7,19 @@
     isConnected: boolean;
     githubHandle: string;
     isSigningOut: boolean;
+    authErrorCode?: string;
+    githubAppInstallUrl?: string | null;
     onSignOut: () => void;
   }
 
-  let { isConnected, githubHandle, isSigningOut, onSignOut }: Props = $props();
+  let {
+    isConnected,
+    githubHandle,
+    isSigningOut,
+    authErrorCode = '',
+    githubAppInstallUrl = null,
+    onSignOut
+  }: Props = $props();
 </script>
 
 <div class="flex w-full flex-col gap-8 px-7 py-8 sm:px-10 sm:py-10">
@@ -25,6 +34,23 @@
     <h1 class="font-mono text-[1.65rem] font-bold tracking-tight text-[#f5f1ed]">Sign in to Porter</h1>
     <p class="mt-3 max-w-[34ch] text-sm leading-relaxed text-[#a39c95]">Route GitHub issues to AI agents with fast @porter triage.</p>
   </div>
+
+  {#if authErrorCode === 'install_required'}
+    <div class="rounded-lg border border-[#c95500]/30 bg-[#2a1a12]/70 px-4 py-3 text-sm text-[#f5f1ed]">
+      <p class="font-medium">Install the Porter GitHub App to continue.</p>
+      <p class="mt-1 text-xs text-[#c8b8ad]">You are signed in, but Porter cannot dispatch tasks until the GitHub App is installed on at least one repository.</p>
+      {#if githubAppInstallUrl}
+        <a
+          href={githubAppInstallUrl}
+          target="_blank"
+          rel="noreferrer"
+          class="mt-3 inline-block text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b] hover:text-[#ffc08d]"
+        >
+          Install GitHub App ->
+        </a>
+      {/if}
+    </div>
+  {/if}
 
   <div class="flex w-full flex-col items-center gap-3">
     <Button
