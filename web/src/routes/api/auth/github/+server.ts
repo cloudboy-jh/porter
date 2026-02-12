@@ -1,10 +1,38 @@
 import { redirect } from '@sveltejs/kit';
 import { randomUUID } from 'crypto';
 import { env } from '$env/dynamic/private';
-import { setOAuthState } from '$lib/server/auth';
+import { getSession, setOAuthState } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
+const getGitHubAppInstallUrl = () => {
+	const explicitUrl =
+		env.GITHUB_APP_INSTALL_URL?.trim() ??
+		(env as Record<string, string | undefined>).PUBLIC_GITHUB_APP_INSTALL_URL?.trim();
+	if (explicitUrl) {
+		return explicitUrl;
+	}
+
+	const appSlug = env.GITHUB_APP_SLUG?.trim();
+	if (!appSlug) {
+		return null;
+	}
+
+	return `https://github.com/apps/${appSlug}/installations/new`;
+};
+
 export const GET: RequestHandler = ({ url, cookies }) => {
+	const session = getSession(cookies);
+	if (session) {
+		if (session.hasInstallation) {
+			throw redirect(302, '/');
+		}
+		const installUrl = getGitHubAppInstallUrl();
+		if (installUrl) {
+			throw redirect(302, installUrl);
+		}
+		throw redirect(302, '/auth?error=install_required');
+	}
+
 	const clientId = env.GITHUB_CLIENT_ID;
 	if (!clientId) {
 		throw redirect(302, '/auth?error=missing_client');

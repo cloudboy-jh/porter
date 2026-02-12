@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
-	import { CheckCircle, GithubLogo, WarningCircle } from 'phosphor-svelte';
+	import { Check, CheckCircle, Copy, GithubLogo, WarningCircle } from 'phosphor-svelte';
 	import AgentSettingsDialog from '$lib/components/AgentSettingsDialog.svelte';
 	import CredentialsModal from '$lib/components/CredentialsModal.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
@@ -570,7 +570,7 @@
 								<div class="rounded-xl border border-primary/35 bg-primary/10 p-3">
 									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Quick setup</p>
 									<p class="mt-1 text-sm font-medium text-foreground">Grab an org token</p>
-									<p class="mt-1 text-xs text-muted-foreground">No manual app deploy required. Porter validates token scope and creates app resources.</p>
+									<p class="mt-1 text-xs text-muted-foreground">Use one org token. Porter validates it, creates the Fly app when missing, and launches task machines.</p>
 									<a
 										href="https://fly.io/dashboard/personal/tokens"
 										target="_blank"
@@ -581,19 +581,27 @@
 									</a>
 								</div>
 								<div class="rounded-xl border border-border/50 bg-card/20 p-3">
-									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">CLI path</p>
-									<p class="mt-1 text-sm font-medium text-foreground">Do it with Fly CLI</p>
-									<p class="mt-1 text-xs text-muted-foreground">Generate the same org token directly in terminal.</p>
+									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Terminal setup</p>
+									<p class="mt-1 text-sm font-medium text-foreground">Generate token in terminal</p>
+									<p class="mt-1 text-xs text-muted-foreground">Prefer terminal? Run this once to mint the same org token.</p>
 									<div class="mt-2 rounded-md border border-border/40 bg-background/70 p-2">
 										<pre class="overflow-x-auto font-mono text-[11px] leading-5 text-foreground">{flyCliCommand}</pre>
 									</div>
-									<button
-										type="button"
-										class="mt-2 text-xs font-medium text-primary hover:text-primary/80"
-										onclick={copyFlyCli}
-									>
-										{flyCliCopied ? 'Copied' : 'Copy terminal command'}
-									</button>
+									<div class="mt-2 flex justify-end">
+										<button
+											type="button"
+											class="inline-flex h-7 w-7 items-center justify-center rounded border border-border/60 text-primary hover:border-primary/50 hover:text-primary/80"
+											onclick={copyFlyCli}
+											aria-label="Copy Fly CLI command"
+											title="Copy command"
+										>
+											{#if flyCliCopied}
+												<Check size={14} weight="bold" />
+											{:else}
+												<Copy size={14} weight="bold" />
+											{/if}
+										</button>
+									</div>
 								</div>
 							</div>
 
