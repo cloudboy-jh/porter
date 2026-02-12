@@ -3,9 +3,11 @@ import { json } from '@sveltejs/kit';
 import {
 	buildTaskFromIssue,
 	fetchIssue,
+	getGitHubErrorMessage,
 	getLatestPorterMetadata,
 	getRateLimitStatus,
 	isGitHubAuthError,
+	isGitHubPermissionError,
 	isGitHubRateLimitError,
 	listInstallationRepos,
 	listIssueComments,
@@ -27,10 +29,10 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 		const status = url.searchParams.get('status') as TaskStatus | null;
 		const { repositories } = await listInstallationRepos(session.token);
 		
-		// Limit to first 20 repos to prevent rate limit issues
-		const limitedRepos = repositories.slice(0, 20);
-		if (repositories.length > 20) {
-			console.warn(`[Rate Limit Protection] Limiting to 20 repos out of ${repositories.length} total`);
+		// Limit breadth to reduce GitHub API fan-out in production.
+		const limitedRepos = repositories.slice(0, 8);
+		if (repositories.length > 8) {
+			console.warn(`[Rate Limit Protection] Limiting to 8 repos out of ${repositories.length} total`);
 		}
 		
 		// Process repos sequentially to avoid burst
@@ -38,8 +40,8 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 		for (const repo of limitedRepos) {
 			try {
 				const issues = await listIssuesWithLabel(session.token, repo.owner, repo.name, 'open');
-				// Limit to 10 issues per repo to prevent rate limit issues
-				const limitedIssues = issues.slice(0, 10);
+				// Limit issue fan-out per repository.
+				const limitedIssues = issues.slice(0, 6);
 				
 				// Process issues sequentially to avoid burst
 				for (const issue of limitedIssues) {
@@ -54,6 +56,9 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 				}
 			} catch (error) {
 				if (isGitHubAuthError(error)) {
+					throw error;
+				}
+				if (isGitHubRateLimitError(error)) {
 					throw error;
 				}
 				console.error('Failed to load tasks for repo:', repo.fullName, error);
@@ -78,6 +83,18 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 				resetAt: resetDate.toISOString(),
 				minutesUntilReset: minutesUntil 
 			}, { status: 429 });
+		}
+		if (isGitHubPermissionError(error)) {
+			return json(
+				{
+					error: 'insufficient_permissions',
+					message: getGitHubErrorMessage(
+						error,
+						'GitHub denied access. Update app permissions and re-accept installation access.'
+					)
+				},
+				{ status: 403 }
+			);
 		}
 		console.error('Failed to load tasks:', error);
 		return json({ error: 'failed' }, { status: 500 });

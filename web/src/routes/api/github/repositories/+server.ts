@@ -1,6 +1,13 @@
 import { json } from '@sveltejs/kit';
 import { clearSession, setSession } from '$lib/server/auth';
-import { isGitHubAuthError, listInstallationRepos } from '$lib/server/github';
+import {
+	getGitHubErrorMessage,
+	getRateLimitStatus,
+	isGitHubAuthError,
+	isGitHubPermissionError,
+	isGitHubRateLimitError,
+	listInstallationRepos
+} from '$lib/server/github';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ locals, cookies }) => {
@@ -24,6 +31,31 @@ export const GET: RequestHandler = async ({ locals, cookies }) => {
 		if (isGitHubAuthError(error)) {
 			clearSession(cookies);
 			return json({ error: 'unauthorized', action: 'reauth' }, { status: 401 });
+		}
+		if (isGitHubRateLimitError(error)) {
+			const status = getRateLimitStatus();
+			const resetDate = new Date(status.reset * 1000);
+			const minutesUntil = Math.ceil((status.reset * 1000 - Date.now()) / 60000);
+			return json(
+				{
+					error: 'rate_limit',
+					message: `GitHub API rate limit exceeded. Resets in ${Math.max(minutesUntil, 0)} minutes.`,
+					resetAt: resetDate.toISOString()
+				},
+				{ status: 429 }
+			);
+		}
+		if (isGitHubPermissionError(error)) {
+			return json(
+				{
+					error: 'insufficient_permissions',
+					message: getGitHubErrorMessage(
+						error,
+						'GitHub denied repository access. Re-accept app permissions for this installation.'
+					)
+				},
+				{ status: 403 }
+			);
 		}
 		console.error('Failed to load GitHub repositories:', error);
 		return json({ error: 'failed' }, { status: 500 });

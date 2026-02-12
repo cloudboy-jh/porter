@@ -88,11 +88,39 @@ export class GitHubRequestError extends Error {
 	}
 }
 
+const getGitHubErrorPayload = (body?: string): { message?: string } => {
+	if (!body) return {};
+	try {
+		const parsed = JSON.parse(body) as { message?: unknown };
+		if (typeof parsed.message === 'string') {
+			return { message: parsed.message };
+		}
+	} catch {
+		// ignore invalid JSON error bodies
+	}
+	return {};
+};
+
+const isRateLimitMessage = (message?: string) =>
+	Boolean(message && /rate limit|secondary rate limit/i.test(message));
+
+export const getGitHubErrorMessage = (error: unknown, fallback = 'GitHub request failed') => {
+	if (!(error instanceof GitHubRequestError)) return fallback;
+	const payload = getGitHubErrorPayload(error.body);
+	return payload.message ?? fallback;
+};
+
 export const isGitHubAuthError = (error: unknown) =>
 	error instanceof GitHubRequestError && error.status === 401;
 
 export const isGitHubRateLimitError = (error: unknown) =>
-	error instanceof GitHubRequestError && error.status === 403;
+	error instanceof GitHubRequestError &&
+	(error.status === 429 ||
+		(error.status === 403 &&
+			isRateLimitMessage(getGitHubErrorPayload(error.body).message)));
+
+export const isGitHubPermissionError = (error: unknown) =>
+	error instanceof GitHubRequestError && error.status === 403 && !isGitHubRateLimitError(error);
 
 export type PorterTaskStatus = 'queued' | 'running' | 'success' | 'failed' | 'timed_out';
 

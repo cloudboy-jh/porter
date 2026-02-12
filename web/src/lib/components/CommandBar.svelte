@@ -117,7 +117,8 @@
 				return;
 			}
 			if (!response.ok) {
-				repoError = 'Repositories unavailable.';
+				const payload = await response.json().catch(() => ({} as { message?: string }));
+				repoError = payload.message ?? 'Repositories unavailable.';
 				repositories = [];
 				return;
 			}

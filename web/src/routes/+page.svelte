@@ -53,7 +53,14 @@
 				return;
 			}
 			if (!response.ok) {
-				tasksError = 'Failed to load tasks.';
+				const payload = await response.json().catch(() => ({} as { message?: string; error?: string }));
+				if (response.status === 429) {
+					tasksError = payload.message ?? 'GitHub API rate limit exceeded. Please retry shortly.';
+				} else if (response.status === 403) {
+					tasksError = payload.message ?? 'GitHub permissions need to be re-approved for this installation.';
+				} else {
+					tasksError = payload.message ?? 'Failed to load tasks.';
+				}
 				tasks = [];
 				return;
 			}
