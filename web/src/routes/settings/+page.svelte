@@ -60,6 +60,7 @@
 	type GithubSummary = {
 		user?: { login: string; avatarUrl?: string | null };
 		repositories?: Array<{ id: number }>;
+		warnings?: string[];
 	};
 	type EditableField = 'flyToken' | 'flyAppName' | 'anthropic' | 'amp' | 'openai';
 	type RepoFilter = 'all' | 'selected' | 'unselected' | 'private' | 'public';
@@ -296,6 +297,9 @@
 			fly = { flyToken: payload.flyToken, flyAppName: payload.flyAppName };
 			configSnapshot = payload;
 			gistUrl = payload.gistUrl ?? null;
+			if (!gistUrl) {
+				credentialStatus = 'Config persistence unavailable. Reconnect GitHub to grant gist access.';
+			}
 			selectedRepoIds = payload.onboarding?.selectedRepos?.map((repo) => repo.id) ?? [];
 			if ((payload.credentials?.anthropic ?? '').trim()) {
 				anthropicValidated = false;
@@ -319,9 +323,17 @@
 				window.location.href = '/auth';
 				return;
 			}
-			const payload = (await response.json().catch(() => ({}))) as GithubSummary & { message?: string };
+			const payload = (await response.json().catch(() => ({}))) as GithubSummary & {
+				message?: string;
+				action?: string;
+				actionUrl?: string;
+			};
 			if (!response.ok) {
-				githubStatus = payload.message ?? 'Failed to load GitHub account summary.';
+				githubStatus =
+					payload.message ??
+					(payload.action === 'reconnect'
+						? 'GitHub account summary requires reconnect. Use Reconnect to refresh permissions.'
+						: 'Failed to load GitHub account summary.');
 				logSettingsError('loadGithubSummary', {
 					status: response.status,
 					message: githubStatus,
@@ -330,6 +342,9 @@
 				return;
 			}
 			githubSummary = payload;
+			if (payload.warnings?.length) {
+				githubStatus = payload.warnings[0] ?? '';
+			}
 		} catch (error) {
 			githubStatus = 'Failed to load GitHub account summary.';
 			logSettingsError('loadGithubSummary', {
@@ -351,9 +366,14 @@
 			const payload = (await response.json().catch(() => ({}))) as {
 				repositories?: RepoSummary[];
 				message?: string;
+				action?: string;
 			};
 			if (!response.ok) {
-				repoStatus = payload.message ?? 'Failed to load repositories.';
+				repoStatus =
+					payload.message ??
+					(payload.action === 'reconnect'
+						? 'Repositories require reconnect. Use Reconnect to refresh permissions.'
+						: 'Failed to load repositories.');
 				logSettingsError('loadRepositories', {
 					status: response.status,
 					message: repoStatus,
@@ -388,11 +408,13 @@
 				body: JSON.stringify(nextCredentials)
 			});
 			if (!response.ok) {
+				const payload = (await response.json().catch(() => ({}))) as { message?: string };
 				logSettingsError('saveCredentials', {
 					status: response.status,
-					message: 'Saving credentials failed.'
+					message: payload.message ?? 'Saving credentials failed.',
+					payload
 				});
-				credentialStatus = 'Failed to save credentials.';
+				credentialStatus = payload.message ?? 'Failed to save credentials.';
 				return false;
 			}
 			credentials = (await response.json()) as Credentials;
@@ -590,11 +612,13 @@
 				body: JSON.stringify(nextConfig)
 			});
 			if (!response.ok) {
+				const payload = (await response.json().catch(() => ({}))) as { message?: string };
 				logSettingsError('saveRepos', {
 					status: response.status,
-					message: 'Saving repository selection failed.'
+					message: payload.message ?? 'Saving repository selection failed.',
+					payload
 				});
-				repoStatus = 'Failed to save repositories.';
+				repoStatus = payload.message ?? 'Failed to save repositories.';
 				return;
 			}
 			configSnapshot = (await response.json()) as ConfigSnapshot;
@@ -894,7 +918,7 @@
 								</div>
 							</div>
 							<div class="flex flex-wrap gap-2">
-								<Button variant="secondary" href="/api/auth/github">Reconnect</Button>
+								<Button variant="secondary" href="/api/auth/github?force=1">Reconnect</Button>
 								<Button variant="outline" class="text-destructive hover:text-destructive" onclick={handleDisconnect}>Disconnect</Button>
 							</div>
 							{#if githubStatus}

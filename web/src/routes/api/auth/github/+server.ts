@@ -22,9 +22,32 @@ const getGitHubAppInstallUrl = () => {
 
 export const GET: RequestHandler = ({ url, cookies }) => {
 	const session = getSession(cookies);
+	const forceReconnect = url.searchParams.get('force') === '1';
 	if (session) {
-		if (session.hasInstallation) {
+		if (session.hasInstallation && !forceReconnect) {
 			throw redirect(302, '/');
+		}
+		if (forceReconnect) {
+			const clientId = env.GITHUB_CLIENT_ID;
+			if (!clientId) {
+				throw redirect(302, '/auth?error=missing_client');
+			}
+
+			const state = randomUUID();
+			setOAuthState(cookies, state);
+
+			const redirectUri =
+				env.GITHUB_OAUTH_REDIRECT_URI ?? `${url.origin}/api/auth/github/callback`;
+
+			const params = new URLSearchParams({
+				client_id: clientId,
+				redirect_uri: redirectUri,
+				state,
+				scope: 'read:user user:email read:org repo gist',
+				prompt: 'consent'
+			});
+
+			throw redirect(302, `https://github.com/login/oauth/authorize?${params.toString()}`);
 		}
 		const installUrl = getGitHubAppInstallUrl();
 		if (installUrl) {

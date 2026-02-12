@@ -58,7 +58,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		throw redirect(302, '/auth');
 	}
 
-	if (session && isProtected && !session.hasInstallation) {
+	if (session && isProtected) {
 		const hasInstallation = await refreshInstallationStatus(event);
 		if (!hasInstallation) {
 			const installUrl = getGitHubAppInstallUrl();

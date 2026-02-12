@@ -213,13 +213,29 @@ export const listInstallationRepos = async (token: string) => {
 		}
 
 		const repoMap = new Map<number, GitHubRepo>();
+		const warnings: Array<{ installationId: number; status?: number; message: string }> = [];
 		for (const installation of installations.installations) {
-			const result = await fetchGitHub<{ repositories: GitHubRepo[] }>(
-				`/user/installations/${installation.id}/repositories?per_page=100`,
-				token
-			);
-			for (const repo of result.repositories) {
-				repoMap.set(repo.id, repo);
+			try {
+				const result = await fetchGitHub<{ repositories: GitHubRepo[] }>(
+					`/user/installations/${installation.id}/repositories?per_page=100`,
+					token
+				);
+				for (const repo of result.repositories) {
+					repoMap.set(repo.id, repo);
+				}
+			} catch (error) {
+				if (error instanceof GitHubRequestError) {
+					warnings.push({
+						installationId: installation.id,
+						status: error.status,
+						message: getGitHubErrorMessage(error, 'Failed to load installation repositories')
+					});
+					if (error.status === 401) {
+						throw error;
+					}
+					continue;
+				}
+				throw error;
 			}
 		}
 
@@ -232,7 +248,7 @@ export const listInstallationRepos = async (token: string) => {
 			description: repo.description
 		}));
 
-		return { repositories, installations };
+		return { repositories, installations, warnings };
 	}, CACHE_TTL.REPOS);
 };
 

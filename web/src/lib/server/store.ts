@@ -268,9 +268,12 @@ export const updateConfig = async (token: string, next: PorterConfig): Promise<P
 		normalized.providerCredentials,
 		next.credentials
 	);
+	const persisted = await saveConfigToGist(token, normalized);
+	if (!persisted) {
+		throw new Error('Failed to persist config to GitHub Gist. Reconnect GitHub and verify gist access.');
+	}
 	configCache.set(token, normalized);
 	configLoaded.add(token);
-	await saveConfigToGist(token, normalized);
 	return normalized;
 };
 

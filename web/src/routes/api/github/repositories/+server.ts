@@ -10,13 +10,15 @@ import {
 } from '$lib/server/github';
 import type { RequestHandler } from './$types';
 
+const reconnectUrl = '/api/auth/github?force=1';
+
 export const GET: RequestHandler = async ({ locals, cookies }) => {
 	const session = locals.session;
 	if (!session) {
 		return json({ error: 'unauthorized' }, { status: 401 });
 	}
 	try {
-		const { repositories, installations } = await listInstallationRepos(session.token);
+		const { repositories, installations, warnings } = await listInstallationRepos(session.token);
 		const hasInstallation = installations.total_count > 0;
 		if (hasInstallation !== session.hasInstallation) {
 			setSession(cookies, { ...session, hasInstallation });
@@ -26,7 +28,7 @@ export const GET: RequestHandler = async ({ locals, cookies }) => {
 			return json({ repositories: [], hasInstallation });
 		}
 
-		return json({ repositories, hasInstallation });
+		return json({ repositories, hasInstallation, warnings: warnings ?? [] });
 	} catch (error) {
 		if (isGitHubAuthError(error)) {
 			clearSession(cookies);
@@ -49,9 +51,11 @@ export const GET: RequestHandler = async ({ locals, cookies }) => {
 			return json(
 				{
 					error: 'insufficient_permissions',
+					action: 'reconnect',
+					actionUrl: reconnectUrl,
 					message: getGitHubErrorMessage(
 						error,
-						'GitHub denied repository access. Re-accept app permissions for this installation.'
+						'GitHub denied repository access. Reconnect GitHub to refresh permissions and installation access.'
 					)
 				},
 				{ status: 403 }

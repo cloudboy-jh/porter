@@ -17,7 +17,12 @@ export const PUT = async ({ request, locals }: { request: Request; locals: App.L
 	if (!locals.session) {
 		return json({ error: 'unauthorized' }, { status: 401 });
 	}
-	const payload = (await request.json()) as PorterConfig;
-	const updated = await updateConfig(locals.session.token, payload);
-	return json(updated);
+	try {
+		const payload = (await request.json()) as PorterConfig;
+		const updated = await updateConfig(locals.session.token, payload);
+		return json(updated);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to save config.';
+		return json({ error: 'failed', message }, { status: 503 });
+	}
 };
