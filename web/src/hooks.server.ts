@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { clearSession, getSession, setSession } from '$lib/server/auth';
-import { fetchGitHub, isGitHubAuthError } from '$lib/server/github';
+import { hasPorterInstallation, isGitHubAuthError } from '$lib/server/github';
 import { startTaskWatchdog } from '$lib/server/watchdog';
 import type { Handle } from '@sveltejs/kit';
 
@@ -28,8 +28,7 @@ const refreshInstallationStatus = async (event: Parameters<Handle>[0]['event']) 
 	if (!session) return false;
 
 	try {
-		const installations = await fetchGitHub<{ total_count: number }>('/user/installations', session.token);
-		const hasInstallation = installations.total_count > 0;
+		const hasInstallation = await hasPorterInstallation(session.token);
 		if (hasInstallation !== session.hasInstallation) {
 			const nextSession = { ...session, hasInstallation };
 			setSession(event.cookies, nextSession);

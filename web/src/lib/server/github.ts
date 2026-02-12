@@ -197,16 +197,59 @@ type GitHubRepo = {
 	description: string | null;
 };
 
+type GitHubUserInstallation = {
+	id: number;
+	app_id?: number;
+	app_slug?: string;
+	account?: { login?: string; id?: number; avatar_url?: string };
+	target_type?: string;
+	created_at?: string;
+};
+
+const getConfiguredAppSlug = () => env.GITHUB_APP_SLUG?.trim().toLowerCase() ?? null;
+
+const getConfiguredAppId = () => {
+	const appId = env.GITHUB_APP_ID?.trim();
+	if (!appId) return null;
+	const parsed = Number(appId);
+	return Number.isFinite(parsed) ? parsed : null;
+};
+
+const isPorterInstallation = (installation: GitHubUserInstallation) => {
+	const configuredSlug = getConfiguredAppSlug();
+	const configuredAppId = getConfiguredAppId();
+	if (configuredSlug && installation.app_slug?.toLowerCase() === configuredSlug) {
+		return true;
+	}
+	if (configuredAppId && installation.app_id === configuredAppId) {
+		return true;
+	}
+	return false;
+};
+
+export const listPorterInstallations = async (token: string) => {
+	const installations = await fetchGitHub<{ total_count: number; installations: GitHubUserInstallation[] }>(
+		'/user/installations?per_page=100',
+		token
+	);
+	const filtered = installations.installations.filter(isPorterInstallation);
+	return {
+		total_count: filtered.length,
+		installations: filtered
+	};
+};
+
+export const hasPorterInstallation = async (token: string) => {
+	const installations = await listPorterInstallations(token);
+	return installations.total_count > 0;
+};
+
 export const listInstallationRepos = async (token: string) => {
 	const cacheKey = `installations:${token.slice(-8)}`;
 	
 	return githubCache.getOrFetch(cacheKey, async () => {
 		console.log('[Fetching] listInstallationRepos from GitHub');
-		
-		const installations = await fetchGitHub<{ total_count: number; installations: { id: number }[] }>(
-			'/user/installations',
-			token
-		);
+		const installations = await listPorterInstallations(token);
 
 		if (!installations.total_count) {
 			return { repositories: [], installations };

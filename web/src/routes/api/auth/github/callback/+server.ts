@@ -6,7 +6,7 @@ import {
 	setSession
 } from '$lib/server/auth';
 import { getConfig, updateConfig } from '$lib/server/store';
-import { listInstallationRepos } from '$lib/server/github';
+import { hasPorterInstallation, listInstallationRepos } from '$lib/server/github';
 import { saveUserOAuthToken } from '$lib/server/oauth-tokens';
 import type { RequestHandler } from './$types';
 
@@ -114,17 +114,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
 		let hasInstallation = false;
 		try {
-			const installations = await fetchJson<{ total_count: number }>(
-				'https://api.github.com/user/installations',
-				{
-					headers: {
-						Authorization: `Bearer ${accessToken}`,
-						Accept: 'application/vnd.github+json',
-						'User-Agent': 'porter-app'
-					}
-				}
-			);
-			hasInstallation = installations.total_count > 0;
+			hasInstallation = await hasPorterInstallation(accessToken);
 		} catch (error) {
 			console.error('GitHub installation fetch failed:', error);
 		}

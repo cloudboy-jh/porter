@@ -1,7 +1,8 @@
 import { redirect } from '@sveltejs/kit';
 import { randomUUID } from 'crypto';
 import { env } from '$env/dynamic/private';
-import { getSession, setOAuthState } from '$lib/server/auth';
+import { getSession, setOAuthState, setSession } from '$lib/server/auth';
+import { hasPorterInstallation } from '$lib/server/github';
 import type { RequestHandler } from './$types';
 
 const getGitHubAppInstallUrl = () => {
@@ -20,12 +21,23 @@ const getGitHubAppInstallUrl = () => {
 	return `https://github.com/apps/${appSlug}/installations/new`;
 };
 
-export const GET: RequestHandler = ({ url, cookies }) => {
+export const GET: RequestHandler = async ({ url, cookies }) => {
 	const session = getSession(cookies);
 	const forceReconnect = url.searchParams.get('force') === '1';
 	if (session) {
-		if (session.hasInstallation && !forceReconnect) {
-			throw redirect(302, '/');
+		let refreshedHasInstallation = session.hasInstallation;
+		if (!forceReconnect) {
+			try {
+				refreshedHasInstallation = await hasPorterInstallation(session.token);
+				if (refreshedHasInstallation !== session.hasInstallation) {
+					setSession(cookies, { ...session, hasInstallation: refreshedHasInstallation });
+				}
+			} catch (error) {
+				console.error('Failed to verify Porter installation before auth redirect:', error);
+			}
+			if (refreshedHasInstallation) {
+				throw redirect(302, '/');
+			}
 		}
 		if (forceReconnect) {
 			const clientId = env.GITHUB_CLIENT_ID;
