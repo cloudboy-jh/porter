@@ -39,7 +39,7 @@ fly tokens create org --name "porter" --expiry 30d`;
   }: Props = $props();
 </script>
 
-<div class="flex w-full flex-col gap-8 px-7 py-8 sm:px-10 sm:py-10">
+<div class="flex w-full flex-col gap-8 px-6 py-8 sm:px-10 sm:py-10 lg:px-12">
   <div class="flex flex-col items-center">
     <div class="flex items-center gap-3">
       <img src={logo} alt="Porter" class="h-10 w-10 rounded" />
@@ -124,7 +124,7 @@ fly tokens create org --name "porter" --expiry 30d`;
         <p class="mt-1 text-sm font-medium text-[#f5f1ed]">Generate token in terminal</p>
         <p class="mt-1 text-xs text-[#9f9892]">Prefer terminal? Run this to mint the same org token.</p>
         <div class="mt-2 rounded-md border border-white/10 bg-black/45 p-2">
-          <pre class="overflow-x-auto font-mono text-[11px] leading-5 text-[#d7c7bc]">{flyCliCommand}</pre>
+          <pre class="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[#d7c7bc]">{flyCliCommand}</pre>
         </div>
         <div class="mt-2 flex justify-end">
           <button

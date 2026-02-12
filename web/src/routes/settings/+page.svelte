@@ -151,6 +151,23 @@
 		}
 	};
 
+	const logSettingsError = (
+		source: string,
+		details: {
+			status?: number;
+			error?: unknown;
+			message?: string;
+			payload?: unknown;
+		}
+	) => {
+		console.error(`[settings] ${source}`, {
+			status: details.status,
+			message: details.message,
+			error: details.error,
+			payload: details.payload
+		});
+	};
+
 	const getAgentIcon = (agent: AgentDisplay) => {
 		const domainMap: Record<string, string> = {
 			opencode: 'opencode.ai',
@@ -244,10 +261,19 @@
 				window.location.href = '/auth';
 				return;
 			}
-			if (!response.ok) return;
+			if (!response.ok) {
+				logSettingsError('loadAgents', {
+					status: response.status,
+					message: 'Agent scan request failed.'
+				});
+				return;
+			}
 			agentConfig = (await response.json()) as AgentConfig[];
-		} catch {
-			// ignore
+		} catch (error) {
+			logSettingsError('loadAgents', {
+				error,
+				message: 'Agent scan request threw.'
+			});
 		}
 	};
 
@@ -258,7 +284,13 @@
 				window.location.href = '/auth';
 				return;
 			}
-			if (!response.ok) return;
+			if (!response.ok) {
+				logSettingsError('loadConfig', {
+					status: response.status,
+					message: 'Config request failed.'
+				});
+				return;
+			}
 			const payload = (await response.json()) as ConfigSnapshot;
 			credentials = payload.credentials ?? {};
 			fly = { flyToken: payload.flyToken, flyAppName: payload.flyAppName };
@@ -271,8 +303,11 @@
 			if (payload.flyToken && payload.flyAppName) {
 				await validateFly(false);
 			}
-		} catch {
-			// ignore
+		} catch (error) {
+			logSettingsError('loadConfig', {
+				error,
+				message: 'Config request threw.'
+			});
 		}
 	};
 
@@ -287,11 +322,20 @@
 			const payload = (await response.json().catch(() => ({}))) as GithubSummary & { message?: string };
 			if (!response.ok) {
 				githubStatus = payload.message ?? 'Failed to load GitHub account summary.';
+				logSettingsError('loadGithubSummary', {
+					status: response.status,
+					message: githubStatus,
+					payload
+				});
 				return;
 			}
 			githubSummary = payload;
-		} catch {
+		} catch (error) {
 			githubStatus = 'Failed to load GitHub account summary.';
+			logSettingsError('loadGithubSummary', {
+				error,
+				message: githubStatus
+			});
 		}
 	};
 
@@ -310,6 +354,11 @@
 			};
 			if (!response.ok) {
 				repoStatus = payload.message ?? 'Failed to load repositories.';
+				logSettingsError('loadRepositories', {
+					status: response.status,
+					message: repoStatus,
+					payload
+				});
 				repositories = [];
 				return;
 			}
@@ -318,7 +367,10 @@
 				selectedRepoIds = repositories.map((repo) => repo.id);
 			}
 		} catch (error) {
-			console.error('Failed to load repositories:', error);
+			logSettingsError('loadRepositories', {
+				error,
+				message: 'Repositories request threw.'
+			});
 			repoStatus = 'Failed to load repositories.';
 			repositories = [];
 		} finally {
@@ -336,6 +388,10 @@
 				body: JSON.stringify(nextCredentials)
 			});
 			if (!response.ok) {
+				logSettingsError('saveCredentials', {
+					status: response.status,
+					message: 'Saving credentials failed.'
+				});
 				credentialStatus = 'Failed to save credentials.';
 				return false;
 			}
@@ -347,7 +403,10 @@
 			await loadAgents(true);
 			return true;
 		} catch (error) {
-			console.error('Saving credentials failed:', error);
+			logSettingsError('saveCredentials', {
+				error,
+				message: 'Saving credentials threw.'
+			});
 			credentialStatus = 'Failed to save credentials.';
 			return false;
 		} finally {
@@ -367,8 +426,18 @@
 				validation: payload
 			};
 			if (showMessage) flyStatus = payload.message;
+			if (!response.ok) {
+				logSettingsError('validateFly', {
+					status: response.status,
+					message: payload.message,
+					payload
+				});
+			}
 		} catch (error) {
-			console.error('Validating Fly credentials failed:', error);
+			logSettingsError('validateFly', {
+				error,
+				message: 'Validating Fly credentials threw.'
+			});
 			fly.validation = {
 				ok: false,
 				status: 'error',
@@ -393,6 +462,11 @@
 			if (!response.ok) {
 				const payload = (await response.json().catch(() => ({}))) as { message?: string };
 				flyStatus = payload.message ?? 'Failed to save Fly settings.';
+				logSettingsError('saveFly', {
+					status: response.status,
+					message: flyStatus,
+					payload
+				});
 				return false;
 			}
 			const payload = (await response.json()) as FlyCredentials & { setupMode?: FlySetupMode };
@@ -407,7 +481,10 @@
 			flyStatus = payload.validation?.message ?? 'Fly settings updated.';
 			return true;
 		} catch (error) {
-			console.error('Saving Fly settings failed:', error);
+			logSettingsError('saveFly', {
+				error,
+				message: 'Saving Fly settings threw.'
+			});
 			flyStatus = 'Failed to save Fly settings.';
 			return false;
 		} finally {
@@ -419,7 +496,17 @@
 		try {
 			const response = await fetch('/api/config/validate/anthropic');
 			anthropicValidated = response.ok;
-		} catch {
+			if (!response.ok) {
+				logSettingsError('validateAnthropic', {
+					status: response.status,
+					message: 'Anthropic key validation failed.'
+				});
+			}
+		} catch (error) {
+			logSettingsError('validateAnthropic', {
+				error,
+				message: 'Anthropic key validation threw.'
+			});
 			anthropicValidated = false;
 		}
 	};
@@ -503,13 +590,20 @@
 				body: JSON.stringify(nextConfig)
 			});
 			if (!response.ok) {
+				logSettingsError('saveRepos', {
+					status: response.status,
+					message: 'Saving repository selection failed.'
+				});
 				repoStatus = 'Failed to save repositories.';
 				return;
 			}
 			configSnapshot = (await response.json()) as ConfigSnapshot;
 			repoStatus = 'Repositories updated.';
 		} catch (error) {
-			console.error('Saving repositories failed:', error);
+			logSettingsError('saveRepos', {
+				error,
+				message: 'Saving repository selection threw.'
+			});
 			repoStatus = 'Failed to save repositories.';
 		} finally {
 			repoSaving = false;
@@ -585,7 +679,7 @@
 									<p class="mt-1 text-sm font-medium text-foreground">Generate token in terminal</p>
 									<p class="mt-1 text-xs text-muted-foreground">Prefer terminal? Run this once to mint the same org token.</p>
 									<div class="mt-2 rounded-md border border-border/40 bg-background/70 p-2">
-										<pre class="overflow-x-auto font-mono text-[11px] leading-5 text-foreground">{flyCliCommand}</pre>
+										<pre class="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-foreground">{flyCliCommand}</pre>
 									</div>
 									<div class="mt-2 flex justify-end">
 										<button
