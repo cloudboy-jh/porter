@@ -1,4 +1,4 @@
-import { redirect } from '@sveltejs/kit';
+import { isRedirect, redirect } from '@sveltejs/kit';
 import { env as privateEnv } from '$env/dynamic/private';
 import {
 	clearOAuthState,
@@ -31,6 +31,8 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
 		const clientId = privateEnv.GITHUB_CLIENT_ID;
 		const clientSecret = privateEnv.GITHUB_CLIENT_SECRET;
+		const redirectUri =
+			privateEnv.GITHUB_OAUTH_REDIRECT_URI ?? `${url.origin}/api/auth/github/callback`;
 
 		if (!clientId || !clientSecret) {
 			throw redirect(302, '/auth?error=missing_client');
@@ -47,7 +49,8 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 				body: JSON.stringify({
 					client_id: clientId,
 					client_secret: clientSecret,
-					code
+					code,
+					redirect_uri: redirectUri
 				})
 			}
 		);
@@ -137,7 +140,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
 		throw redirect(302, '/');
 	} catch (error) {
-		if (error instanceof Response && error.status >= 300 && error.status < 400) {
+		if (isRedirect(error)) {
 			throw error;
 		}
 		console.error('GitHub auth callback failed:', error);
