@@ -1,6 +1,7 @@
-name = "porter-web"
+name = "porter"
 main = ".svelte-kit/cloudflare/_worker.js"
 compatibility_date = "2026-02-11"
+compatibility_flags = ["nodejs_compat"]
 
 [assets]
 directory = ".svelte-kit/cloudflare"
