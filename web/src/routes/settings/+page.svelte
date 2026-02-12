@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { CheckCircle, GithubLogo, WarningCircle } from 'phosphor-svelte';
 	import AgentSettingsDialog from '$lib/components/AgentSettingsDialog.svelte';
@@ -12,11 +13,23 @@
 
 	type AgentDisplay = AgentConfig & { readyState?: 'ready' | 'missing_credentials' | 'disabled' };
 	type Credentials = { anthropic?: string; openai?: string; amp?: string };
+	type FlySetupMode = 'org' | 'deploy';
 	type FlyValidation = {
 		ok: boolean;
-		status: 'ready' | 'missing' | 'invalid_token' | 'error';
+		status:
+			| 'ready'
+			| 'missing'
+			| 'missing_token'
+			| 'missing_app_name'
+			| 'invalid_token'
+			| 'insufficient_scope'
+			| 'app_not_found'
+			| 'name_conflict'
+			| 'error';
 		message: string;
 		appCreated: boolean;
+		flyAppName?: string;
+		mode?: FlySetupMode;
 	};
 	type FlyCredentials = { flyToken?: string; flyAppName?: string; validation?: FlyValidation };
 	type RepoSummary = {
@@ -68,6 +81,8 @@
 	let credentialStatus = $state('');
 	let flyStatus = $state('');
 	let repoStatus = $state('');
+	let githubStatus = $state('');
+	let flySetupMode = $state<FlySetupMode>('org');
 
 	let credentialSaving = $state(false);
 	let flySaving = $state(false);
@@ -119,6 +134,20 @@
 	const sectionLabelClass =
 		'text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground';
 
+	const normalizeSetupMode = (value: string | null): FlySetupMode =>
+		value === 'deploy' ? 'deploy' : 'org';
+
+	const setFlySetupMode = async (mode: FlySetupMode) => {
+		flySetupMode = mode;
+		const search = new URLSearchParams($page.url.searchParams);
+		search.set('setup', mode);
+		await goto(`${$page.url.pathname}?${search.toString()}`, {
+			replaceState: true,
+			noScroll: true,
+			keepFocus: true
+		});
+	};
+
 	const getAgentIcon = (agent: AgentDisplay) => {
 		const domainMap: Record<string, string> = {
 			opencode: 'opencode.ai',
@@ -146,9 +175,9 @@
 	const getFieldLabel = (field: EditableField) => {
 		switch (field) {
 			case 'flyToken':
-				return 'Fly Token';
+				return flySetupMode === 'deploy' ? 'Fly App Deploy Token' : 'Fly Org Token';
 			case 'flyAppName':
-				return 'Fly App Name';
+				return flySetupMode === 'deploy' ? 'Fly App Name' : 'Fly App Name (optional)';
 			case 'anthropic':
 				return 'Anthropic API Key';
 			case 'amp':
@@ -245,12 +274,21 @@
 	};
 
 	const loadGithubSummary = async () => {
+		githubStatus = '';
 		try {
 			const response = await fetch('/api/github/summary');
-			if (!response.ok) return;
-			githubSummary = (await response.json()) as GithubSummary;
+			if (response.status === 401) {
+				window.location.href = '/auth';
+				return;
+			}
+			const payload = (await response.json().catch(() => ({}))) as GithubSummary & { message?: string };
+			if (!response.ok) {
+				githubStatus = payload.message ?? 'Failed to load GitHub account summary.';
+				return;
+			}
+			githubSummary = payload;
 		} catch {
-			// ignore
+			githubStatus = 'Failed to load GitHub account summary.';
 		}
 	};
 
@@ -263,12 +301,15 @@
 				window.location.href = '/auth';
 				return;
 			}
+			const payload = (await response.json().catch(() => ({}))) as {
+				repositories?: RepoSummary[];
+				message?: string;
+			};
 			if (!response.ok) {
-				repoStatus = 'Failed to load repositories.';
+				repoStatus = payload.message ?? 'Failed to load repositories.';
 				repositories = [];
 				return;
 			}
-			const payload = (await response.json()) as { repositories: RepoSummary[] };
 			repositories = payload.repositories ?? [];
 			if (!selectedRepoIds.length && repositories.length) {
 				selectedRepoIds = repositories.map((repo) => repo.id);
@@ -315,9 +356,13 @@
 		flyValidating = true;
 		if (showMessage) flyStatus = '';
 		try {
-			const response = await fetch('/api/config/validate/fly');
+			const response = await fetch(`/api/config/validate/fly?mode=${flySetupMode}`);
 			const payload = (await response.json()) as FlyValidation;
-			fly.validation = payload;
+			fly = {
+				...fly,
+				flyAppName: payload.flyAppName ?? fly.flyAppName,
+				validation: payload
+			};
 			if (showMessage) flyStatus = payload.message;
 		} catch (error) {
 			console.error('Validating Fly credentials failed:', error);
@@ -340,18 +385,22 @@
 			const response = await fetch('/api/config/fly', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ ...nextFly, validate: true })
+				body: JSON.stringify({ ...nextFly, validate: true, setupMode: flySetupMode })
 			});
 			if (!response.ok) {
-				flyStatus = 'Failed to save Fly settings.';
+				const payload = (await response.json().catch(() => ({}))) as { message?: string };
+				flyStatus = payload.message ?? 'Failed to save Fly settings.';
 				return false;
 			}
-			const payload = (await response.json()) as FlyCredentials;
+			const payload = (await response.json()) as FlyCredentials & { setupMode?: FlySetupMode };
 			fly = {
 				flyToken: payload.flyToken,
 				flyAppName: payload.flyAppName,
 				validation: payload.validation
 			};
+			if (payload.setupMode) {
+				flySetupMode = payload.setupMode;
+			}
 			flyStatus = payload.validation?.message ?? 'Fly settings updated.';
 			return true;
 		} catch (error) {
@@ -473,7 +522,12 @@
 		await goto('/auth');
 	};
 
+	$effect(() => {
+		flySetupMode = normalizeSetupMode($page.url.searchParams.get('setup'));
+	});
+
 	onMount(() => {
+		flySetupMode = normalizeSetupMode($page.url.searchParams.get('setup'));
 		loadAgents(true);
 		if (isConnected) {
 			loadConfig();
@@ -507,6 +561,42 @@
 									<p class="mt-1 text-sm text-muted-foreground">API keys and tokens stored in your private GitHub Gist.</p>
 								</div>
 								<Button size="sm" onclick={() => (showCredentialsModal = true)}>Manage Credentials</Button>
+							</div>
+
+							<div class="grid gap-3 sm:grid-cols-2">
+								<button
+									type="button"
+									class={`rounded-xl border p-3 text-left transition ${flySetupMode === 'org' ? 'border-primary/40 bg-primary/10' : 'border-border/50 bg-card/20 hover:border-border'}`}
+									onclick={() => setFlySetupMode('org')}
+								>
+									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Quick setup</p>
+									<p class="mt-1 text-sm font-medium text-foreground">Org token</p>
+									<p class="mt-1 text-xs text-muted-foreground">Best for first run. Paste token and Porter can create app resources.</p>
+								</button>
+								<button
+									type="button"
+									class={`rounded-xl border p-3 text-left transition ${flySetupMode === 'deploy' ? 'border-primary/40 bg-primary/10' : 'border-border/50 bg-card/20 hover:border-border'}`}
+									onclick={() => setFlySetupMode('deploy')}
+								>
+									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Least privilege</p>
+									<p class="mt-1 text-sm font-medium text-foreground">App deploy token</p>
+									<p class="mt-1 text-xs text-muted-foreground">App-scoped token. Provide exact app name and matching token.</p>
+								</button>
+							</div>
+
+							<div class="rounded-xl border border-border/50 bg-card/20 p-3 text-xs text-muted-foreground">
+								{#if flySetupMode === 'org'}
+									<p class="font-medium text-foreground">Org token setup</p>
+									<p class="mt-1">Create an org token once, then Porter validates and can auto-create the Fly app.</p>
+									<pre class="mt-2 overflow-x-auto rounded-md border border-border/40 bg-background/60 p-2 text-[11px] text-foreground">fly auth login
+fly tokens create org --name "porter" --expiry 30d</pre>
+								{:else}
+									<p class="font-medium text-foreground">App deploy token setup</p>
+									<p class="mt-1">Create app first, then generate deploy token scoped to that app.</p>
+									<pre class="mt-2 overflow-x-auto rounded-md border border-border/40 bg-background/60 p-2 text-[11px] text-foreground">fly auth login
+fly apps create porter-myapp
+fly tokens create deploy -a porter-myapp --name "porter" --expiry 30d</pre>
+								{/if}
 							</div>
 
 							<div class="divide-y divide-border/30 rounded-xl border border-border/50 bg-card/30">
@@ -652,11 +742,17 @@
 								</div>
 								<div class="flex items-center justify-between text-sm">
 									<span class="flex items-center gap-2">
-										{#if flyValidationReady}<CheckCircle size={16} weight="fill" class="text-emerald-500" />{:else}<WarningCircle size={16} weight="fill" class="text-amber-500" />{/if}
-										Fly
-									</span>
-									<span class="text-muted-foreground">{flyValidationReady ? 'Connected' : 'Missing token/app'}</span>
-								</div>
+									{#if flyValidationReady}<CheckCircle size={16} weight="fill" class="text-emerald-500" />{:else}<WarningCircle size={16} weight="fill" class="text-amber-500" />{/if}
+									Fly
+								</span>
+								<span class="text-muted-foreground">
+									{flyValidationReady
+										? 'Connected'
+										: flySetupMode === 'deploy'
+											? 'Need deploy token + app'
+											: 'Need org token'}
+								</span>
+							</div>
 								<div class="flex items-center justify-between text-sm">
 									<span class="flex items-center gap-2">
 										{#if (credentials.anthropic ?? '').trim()}<CheckCircle size={16} weight="fill" class="text-emerald-500" />{:else}<WarningCircle size={16} weight="fill" class="text-amber-500" />{/if}
@@ -700,6 +796,9 @@
 								<Button variant="secondary" href="/api/auth/github">Reconnect</Button>
 								<Button variant="outline" class="text-destructive hover:text-destructive" onclick={handleDisconnect}>Disconnect</Button>
 							</div>
+							{#if githubStatus}
+								<p class="text-xs text-muted-foreground">{githubStatus}</p>
+							{/if}
 						</section>
 
 						<section class="space-y-3">

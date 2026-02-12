@@ -46,6 +46,47 @@
     {/if}
   </div>
 
+  <div class="space-y-3">
+    <p class="text-center text-[0.68rem] uppercase tracking-[0.2em] text-[#756d67]">Choose setup path</p>
+    <div class="grid gap-3 sm:grid-cols-2">
+      <div class="rounded-lg border border-white/10 bg-black/20 p-3 text-left">
+        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b]">Quick setup</p>
+        <p class="mt-1 text-sm font-medium text-[#f5f1ed]">Org token flow</p>
+        <p class="mt-1 text-xs text-[#9f9892]">Best for first run. Porter can validate and create app resources.</p>
+        <ol class="mt-2 space-y-1 text-xs text-[#b7b0aa]">
+          <li>1. Create a Fly org token</li>
+          <li>2. Paste token in Settings</li>
+          <li>3. Porter handles app setup</li>
+        </ol>
+        {#if isConnected}
+          <a class="mt-3 inline-block text-xs font-medium text-[#f3a56b] hover:text-[#ffc08d]" href="/settings?setup=org">
+            Continue with org token ->
+          </a>
+        {:else}
+          <p class="mt-3 text-xs text-[#8e8781]">Connect GitHub, then continue in Settings.</p>
+        {/if}
+      </div>
+
+      <div class="rounded-lg border border-white/10 bg-black/20 p-3 text-left">
+        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b]">Least privilege</p>
+        <p class="mt-1 text-sm font-medium text-[#f5f1ed]">App deploy token flow</p>
+        <p class="mt-1 text-xs text-[#9f9892]">More scoped. You provide exact app name and matching deploy token.</p>
+        <ol class="mt-2 space-y-1 text-xs text-[#b7b0aa]">
+          <li>1. Create Fly app</li>
+          <li>2. Create deploy token for app</li>
+          <li>3. Paste app name + token in Settings</li>
+        </ol>
+        {#if isConnected}
+          <a class="mt-3 inline-block text-xs font-medium text-[#f3a56b] hover:text-[#ffc08d]" href="/settings?setup=deploy">
+            Continue with deploy token ->
+          </a>
+        {:else}
+          <p class="mt-3 text-xs text-[#8e8781]">Connect GitHub, then continue in Settings.</p>
+        {/if}
+      </div>
+    </div>
+  </div>
+
   <div class="mt-1 w-full border-t border-white/5 pt-5 text-center text-[0.68rem] uppercase tracking-[0.2em] text-[#5f5852]">
     Docs · Privacy
   </div>
