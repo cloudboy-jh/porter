@@ -12,6 +12,23 @@
     onSignOut: () => void;
   }
 
+  const flyCliCommand = `fly auth login
+fly tokens create org --name "porter" --expiry 30d`;
+
+  let copiedFlyCli = $state(false);
+
+  const copyFlyCli = async () => {
+    try {
+      await navigator.clipboard.writeText(flyCliCommand);
+      copiedFlyCli = true;
+      setTimeout(() => {
+        copiedFlyCli = false;
+      }, 1200);
+    } catch {
+      copiedFlyCli = false;
+    }
+  };
+
   let {
     isConnected,
     githubHandle,
@@ -77,13 +94,22 @@
     <div class="grid gap-3 sm:grid-cols-2">
       <div class="rounded-lg border border-white/10 bg-black/20 p-3 text-left">
         <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b]">Quick setup</p>
-        <p class="mt-1 text-sm font-medium text-[#f5f1ed]">Org token flow</p>
-        <p class="mt-1 text-xs text-[#9f9892]">Best for first run. Porter can validate and create app resources.</p>
+        <p class="mt-1 text-sm font-medium text-[#f5f1ed]">Grab an org token</p>
+        <p class="mt-1 text-xs text-[#9f9892]">No manual app deploy required. Porter validates credentials and handles app setup.</p>
         <ol class="mt-2 space-y-1 text-xs text-[#b7b0aa]">
-          <li>1. Create a Fly org token</li>
-          <li>2. Paste token in Settings</li>
-          <li>3. Porter handles app setup</li>
+          <li>1. Open Fly dashboard tokens</li>
+          <li>2. Create an org token</li>
+          <li>3. Paste token in Settings</li>
+          <li>4. Run your first Porter task</li>
         </ol>
+        <a
+          href="https://fly.io/dashboard/personal/tokens"
+          target="_blank"
+          rel="noreferrer"
+          class="mt-3 inline-block text-xs font-medium text-[#f3a56b] hover:text-[#ffc08d]"
+        >
+          Open Fly tokens ↗
+        </a>
         {#if isConnected}
           <a class="mt-3 inline-block text-xs font-medium text-[#f3a56b] hover:text-[#ffc08d]" href="/settings?setup=org">
             Continue with org token ->
@@ -94,17 +120,22 @@
       </div>
 
       <div class="rounded-lg border border-white/10 bg-black/20 p-3 text-left">
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b]">Least privilege</p>
-        <p class="mt-1 text-sm font-medium text-[#f5f1ed]">App deploy token flow</p>
-        <p class="mt-1 text-xs text-[#9f9892]">More scoped. You provide exact app name and matching deploy token.</p>
-        <ol class="mt-2 space-y-1 text-xs text-[#b7b0aa]">
-          <li>1. Create Fly app</li>
-          <li>2. Create deploy token for app</li>
-          <li>3. Paste app name + token in Settings</li>
-        </ol>
+        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b]">CLI path</p>
+        <p class="mt-1 text-sm font-medium text-[#f5f1ed]">Do it with the Fly CLI</p>
+        <p class="mt-1 text-xs text-[#9f9892]">Generate the same org token from terminal and paste it into Settings.</p>
+        <div class="mt-2 rounded-md border border-white/10 bg-black/45 p-2">
+          <pre class="overflow-x-auto font-mono text-[11px] leading-5 text-[#d7c7bc]">{flyCliCommand}</pre>
+        </div>
+        <button
+          type="button"
+          class="mt-2 text-xs font-medium text-[#f3a56b] hover:text-[#ffc08d]"
+          onclick={copyFlyCli}
+        >
+          {copiedFlyCli ? 'Copied' : 'Copy terminal command'}
+        </button>
         {#if isConnected}
-          <a class="mt-3 inline-block text-xs font-medium text-[#f3a56b] hover:text-[#ffc08d]" href="/settings?setup=deploy">
-            Continue with deploy token ->
+          <a class="mt-3 inline-block text-xs font-medium text-[#f3a56b] hover:text-[#ffc08d]" href="/settings?setup=org">
+            Continue with CLI token ->
           </a>
         {:else}
           <p class="mt-3 text-xs text-[#8e8781]">Connect GitHub, then continue in Settings.</p>

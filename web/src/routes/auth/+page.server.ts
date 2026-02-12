@@ -2,7 +2,9 @@ import { env } from '$env/dynamic/private';
 import type { PageServerLoad } from './$types';
 
 const getGitHubAppInstallUrl = () => {
-	const explicitUrl = env.GITHUB_APP_INSTALL_URL?.trim();
+	const publicInstallUrl = (env as Record<string, string | undefined>).PUBLIC_GITHUB_APP_INSTALL_URL;
+	const explicitUrl =
+		env.GITHUB_APP_INSTALL_URL?.trim() ?? publicInstallUrl?.trim();
 	if (explicitUrl) {
 		return explicitUrl;
 	}

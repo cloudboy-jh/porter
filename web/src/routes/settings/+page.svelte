@@ -83,6 +83,7 @@
 	let repoStatus = $state('');
 	let githubStatus = $state('');
 	let flySetupMode = $state<FlySetupMode>('org');
+	let flyCliCopied = $state(false);
 
 	let credentialSaving = $state(false);
 	let flySaving = $state(false);
@@ -134,18 +135,20 @@
 	const sectionLabelClass =
 		'text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground';
 
-	const normalizeSetupMode = (value: string | null): FlySetupMode =>
-		value === 'deploy' ? 'deploy' : 'org';
+	const flyCliCommand = `fly auth login\nfly tokens create org --name "porter" --expiry 30d`;
 
-	const setFlySetupMode = async (mode: FlySetupMode) => {
-		flySetupMode = mode;
-		const search = new URLSearchParams($page.url.searchParams);
-		search.set('setup', mode);
-		await goto(`${$page.url.pathname}?${search.toString()}`, {
-			replaceState: true,
-			noScroll: true,
-			keepFocus: true
-		});
+	const normalizeSetupMode = (_value: string | null): FlySetupMode => 'org';
+
+	const copyFlyCli = async () => {
+		try {
+			await navigator.clipboard.writeText(flyCliCommand);
+			flyCliCopied = true;
+			setTimeout(() => {
+				flyCliCopied = false;
+			}, 1200);
+		} catch {
+			flyCliCopied = false;
+		}
 	};
 
 	const getAgentIcon = (agent: AgentDisplay) => {
@@ -175,9 +178,9 @@
 	const getFieldLabel = (field: EditableField) => {
 		switch (field) {
 			case 'flyToken':
-				return flySetupMode === 'deploy' ? 'Fly App Deploy Token' : 'Fly Org Token';
+				return 'Fly Org Token';
 			case 'flyAppName':
-				return flySetupMode === 'deploy' ? 'Fly App Name' : 'Fly App Name (optional)';
+				return 'Fly App Name (optional)';
 			case 'anthropic':
 				return 'Anthropic API Key';
 			case 'amp':
@@ -564,39 +567,39 @@
 							</div>
 
 							<div class="grid gap-3 sm:grid-cols-2">
-								<button
-									type="button"
-									class={`rounded-xl border p-3 text-left transition ${flySetupMode === 'org' ? 'border-primary/40 bg-primary/10' : 'border-border/50 bg-card/20 hover:border-border'}`}
-									onclick={() => setFlySetupMode('org')}
-								>
+								<div class="rounded-xl border border-primary/35 bg-primary/10 p-3">
 									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Quick setup</p>
-									<p class="mt-1 text-sm font-medium text-foreground">Org token</p>
-									<p class="mt-1 text-xs text-muted-foreground">Best for first run. Paste token and Porter can create app resources.</p>
-								</button>
-								<button
-									type="button"
-									class={`rounded-xl border p-3 text-left transition ${flySetupMode === 'deploy' ? 'border-primary/40 bg-primary/10' : 'border-border/50 bg-card/20 hover:border-border'}`}
-									onclick={() => setFlySetupMode('deploy')}
-								>
-									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Least privilege</p>
-									<p class="mt-1 text-sm font-medium text-foreground">App deploy token</p>
-									<p class="mt-1 text-xs text-muted-foreground">App-scoped token. Provide exact app name and matching token.</p>
-								</button>
+									<p class="mt-1 text-sm font-medium text-foreground">Grab an org token</p>
+									<p class="mt-1 text-xs text-muted-foreground">No manual app deploy required. Porter validates token scope and creates app resources.</p>
+									<a
+										href="https://fly.io/dashboard/personal/tokens"
+										target="_blank"
+										rel="noreferrer"
+										class="mt-2 inline-block text-xs font-medium text-primary hover:text-primary/80"
+									>
+										Open Fly tokens ↗
+									</a>
+								</div>
+								<div class="rounded-xl border border-border/50 bg-card/20 p-3">
+									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">CLI path</p>
+									<p class="mt-1 text-sm font-medium text-foreground">Do it with Fly CLI</p>
+									<p class="mt-1 text-xs text-muted-foreground">Generate the same org token directly in terminal.</p>
+									<div class="mt-2 rounded-md border border-border/40 bg-background/70 p-2">
+										<pre class="overflow-x-auto font-mono text-[11px] leading-5 text-foreground">{flyCliCommand}</pre>
+									</div>
+									<button
+										type="button"
+										class="mt-2 text-xs font-medium text-primary hover:text-primary/80"
+										onclick={copyFlyCli}
+									>
+										{flyCliCopied ? 'Copied' : 'Copy terminal command'}
+									</button>
+								</div>
 							</div>
 
 							<div class="rounded-xl border border-border/50 bg-card/20 p-3 text-xs text-muted-foreground">
-								{#if flySetupMode === 'org'}
-									<p class="font-medium text-foreground">Org token setup</p>
-									<p class="mt-1">Create an org token once, then Porter validates and can auto-create the Fly app.</p>
-									<pre class="mt-2 overflow-x-auto rounded-md border border-border/40 bg-background/60 p-2 text-[11px] text-foreground">fly auth login
-fly tokens create org --name "porter" --expiry 30d</pre>
-								{:else}
-									<p class="font-medium text-foreground">App deploy token setup</p>
-									<p class="mt-1">Create app first, then generate deploy token scoped to that app.</p>
-									<pre class="mt-2 overflow-x-auto rounded-md border border-border/40 bg-background/60 p-2 text-[11px] text-foreground">fly auth login
-fly apps create porter-myapp
-fly tokens create deploy -a porter-myapp --name "porter" --expiry 30d</pre>
-								{/if}
+								<p class="font-medium text-foreground">What Porter handles</p>
+								<p class="mt-1">After you save an org token, Porter validates it, creates the Fly app when missing, and reuses that app for task machines.</p>
 							</div>
 
 							<div class="divide-y divide-border/30 rounded-xl border border-border/50 bg-card/30">
@@ -746,11 +749,7 @@ fly tokens create deploy -a porter-myapp --name "porter" --expiry 30d</pre>
 									Fly
 								</span>
 								<span class="text-muted-foreground">
-									{flyValidationReady
-										? 'Connected'
-										: flySetupMode === 'deploy'
-											? 'Need deploy token + app'
-											: 'Need org token'}
+									{flyValidationReady ? 'Connected' : 'Need org token'}
 								</span>
 							</div>
 								<div class="flex items-center justify-between text-sm">
