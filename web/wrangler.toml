@@ -1,0 +1,12 @@
+name = "porter-web"
+main = ".svelte-kit/cloudflare/_worker.js"
+compatibility_date = "2026-02-11"
+
+[assets]
+directory = ".svelte-kit/cloudflare"
+binding = "ASSETS"
+
+[build]
+command = "bun install --frozen-lockfile && bun run build"
+cwd = "."
+watch_dir = ["src", "static", "svelte.config.js", "vite.config.ts", "package.json", "bun.lock", "tsconfig.json"]

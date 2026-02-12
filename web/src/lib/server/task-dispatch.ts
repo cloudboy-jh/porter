@@ -18,14 +18,28 @@ type DispatchPriority = 'low' | 'normal' | 'high';
 
 type DispatchInput = {
 	githubToken: string;
+	configToken?: string;
 	repoOwner: string;
 	repoName: string;
 	issueNumber?: number;
 	agent: string;
 	priority: DispatchPriority;
 	prompt?: string;
+	enrichedPrompt?: string;
 	issueBody?: string;
 	issueTitle?: string;
+	installationId?: number;
+	repoCloneUrl?: string;
+	baseBranch?: string;
+	runtimeConfig?: {
+		flyToken?: string;
+		flyAppName?: string;
+		credentials?: {
+			anthropic?: string;
+			openai?: string;
+			amp?: string;
+		};
+	};
 	requireReadyAgent?: boolean;
 };
 
@@ -70,6 +84,7 @@ const updateLabelsAndComment = async (
 		if (lower.startsWith('porter:running')) return false;
 		if (lower.startsWith('porter:success')) return false;
 		if (lower.startsWith('porter:failed')) return false;
+		if (lower.startsWith('porter:timed_out')) return false;
 		return true;
 	});
 	const labels = Array.from(new Set([...cleanedLabels, ...porterLabels]));
@@ -132,7 +147,8 @@ export const dispatchTaskToFly = async (input: DispatchInput): Promise<DispatchR
 	await updateLabelsAndComment(input.githubToken, input.repoOwner, input.repoName, issue.number, metadata);
 
 	if (input.requireReadyAgent) {
-		const agents = await listAgents(input.githubToken);
+		const configLookupToken = input.configToken ?? input.githubToken;
+		const agents = await listAgents(configLookupToken);
 		const agentInfo = agents.find((entry) => entry.name === input.agent);
 		const isReady = agentInfo?.readyState === 'ready';
 		if (!agentInfo || !isReady) {
@@ -156,10 +172,12 @@ export const dispatchTaskToFly = async (input: DispatchInput): Promise<DispatchR
 		}
 	}
 
-	const activeConfig = await getConfig(input.githubToken);
-	const flyToken = activeConfig.flyToken?.trim();
-	const flyAppName = activeConfig.flyAppName?.trim();
-	const anthropicKey = activeConfig.credentials?.anthropic?.trim();
+	const configLookupToken = input.configToken ?? input.githubToken;
+	const activeConfig = input.runtimeConfig ? null : await getConfig(configLookupToken);
+	const flyToken = (input.runtimeConfig?.flyToken ?? activeConfig?.flyToken)?.trim();
+	const flyAppName = (input.runtimeConfig?.flyAppName ?? activeConfig?.flyAppName)?.trim();
+	const anthropicKey =
+		(input.runtimeConfig?.credentials?.anthropic ?? activeConfig?.credentials?.anthropic)?.trim();
 	const callbackBaseUrl = env.PUBLIC_APP_URL ?? env.APP_URL;
 
 	if (!flyToken || !flyAppName || !anthropicKey) {
@@ -200,19 +218,27 @@ export const dispatchTaskToFly = async (input: DispatchInput): Promise<DispatchR
 
 	try {
 		const extraInstructions = input.issueNumber ? prompt : '';
+		const resolvedPrompt =
+			input.enrichedPrompt ??
+			buildEnrichedPrompt(
+				issue.title,
+				issue.body ?? input.issueBody ?? prompt,
+				issue.number,
+				extraInstructions
+			);
 		const execution = createExecutionContext({
 			owner: input.repoOwner,
 			repo: input.repoName,
 			issueNumber: issue.number,
 			agent: input.agent,
 			priority: input.priority,
-			prompt: buildEnrichedPrompt(
-				issue.title,
-				issue.body ?? input.issueBody ?? prompt,
-				issue.number,
-				extraInstructions
-			),
-			githubToken: input.githubToken
+			prompt: resolvedPrompt,
+			githubToken: input.githubToken,
+			repoCloneUrl: input.repoCloneUrl,
+			baseBranch: input.baseBranch,
+			installationId: input.installationId,
+			flyToken,
+			flyAppName
 		});
 
 		const machine = await launchExecutionMachine(execution, {
@@ -220,8 +246,8 @@ export const dispatchTaskToFly = async (input: DispatchInput): Promise<DispatchR
 			flyAppName,
 			callbackBaseUrl,
 			anthropicKey,
-			ampKey: activeConfig.credentials?.amp,
-			openaiKey: activeConfig.credentials?.openai
+			ampKey: input.runtimeConfig?.credentials?.amp ?? activeConfig?.credentials?.amp,
+			openaiKey: input.runtimeConfig?.credentials?.openai ?? activeConfig?.credentials?.openai
 		});
 
 		const runningSummary = `Task running on Fly Machine ${machine.id}.`;

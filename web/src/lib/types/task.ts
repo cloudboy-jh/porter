@@ -1,6 +1,6 @@
 export type Task = {
 	id: string;
-	status: 'queued' | 'running' | 'success' | 'failed';
+	status: 'queued' | 'running' | 'success' | 'failed' | 'timed_out';
 	statusLabel: string;
 	title: string;
 	technicalSummary?: string;

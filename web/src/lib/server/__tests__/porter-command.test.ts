@@ -7,6 +7,7 @@ describe('parsePorterCommand', () => {
 		const parsed = parsePorterCommand('@porter claude-code --priority=high');
 		expect(parsed).toEqual({
 			agent: 'claude-code',
+			agentExplicit: true,
 			priority: 'high',
 			extraInstructions: ''
 		});
@@ -16,6 +17,7 @@ describe('parsePorterCommand', () => {
 		const parsed = parsePorterCommand('@porter');
 		expect(parsed).toEqual({
 			agent: 'opencode',
+			agentExplicit: false,
 			priority: 'normal',
 			extraInstructions: ''
 		});
@@ -25,8 +27,19 @@ describe('parsePorterCommand', () => {
 		const parsed = parsePorterCommand('@porter opencode --priority=low please focus on tests');
 		expect(parsed).toEqual({
 			agent: 'opencode',
+			agentExplicit: true,
 			priority: 'low',
 			extraInstructions: 'please focus on tests'
+		});
+	});
+
+	it('treats non-agent first token as instructions', () => {
+		const parsed = parsePorterCommand('@porter please fix login race condition');
+		expect(parsed).toEqual({
+			agent: 'opencode',
+			agentExplicit: false,
+			priority: 'normal',
+			extraInstructions: 'please fix login race condition'
 		});
 	});
 

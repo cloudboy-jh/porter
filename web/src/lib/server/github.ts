@@ -1,6 +1,80 @@
+import { createSign } from 'crypto';
+import { env } from '$env/dynamic/private';
 import { githubCache, CACHE_TTL } from './cache';
 
 const GITHUB_API = 'https://api.github.com';
+
+const toBase64Url = (value: string | Uint8Array) =>
+	Buffer.from(typeof value === 'string' ? value : Uint8Array.from(value))
+		.toString('base64')
+		.replace(/=/g, '')
+		.replace(/\+/g, '-')
+		.replace(/\//g, '_');
+
+const getGitHubAppPrivateKey = () => {
+	const raw = env.GITHUB_APP_PRIVATE_KEY?.trim();
+	if (!raw) {
+		throw new Error('Missing GITHUB_APP_PRIVATE_KEY');
+	}
+	return raw.replace(/\\n/g, '\n');
+};
+
+const getGitHubAppId = () => {
+	const appId = env.GITHUB_APP_ID?.trim();
+	if (!appId) {
+		throw new Error('Missing GITHUB_APP_ID');
+	}
+	return appId;
+};
+
+export const createGitHubAppJwt = () => {
+	const now = Math.floor(Date.now() / 1000);
+	const header = toBase64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+	const payload = toBase64Url(
+		JSON.stringify({
+			iat: now - 60,
+			exp: now + 9 * 60,
+			iss: getGitHubAppId()
+		})
+	);
+	const unsigned = `${header}.${payload}`;
+	const signer = createSign('RSA-SHA256');
+	signer.update(unsigned);
+	signer.end();
+	const signature = signer.sign(getGitHubAppPrivateKey());
+	return `${unsigned}.${toBase64Url(Uint8Array.from(signature))}`;
+};
+
+export const createInstallationAccessToken = async (installationId: number) => {
+	const jwt = createGitHubAppJwt();
+	const response = await fetch(
+		`${GITHUB_API}/app/installations/${installationId}/access_tokens`,
+		{
+			method: 'POST',
+			headers: {
+				Accept: 'application/vnd.github+json',
+				Authorization: `Bearer ${jwt}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({})
+		}
+	);
+
+	if (!response.ok) {
+		const body = await response.text();
+		throw new GitHubRequestError(
+			response.status,
+			`Failed to create installation token: ${response.status}`,
+			body
+		);
+	}
+
+	const payload = (await response.json()) as { token: string; expires_at?: string };
+	return {
+		token: payload.token,
+		expiresAt: payload.expires_at
+	};
+};
 
 export class GitHubRequestError extends Error {
 	status: number;
@@ -20,7 +94,7 @@ export const isGitHubAuthError = (error: unknown) =>
 export const isGitHubRateLimitError = (error: unknown) =>
 	error instanceof GitHubRequestError && error.status === 403;
 
-export type PorterTaskStatus = 'queued' | 'running' | 'success' | 'failed';
+export type PorterTaskStatus = 'queued' | 'running' | 'success' | 'failed' | 'timed_out';
 
 export type PorterTaskMetadata = {
 	taskId: string;
@@ -46,7 +120,8 @@ const PORTER_STATUS_LABELS: Record<PorterTaskStatus, string> = {
 	queued: 'porter:queued',
 	running: 'porter:running',
 	success: 'porter:success',
-	failed: 'porter:failed'
+	failed: 'porter:failed',
+	timed_out: 'porter:timed_out'
 };
 
 const porterMetadataRegex = /<!--\s*porter:(.*?)\s*-->/s;
@@ -233,6 +308,22 @@ export const addIssueComment = (token: string, owner: string, repo: string, numb
 		body: JSON.stringify({ body })
 	});
 
+export const addIssueCommentReaction = (
+	token: string,
+	owner: string,
+	repo: string,
+	commentId: number,
+	reaction: '+1' | '-1' | 'laugh' | 'hooray' | 'confused' | 'heart' | 'rocket' | 'eyes'
+) =>
+	fetchGitHub<{ id: number }>(`/repos/${owner}/${repo}/issues/comments/${commentId}/reactions`, token, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Accept: 'application/vnd.github+json'
+		},
+		body: JSON.stringify({ content: reaction })
+	});
+
 export const createPullRequest = (
 	token: string,
 	owner: string,
@@ -244,6 +335,48 @@ export const createPullRequest = (
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(input)
 	});
+
+export const findOpenPullRequestByHead = async (
+	token: string,
+	owner: string,
+	repo: string,
+	head: string
+) => {
+	const pulls = await fetchGitHub<GitHubPull[]>(
+		`/repos/${owner}/${repo}/pulls?state=all&head=${encodeURIComponent(`${owner}:${head}`)}`,
+		token
+	);
+	return pulls[0] ?? null;
+};
+
+type GitHubContentFile = {
+	type: 'file';
+	content?: string;
+	encoding?: string;
+};
+
+export const fetchRepoFileContent = async (
+	token: string,
+	owner: string,
+	repo: string,
+	path: string
+) => {
+	try {
+		const file = await fetchGitHub<GitHubContentFile>(
+			`/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`,
+			token
+		);
+		if (file.type !== 'file' || !file.content) return null;
+		if (file.encoding !== 'base64') return null;
+		const normalized = file.content.replace(/\n/g, '');
+		return Buffer.from(normalized, 'base64').toString('utf8');
+	} catch (error) {
+		if (error instanceof GitHubRequestError && error.status === 404) {
+			return null;
+		}
+		throw error;
+	}
+};
 
 export const listIssueComments = async (token: string, owner: string, repo: string, number: number) => {
 	const cacheKey = `comments:${owner}/${repo}#${number}:${token.slice(-8)}`;
@@ -287,7 +420,7 @@ export const getLatestPorterMetadata = (comments: GitHubComment[]) => {
 };
 
 export const buildTaskLog = (metadata: PorterTaskMetadata | null, status: PorterTaskStatus) => {
-	const level = status === 'success' ? 'success' : status === 'failed' ? 'error' : 'info';
+	const level = status === 'success' ? 'success' : status === 'failed' || status === 'timed_out' ? 'error' : 'info';
 	const message = metadata?.summary ?? `Task ${status}`;
 	const baseTime = metadata?.updatedAt ?? new Date().toISOString();
 	const logs = [{ time: baseTime, level, message }];

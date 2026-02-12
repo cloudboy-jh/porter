@@ -88,21 +88,24 @@
 		running: 'border-primary/60 bg-primary/10 text-primary',
 		queued: 'border-border/70 bg-muted text-muted-foreground',
 		success: 'border-emerald-500/60 bg-emerald-500/10 text-emerald-600',
-		failed: 'border-rose-500/60 bg-rose-500/10 text-rose-600'
+		failed: 'border-rose-500/60 bg-rose-500/10 text-rose-600',
+		timed_out: 'border-amber-500/60 bg-amber-500/10 text-amber-600'
 	};
 
 	const highlightRing: Record<Task['status'], string> = {
 		running: 'ring-2 ring-primary/15',
 		queued: 'ring-2 ring-border/40',
 		success: 'ring-2 ring-emerald-500/15',
-		failed: 'ring-2 ring-rose-500/15'
+		failed: 'ring-2 ring-rose-500/15',
+		timed_out: 'ring-2 ring-amber-500/15'
 	};
 
 	const lineGlow: Record<Task['status'], string> = {
 		running: 'bg-primary/40',
 		queued: 'bg-border/60',
 		success: 'bg-emerald-500/40',
-		failed: 'bg-rose-500/40'
+		failed: 'bg-rose-500/40',
+		timed_out: 'bg-amber-500/40'
 	};
 
 	const statusBadge: Record<Task['status'], { label: string; className: string }> = {
@@ -121,13 +124,18 @@
 		failed: {
 			label: 'Failed',
 			className: 'border-rose-500/30 bg-rose-500/10 text-rose-600'
+		},
+		timed_out: {
+			label: 'Timed Out',
+			className: 'border-amber-500/30 bg-amber-500/10 text-amber-600'
 		}
 	};
 
 	const isHighlighted = (task: TaskWithLinks) =>
 		task.status === 'running' || (highlightStatus && task.status === highlightStatus);
 
-	const showRetry = (task: TaskWithLinks) => showStatusActions && task.status === 'failed';
+	const showRetry = (task: TaskWithLinks) =>
+		showStatusActions && (task.status === 'failed' || task.status === 'timed_out');
 	const showCancel = (task: TaskWithLinks) =>
 		showStatusActions && (task.status === 'running' || task.status === 'queued');
 	const resolveTaskActions = (task: TaskWithLinks) => (getTaskActions ? getTaskActions(task) : []);

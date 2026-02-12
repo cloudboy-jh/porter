@@ -71,6 +71,7 @@ const applyRejectedStatus = async (
 		if (lower.startsWith('porter:running')) return false;
 		if (lower.startsWith('porter:success')) return false;
 		if (lower.startsWith('porter:failed')) return false;
+		if (lower.startsWith('porter:timed_out')) return false;
 		return true;
 	});
 

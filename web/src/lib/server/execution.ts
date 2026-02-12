@@ -18,7 +18,12 @@ export type ExecutionContext = {
 	priority: ExecutionPriority;
 	prompt: string;
 	branchName: string;
+	baseBranch: string;
 	githubToken: string;
+	repoCloneUrl?: string;
+	installationId?: number;
+	flyToken?: string;
+	flyAppName?: string;
 	createdAt: string;
 	machineId?: string;
 };
@@ -75,6 +80,11 @@ export const createExecutionContext = (input: {
 	priority: ExecutionPriority;
 	prompt: string;
 	githubToken: string;
+	repoCloneUrl?: string;
+	baseBranch?: string;
+	installationId?: number;
+	flyToken?: string;
+	flyAppName?: string;
 }) => {
 	const executionId = `task_${randomUUID()}`;
 	const branchName = `porter/${executionId}`;
@@ -89,7 +99,12 @@ export const createExecutionContext = (input: {
 		priority: input.priority,
 		prompt: input.prompt,
 		branchName,
+		baseBranch: input.baseBranch?.trim() || 'main',
 		githubToken: input.githubToken,
+		repoCloneUrl: input.repoCloneUrl,
+		installationId: input.installationId,
+		flyToken: input.flyToken,
+		flyAppName: input.flyAppName,
 		createdAt: new Date().toISOString()
 	};
 	pendingExecutions.set(executionId, context);
@@ -103,6 +118,26 @@ export const getExecutionContext = async (executionId: string) => {
 };
 
 export const consumeExecutionContext = async (executionId: string) => {
+	await loadExecutionStore();
+	const existing = pendingExecutions.get(executionId) ?? null;
+	if (existing) {
+		pendingExecutions.delete(executionId);
+		await persistExecutionStore();
+	}
+	return existing;
+};
+
+export const listRunningExecutionsOlderThan = async (maxAgeMs: number) => {
+	await loadExecutionStore();
+	const cutoff = Date.now() - maxAgeMs;
+	return Array.from(pendingExecutions.values()).filter((execution) => {
+		if (!execution.machineId) return false;
+		const startedAt = new Date(execution.createdAt).getTime();
+		return Number.isFinite(startedAt) && startedAt < cutoff;
+	});
+};
+
+export const removeExecutionContext = async (executionId: string) => {
 	await loadExecutionStore();
 	const existing = pendingExecutions.get(executionId) ?? null;
 	if (existing) {
@@ -131,10 +166,15 @@ export const launchExecutionMachine = async (context: ExecutionContext, input: L
 			env: {
 				TASK_ID: context.executionId,
 				REPO_FULL_NAME: `${context.owner}/${context.repo}`,
+				REPO_URL:
+					context.repoCloneUrl ??
+					`https://x-access-token:${context.githubToken}@github.com/${context.owner}/${context.repo}.git`,
 				ISSUE_NUMBER: String(context.issueNumber),
 				AGENT: context.agent,
 				PROMPT: context.prompt,
+				BRANCH: context.branchName,
 				BRANCH_NAME: context.branchName,
+				BASE_BRANCH: context.baseBranch,
 				GITHUB_TOKEN: context.githubToken,
 				CALLBACK_URL: callbackUrl,
 				CALLBACK_TOKEN: context.callbackToken,

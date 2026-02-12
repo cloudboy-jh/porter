@@ -116,6 +116,16 @@ export const createFlyMachine = async (
 	);
 };
 
+export const destroyFlyMachine = async (token: string, appName: string, machineId: string) => {
+	return flyFetch<Record<string, unknown>>(
+		token,
+		`/apps/${encodeURIComponent(appName)}/machines/${encodeURIComponent(machineId)}`,
+		{
+			method: 'DELETE'
+		}
+	);
+};
+
 export const validateFlyCredentials = async (token: string, appName: string) => {
 	const trimmedToken = token.trim();
 	const trimmedApp = appName.trim();

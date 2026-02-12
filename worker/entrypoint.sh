@@ -24,6 +24,7 @@ post_callback() {
   local error_message="$3"
   local branch_name="$4"
   local commit_hash="$5"
+  local pr_exists="${6:-0}"
 
   local attempt
   local max_attempts=5
@@ -41,6 +42,7 @@ post_callback() {
     payload+="\"commit_hash\":$(json_escape "${commit_hash}"),"
     payload+="\"summary\":$(json_escape "${summary}"),"
     payload+="\"error\":$(json_escape "${error_message}"),"
+    payload+="\"pr_exists\":${pr_exists},"
     payload+="\"callback_attempt\":${attempt},"
     payload+="\"callback_max_attempts\":${max_attempts},"
     payload+="\"callback_last_http_code\":$(json_escape "${last_http_code}"),"
@@ -83,8 +85,9 @@ fail_task() {
   local message="$1"
   local branch_name="${2:-${BRANCH_NAME}}"
   local commit_hash="${3:-}"
+  local pr_exists="${4:-0}"
   log "Task failed: ${message}"
-  post_callback 'failed' '' "${message}" "${branch_name}" "${commit_hash}" || true
+  post_callback 'failed' '' "${message}" "${branch_name}" "${commit_hash}" "${pr_exists}" || true
   exit 1
 }
 
@@ -95,15 +98,15 @@ run_agent() {
   case "${normalized_agent}" in
     opencode)
       command -v opencode >/dev/null 2>&1 || return 127
-      opencode run --model anthropic/claude-sonnet-4 "${PROMPT}"
+      timeout 900 opencode run --model anthropic/claude-sonnet-4 "${PROMPT}"
       ;;
     claude|claude-code)
       command -v claude >/dev/null 2>&1 || return 127
-      claude -p "${PROMPT}" --dangerously-skip-permissions
+      timeout 900 claude -p "${PROMPT}" --dangerously-skip-permissions
       ;;
     amp)
       command -v amp >/dev/null 2>&1 || return 127
-      amp -x "${PROMPT}" --dangerously-allow-all
+      timeout 900 amp -x "${PROMPT}" --dangerously-allow-all
       ;;
     mock)
       printf '%s\n' "[mock-agent] ${PROMPT}" > /tmp/mock-agent-output.txt
@@ -119,21 +122,24 @@ run_agent() {
 }
 
 require_env TASK_ID
-require_env REPO_FULL_NAME
 require_env AGENT
 require_env PROMPT
 require_env CALLBACK_URL
 require_env CALLBACK_TOKEN
 
-BRANCH_NAME="${BRANCH_NAME:-porter/${TASK_ID}}"
+BRANCH_NAME="${BRANCH:-${BRANCH_NAME:-porter/${TASK_ID}}}"
 BASE_BRANCH="${BASE_BRANCH:-main}"
 REPO_DIR="/workspace/repo"
-if [ -n "${REPO_CLONE_URL:-}" ]; then
+if [ -n "${REPO_URL:-}" ]; then
+  REPO_URL="${REPO_URL}"
+elif [ -n "${REPO_CLONE_URL:-}" ]; then
   REPO_URL="${REPO_CLONE_URL}"
 else
+  require_env REPO_FULL_NAME
   require_env GITHUB_TOKEN
   REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO_FULL_NAME}.git"
 fi
+REPO_FULL_NAME="${REPO_FULL_NAME:-}"
 AGENT_LOG_PATH='/tmp/agent.log'
 
 log "Starting task ${TASK_ID} on ${REPO_FULL_NAME} with ${AGENT}."
@@ -162,9 +168,16 @@ if ! git checkout -B "${BRANCH_NAME}" >/tmp/git-checkout.log 2>&1; then
   fail_task "Failed to create branch ${BRANCH_NAME}."
 fi
 
-if ! run_agent >"${AGENT_LOG_PATH}" 2>&1; then
+set +e
+run_agent >"${AGENT_LOG_PATH}" 2>&1
+exit_code=$?
+set -e
+if [ "${exit_code}" -ne 0 ]; then
   failure_tail=$(tail -n 80 "${AGENT_LOG_PATH}" 2>/dev/null || true)
-  fail_task "Agent run failed. ${failure_tail}" "${BRANCH_NAME}"
+  if [ "${exit_code}" -eq 124 ]; then
+    fail_task "timeout after 15 minutes" "${BRANCH_NAME}"
+  fi
+  fail_task "agent exited with code ${exit_code}. ${failure_tail}" "${BRANCH_NAME}"
 fi
 
 if ! git push --set-upstream origin "${BRANCH_NAME}" >/tmp/git-push.log 2>&1; then
@@ -173,8 +186,17 @@ fi
 
 commit_hash="$(git rev-parse --short HEAD 2>/dev/null || true)"
 summary="Agent completed successfully. Branch ${BRANCH_NAME} pushed${commit_hash:+ at ${commit_hash}}."
+pr_exists='0'
+if [ -n "${GITHUB_TOKEN:-}" ] && [ -n "${REPO_FULL_NAME:-}" ]; then
+  owner="${REPO_FULL_NAME%%/*}"
+  pr_exists=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+    -H 'Accept: application/vnd.github+json' \
+    "https://api.github.com/repos/${REPO_FULL_NAME}/pulls?state=open&head=${owner}:${BRANCH_NAME}" \
+    | grep -c '"number"' || true)
+  pr_exists="${pr_exists:-0}"
+fi
 
-if ! post_callback 'complete' "${summary}" '' "${BRANCH_NAME}" "${commit_hash}"; then
+if ! post_callback 'complete' "${summary}" '' "${BRANCH_NAME}" "${commit_hash}" "${pr_exists}"; then
   exit 1
 fi
 

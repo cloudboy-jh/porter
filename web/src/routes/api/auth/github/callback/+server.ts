@@ -7,6 +7,7 @@ import {
 } from '$lib/server/auth';
 import { getConfig, updateConfig } from '$lib/server/store';
 import { listInstallationRepos } from '$lib/server/github';
+import { saveUserOAuthToken } from '$lib/server/oauth-tokens';
 import type { RequestHandler } from './$types';
 
 const fetchJson = async <T>(url: string, options: RequestInit): Promise<T> => {
@@ -66,6 +67,12 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	);
 
 	const primaryEmail = null;
+
+	await saveUserOAuthToken({
+		userId: user.id,
+		login: user.login,
+		token: accessToken
+	});
 
 	let hasInstallation = false;
 	try {

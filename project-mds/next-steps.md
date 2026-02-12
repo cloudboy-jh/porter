@@ -1,4 +1,4 @@
-# Next Steps (Feb 5, 2026)
+# Next Steps (Feb 11, 2026)
 
 ## Where we are (per `project-mds/main-spec.md`)
 
@@ -32,16 +32,19 @@
 
 ### Phase 3: GitHub App
 - [x] Local testing for Porter run E2E
-- [ ] Live Fly Machine creation for "Production" for just cloudboy-jh to start, To establish the container lifecycle. 
+- [x] Live webhook -> Fly Machine dispatch in production path
 - [x] App registration
 - [x] Webhook verification
 - [x] Issue comment parsing for @porter commands
 - [x] PR link commenting on completion
+- [x] Installation-token auth for repo clone/push/PR creation
+- [x] OAuth-token lookup for commenter private Gist config
 
 ### Phase 4: Polish
-- [ ] Error handling and retries
-- [ ] Task history refinements
-- [ ] Settings UX polish
+- [x] Error handling and retries (entrypoint + callback hardening)
+- [x] Task history refinements (status propagation + timeout visibility)
+- [x] Settings UX polish
+- [x] Timeout watchdog for stale running tasks
 
 ## Notes
 
@@ -50,12 +53,11 @@
 
 ## Next Focus
 
-### UI/UX refinement sprint
-- continue reviewing every web app surface for visual and interaction consistency
-- refine typography, spacing, color tokens, and component behavior across light/dark themes
-- tighten review feed and diff viewer polish until they match Porter design intent
+### Launch Readiness
+- run one production dry-run from real `@porter` issue comment to merged PR
+- verify required env vars exist in deployment (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `PORTER_OAUTH_TOKEN_SECRET`)
+- monitor first live callbacks and watchdog timeout events in logs
 
-### After UI/UX pass
-- run final verification sweep for UI/UX regressions
-- commit finalized UI/UX refinement changes
-- push branch updates to remote repository
+### Nice-to-have follow-ups
+- add targeted tests for watchdog and oauth token store edge cases
+- tighten observability around machine lifecycle metrics

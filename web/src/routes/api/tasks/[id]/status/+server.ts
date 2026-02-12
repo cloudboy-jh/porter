@@ -43,6 +43,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		if (lower.startsWith('porter:running')) return false;
 		if (lower.startsWith('porter:success')) return false;
 		if (lower.startsWith('porter:failed')) return false;
+		if (lower.startsWith('porter:timed_out')) return false;
 		return true;
 	});
 	const labels = Array.from(new Set([...cleanedLabels, ...porterLabels]));

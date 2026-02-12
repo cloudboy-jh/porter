@@ -1,4 +1,4 @@
-export type TaskStatus = 'queued' | 'running' | 'success' | 'failed';
+export type TaskStatus = 'queued' | 'running' | 'success' | 'failed' | 'timed_out';
 
 export interface TaskLog {
 	time: string;
