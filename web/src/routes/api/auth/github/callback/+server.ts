@@ -13,7 +13,8 @@ import type { RequestHandler } from './$types';
 const fetchJson = async <T>(url: string, options: RequestInit): Promise<T> => {
 	const response = await fetch(url, options);
 	if (!response.ok) {
-		throw new Error(`Request failed: ${response.status}`);
+		const body = await response.text();
+		throw new Error(`Request failed: ${response.status} ${url} ${body}`);
 	}
 	return (await response.json()) as T;
 };
@@ -38,37 +39,50 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 			throw redirect(302, '/auth?error=missing_client');
 		}
 
-		const tokenResponse = await fetchJson<{ access_token?: string }>(
-			'https://github.com/login/oauth/access_token',
-			{
-				method: 'POST',
-				headers: {
-					Accept: 'application/json',
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					client_id: clientId,
-					client_secret: clientSecret,
-					code,
-					redirect_uri: redirectUri
-				})
-			}
-		);
+		let tokenResponse: { access_token?: string };
+		try {
+			tokenResponse = await fetchJson<{ access_token?: string }>(
+				'https://github.com/login/oauth/access_token',
+				{
+					method: 'POST',
+					headers: {
+						Accept: 'application/json',
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						client_id: clientId,
+						client_secret: clientSecret,
+						code,
+						redirect_uri: redirectUri
+					})
+				}
+			);
+		} catch (error) {
+			console.error('GitHub OAuth token exchange failed:', error);
+			throw redirect(302, '/auth?error=oauth_token_exchange');
+		}
 
 		if (!tokenResponse.access_token) {
 			throw redirect(302, '/auth?error=token');
 		}
 
 		const accessToken = tokenResponse.access_token;
-		const user = await fetchJson<{ id: number; login: string; name: string | null; avatar_url: string }>(
-			'https://api.github.com/user',
-			{
-				headers: {
-					Authorization: `Bearer ${accessToken}`,
-					Accept: 'application/vnd.github+json'
+		let user: { id: number; login: string; name: string | null; avatar_url: string };
+		try {
+			user = await fetchJson<{ id: number; login: string; name: string | null; avatar_url: string }>(
+				'https://api.github.com/user',
+				{
+					headers: {
+						Authorization: `Bearer ${accessToken}`,
+						Accept: 'application/vnd.github+json',
+						'User-Agent': 'porter-app'
+					}
 				}
-			}
-		);
+			);
+		} catch (error) {
+			console.error('GitHub OAuth user fetch failed:', error);
+			throw redirect(302, '/auth?error=oauth_user');
+		}
 
 		const primaryEmail = null;
 
@@ -89,7 +103,8 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 				{
 					headers: {
 						Authorization: `Bearer ${accessToken}`,
-						Accept: 'application/vnd.github+json'
+						Accept: 'application/vnd.github+json',
+						'User-Agent': 'porter-app'
 					}
 				}
 			);
