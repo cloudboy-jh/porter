@@ -19,22 +19,6 @@ const fetchJson = async <T>(url: string, options: RequestInit): Promise<T> => {
 	return (await response.json()) as T;
 };
 
-const getGitHubAppInstallUrl = () => {
-	const explicitUrl =
-		privateEnv.GITHUB_APP_INSTALL_URL?.trim() ??
-		(privateEnv as Record<string, string | undefined>).PUBLIC_GITHUB_APP_INSTALL_URL?.trim();
-	if (explicitUrl) {
-		return explicitUrl;
-	}
-
-	const appSlug = privateEnv.GITHUB_APP_SLUG?.trim();
-	if (!appSlug) {
-		return null;
-	}
-
-	return `https://github.com/apps/${appSlug}/installations/new`;
-};
-
 export const GET: RequestHandler = async ({ url, cookies }) => {
 	try {
 		const code = url.searchParams.get('code');
@@ -160,10 +144,6 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		}
 
 		if (!hasInstallation) {
-			const installUrl = getGitHubAppInstallUrl();
-			if (installUrl) {
-				throw redirect(302, installUrl);
-			}
 			throw redirect(302, '/auth?error=install_required');
 		}
 
