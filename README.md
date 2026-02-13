@@ -5,7 +5,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Fly.io-Fly%20Machines-8B5CF6?logo=fly.io&logoColor=white" alt="Fly.io" />
+<img src="https://img.shields.io/badge/Svelte-FF3E00?style=flat-square&logo=svelte&logoColor=white" alt="Svelte"/>
+<img src="https://img.shields.io/badge/Bun-000?style=flat-square&logo=bun&logoColor=white" alt="Bun"/>
+<img src="https://img.shields.io/badge/Fly.io-8B5CF6?logo=fly.io&logoColor=white" alt="Fly.io" />
 </p>
 
 
