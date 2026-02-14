@@ -11,6 +11,22 @@ import { logEvent, serializeError, tokenFingerprint } from '$lib/server/logging'
 import { saveUserOAuthToken } from '$lib/server/oauth-tokens';
 import type { RequestHandler } from './$types';
 
+const getGitHubAppInstallUrl = () => {
+	const explicitUrl =
+		privateEnv.GITHUB_APP_INSTALL_URL?.trim() ??
+		(privateEnv as Record<string, string | undefined>).PUBLIC_GITHUB_APP_INSTALL_URL?.trim();
+	if (explicitUrl) {
+		return explicitUrl;
+	}
+
+	const appSlug = privateEnv.GITHUB_APP_SLUG?.trim();
+	if (!appSlug) {
+		return null;
+	}
+
+	return `https://github.com/apps/${appSlug}/installations/new`;
+};
+
 const fetchJson = async <T>(url: string, options: RequestInit): Promise<T> => {
 	const response = await fetch(url, options);
 	if (!response.ok) {
@@ -215,7 +231,18 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
 				});
 				throw redirect(302, '/auth?error=install_check_failed');
 			}
-			logEvent('info', 'auth.github.callback', 'redirect_install_required', {
+			const installUrl = getGitHubAppInstallUrl();
+			if (installUrl) {
+				logEvent('info', 'auth.github.callback', 'redirect_install_url_after_oauth', {
+					requestId,
+					userId: user.id,
+					login: user.login,
+					installUrl,
+					token: tokenFingerprint(accessToken)
+				});
+				throw redirect(302, installUrl);
+			}
+			logEvent('warn', 'auth.github.callback', 'redirect_install_required_missing_url', {
 				requestId,
 				userId: user.id,
 				login: user.login,
