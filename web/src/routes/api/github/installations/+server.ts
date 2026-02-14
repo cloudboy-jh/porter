@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { clearSession } from '$lib/server/auth';
 import { isGitHubAuthError, resolvePorterInstallationStatus } from '$lib/server/github';
+import { logEvent, serializeError, tokenFingerprint } from '$lib/server/logging';
 import type { RequestHandler } from './$types';
 
 type GitHubInstallation = {
@@ -13,8 +14,10 @@ type GitHubInstallation = {
 };
 
 export const GET: RequestHandler = async ({ locals, cookies }) => {
+	const requestId = locals.requestId;
 	const session = locals.session;
 	if (!session) {
+		logEvent('warn', 'api.github.installations', 'unauthorized', { requestId });
 		return json({ error: 'unauthorized' }, { status: 401 });
 	}
 	try {
@@ -23,9 +26,17 @@ export const GET: RequestHandler = async ({ locals, cookies }) => {
 			delayMs: 200
 		});
 		const installations = resolved.installations;
+		logEvent('info', 'api.github.installations', 'loaded', {
+			requestId,
+			status: resolved.status,
+			total: installations.total_count,
+			reason: resolved.reason ?? null,
+			token: tokenFingerprint(session.token)
+		});
 		return json({
 			status: resolved.status,
 			reason: resolved.reason ?? null,
+			requestId,
 			total: installations.total_count,
 			installations: installations.installations.map((installation) => ({
 				id: installation.id,
@@ -44,10 +55,19 @@ export const GET: RequestHandler = async ({ locals, cookies }) => {
 		});
 	} catch (error) {
 		if (isGitHubAuthError(error)) {
+			logEvent('warn', 'api.github.installations', 'github_auth_error', {
+				requestId,
+				token: tokenFingerprint(session.token),
+				error: serializeError(error)
+			});
 			clearSession(cookies);
 			return json({ error: 'unauthorized', action: 'reauth' }, { status: 401 });
 		}
-		console.error('Failed to load GitHub installations:', error);
+		logEvent('error', 'api.github.installations', 'load_failed', {
+			requestId,
+			token: tokenFingerprint(session.token),
+			error: serializeError(error)
+		});
 		return json({ error: 'failed' }, { status: 500 });
 	}
 };

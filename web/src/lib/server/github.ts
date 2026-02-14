@@ -1,6 +1,7 @@
 import { createSign } from 'crypto';
 import { env } from '$env/dynamic/private';
 import { githubCache, CACHE_TTL } from './cache';
+import { logEvent, serializeError, tokenFingerprint } from './logging';
 
 const GITHUB_API = 'https://api.github.com';
 
@@ -79,12 +80,33 @@ export const createInstallationAccessToken = async (installationId: number) => {
 export class GitHubRequestError extends Error {
 	status: number;
 	body?: string;
+	meta?: {
+		path: string;
+		url: string;
+		method: string;
+		githubRequestId?: string;
+		rateLimitRemaining?: string;
+		rateLimitReset?: string;
+	};
 
-	constructor(status: number, message: string, body?: string) {
+	constructor(
+		status: number,
+		message: string,
+		body?: string,
+		meta?: {
+			path: string;
+			url: string;
+			method: string;
+			githubRequestId?: string;
+			rateLimitRemaining?: string;
+			rateLimitReset?: string;
+		}
+	) {
 		super(message);
 		this.name = 'GitHubRequestError';
 		this.status = status;
 		this.body = body;
+		this.meta = meta;
 	}
 }
 
@@ -160,11 +182,14 @@ let rateLimitReset = 0;
 
 export const fetchGitHub = async <T>(path: string, token: string, init?: RequestInit): Promise<T> => {
 	const url = path.startsWith('http') ? path : `${GITHUB_API}${path}`;
+	const method = (init?.method ?? 'GET').toUpperCase();
 	const response = await fetch(url, {
 		...init,
 		headers: {
 			Accept: 'application/vnd.github+json',
 			Authorization: `Bearer ${token}`,
+			'User-Agent': 'porter-app',
+			'X-GitHub-Api-Version': '2022-11-28',
 			...(init?.headers ?? {})
 		}
 	});
@@ -177,7 +202,20 @@ export const fetchGitHub = async <T>(path: string, token: string, init?: Request
 	
 	if (!response.ok) {
 		const body = await response.text();
-		throw new GitHubRequestError(response.status, `GitHub request failed: ${response.status}`, body);
+		const meta = {
+			path,
+			url,
+			method,
+			githubRequestId: response.headers.get('x-github-request-id') ?? undefined,
+			rateLimitRemaining: response.headers.get('x-ratelimit-remaining') ?? undefined,
+			rateLimitReset: response.headers.get('x-ratelimit-reset') ?? undefined
+		};
+		logEvent('error', 'github.api', 'request_failed', {
+			status: response.status,
+			meta,
+			body: body.slice(0, 500)
+		});
+		throw new GitHubRequestError(response.status, `GitHub request failed: ${response.status}`, body, meta);
 	}
 	return (await response.json()) as T;
 };
@@ -240,20 +278,45 @@ export const resolvePorterInstallationStatus = async (
 	for (let attempt = 1; attempt <= attempts; attempt += 1) {
 		try {
 			const installations = await listPorterInstallations(token);
+			logEvent('info', 'auth.install', 'resolve_status', {
+				attempt,
+				attempts,
+				status: installations.total_count > 0 ? 'installed' : 'not_installed',
+				totalInstallations: installations.total_count,
+				token: tokenFingerprint(token)
+			});
 			return {
 				status: installations.total_count > 0 ? 'installed' : 'not_installed',
 				installations
 			};
 		} catch (error) {
 			if (isGitHubAuthError(error)) {
+				logEvent('warn', 'auth.install', 'resolve_auth_error', {
+					attempt,
+					attempts,
+					token: tokenFingerprint(token),
+					error: serializeError(error)
+				});
 				throw error;
 			}
 			lastError = error;
+			logEvent('warn', 'auth.install', 'resolve_attempt_failed', {
+				attempt,
+				attempts,
+				token: tokenFingerprint(token),
+				error: serializeError(error)
+			});
 			if (attempt < attempts && delayMs > 0) {
 				await wait(delayMs);
 			}
 		}
 	}
+
+	logEvent('error', 'auth.install', 'resolve_indeterminate', {
+		attempts,
+		token: tokenFingerprint(token),
+		error: serializeError(lastError)
+	});
 
 	return {
 		status: 'indeterminate',

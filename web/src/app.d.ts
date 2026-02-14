@@ -5,6 +5,7 @@ declare global {
 	// interface Error {}
 	interface Locals {
 		session: import('$lib/server/auth').Session | null;
+		requestId: string;
 	}
 	interface PageData {
 		session: import('$lib/server/auth').Session | null;

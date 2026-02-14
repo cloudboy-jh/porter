@@ -38,11 +38,6 @@ fly tokens create org --name "porter" --expiry 30d`;
     onSignOut
   }: Props = $props();
 
-  const continueHref = $derived(
-    isConnected && authErrorCode === 'install_check_failed'
-      ? '/api/auth/github?force=1'
-      : '/api/auth/github'
-  );
 </script>
 
 <div class="flex w-full flex-col gap-8 px-6 py-8 sm:px-10 sm:py-10 lg:px-12">
@@ -87,11 +82,11 @@ fly tokens create org --name "porter" --expiry 30d`;
   {/if}
 
   <div class="flex w-full flex-col items-center gap-3">
-    <Button
-      size="lg"
-      class="h-11 w-72 gap-2 rounded-lg bg-[#c95500] px-8 text-[#140c07] hover:bg-[#d45f00]"
-      href={continueHref}
-    >
+		<Button
+			size="lg"
+			class="h-11 w-72 gap-2 rounded-lg bg-[#c95500] px-8 text-[#140c07] hover:bg-[#d45f00]"
+			href="/api/auth/github"
+		>
       <GithubLogo size={16} weight="regular" />
       {isConnected ? `Continue as @${githubHandle}` : "Continue with GitHub"}
     </Button>
