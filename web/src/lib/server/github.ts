@@ -206,42 +206,67 @@ type GitHubUserInstallation = {
 	created_at?: string;
 };
 
-const getConfiguredAppSlug = () => env.GITHUB_APP_SLUG?.trim().toLowerCase() ?? null;
-
-const getConfiguredAppId = () => {
-	const appId = env.GITHUB_APP_ID?.trim();
-	if (!appId) return null;
-	const parsed = Number(appId);
-	return Number.isFinite(parsed) ? parsed : null;
+type GitHubInstallationsResponse = {
+	total_count: number;
+	installations: GitHubUserInstallation[];
 };
 
-const isPorterInstallation = (installation: GitHubUserInstallation) => {
-	const configuredSlug = getConfiguredAppSlug();
-	const configuredAppId = getConfiguredAppId();
-	if (configuredSlug && installation.app_slug?.toLowerCase() === configuredSlug) {
-		return true;
-	}
-	if (configuredAppId && installation.app_id === configuredAppId) {
-		return true;
-	}
-	return false;
-};
+export type PorterInstallationStatus = 'installed' | 'not_installed' | 'indeterminate';
+
+const listUserInstallations = (token: string) =>
+	fetchGitHub<GitHubInstallationsResponse>('/user/installations?per_page=100', token);
 
 export const listPorterInstallations = async (token: string) => {
-	const installations = await fetchGitHub<{ total_count: number; installations: GitHubUserInstallation[] }>(
-		'/user/installations?per_page=100',
-		token
-	);
-	const filtered = installations.installations.filter(isPorterInstallation);
+	return listUserInstallations(token);
+};
+
+const wait = async (ms: number) =>
+	new Promise<void>((resolve) => {
+		setTimeout(resolve, ms);
+	});
+
+export const resolvePorterInstallationStatus = async (
+	token: string,
+	options?: { attempts?: number; delayMs?: number }
+): Promise<{
+	status: PorterInstallationStatus;
+	installations: GitHubInstallationsResponse;
+	reason?: string;
+}> => {
+	const attempts = Math.max(1, options?.attempts ?? 1);
+	const delayMs = Math.max(0, options?.delayMs ?? 0);
+
+	let lastError: unknown = null;
+	for (let attempt = 1; attempt <= attempts; attempt += 1) {
+		try {
+			const installations = await listPorterInstallations(token);
+			return {
+				status: installations.total_count > 0 ? 'installed' : 'not_installed',
+				installations
+			};
+		} catch (error) {
+			if (isGitHubAuthError(error)) {
+				throw error;
+			}
+			lastError = error;
+			if (attempt < attempts && delayMs > 0) {
+				await wait(delayMs);
+			}
+		}
+	}
+
 	return {
-		total_count: filtered.length,
-		installations: filtered
+		status: 'indeterminate',
+		installations: { total_count: 0, installations: [] },
+		reason:
+			(lastError instanceof Error && lastError.message) ||
+			getGitHubErrorMessage(lastError, 'Unable to verify GitHub app installation.')
 	};
 };
 
 export const hasPorterInstallation = async (token: string) => {
-	const installations = await listPorterInstallations(token);
-	return installations.total_count > 0;
+	const resolution = await resolvePorterInstallationStatus(token);
+	return resolution.status === 'installed';
 };
 
 export const listInstallationRepos = async (token: string) => {

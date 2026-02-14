@@ -37,6 +37,12 @@ fly tokens create org --name "porter" --expiry 30d`;
     githubAppInstallUrl = null,
     onSignOut
   }: Props = $props();
+
+  const continueHref = $derived(
+    isConnected && authErrorCode === 'install_check_failed'
+      ? '/api/auth/github?force=1'
+      : '/api/auth/github'
+  );
 </script>
 
 <div class="flex w-full flex-col gap-8 px-6 py-8 sm:px-10 sm:py-10 lg:px-12">
@@ -67,13 +73,24 @@ fly tokens create org --name "porter" --expiry 30d`;
         </a>
       {/if}
     </div>
+  {:else if authErrorCode === 'install_check_failed'}
+    <div class="rounded-lg border border-[#c95500]/30 bg-[#2a1a12]/70 px-4 py-3 text-sm text-[#f5f1ed]">
+      <p class="font-medium">Unable to verify GitHub App installation right now.</p>
+      <p class="mt-1 text-xs text-[#c8b8ad]">Reconnect GitHub and retry install. If this persists, check GitHub App callback/setup URLs and runtime credentials.</p>
+      <a
+        href="/api/auth/github?force=1"
+        class="mt-3 inline-block text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b] hover:text-[#ffc08d]"
+      >
+        Reconnect GitHub ->
+      </a>
+    </div>
   {/if}
 
   <div class="flex w-full flex-col items-center gap-3">
     <Button
       size="lg"
       class="h-11 w-72 gap-2 rounded-lg bg-[#c95500] px-8 text-[#140c07] hover:bg-[#d45f00]"
-      href="/api/auth/github"
+      href={continueHref}
     >
       <GithubLogo size={16} weight="regular" />
       {isConnected ? `Continue as @${githubHandle}` : "Continue with GitHub"}

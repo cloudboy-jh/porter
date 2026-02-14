@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { clearSession } from '$lib/server/auth';
-import { isGitHubAuthError, listPorterInstallations } from '$lib/server/github';
+import { isGitHubAuthError, resolvePorterInstallationStatus } from '$lib/server/github';
 import type { RequestHandler } from './$types';
 
 type GitHubInstallation = {
@@ -18,8 +18,14 @@ export const GET: RequestHandler = async ({ locals, cookies }) => {
 		return json({ error: 'unauthorized' }, { status: 401 });
 	}
 	try {
-		const installations = await listPorterInstallations(session.token);
+		const resolved = await resolvePorterInstallationStatus(session.token, {
+			attempts: 2,
+			delayMs: 200
+		});
+		const installations = resolved.installations;
 		return json({
+			status: resolved.status,
+			reason: resolved.reason ?? null,
 			total: installations.total_count,
 			installations: installations.installations.map((installation) => ({
 				id: installation.id,

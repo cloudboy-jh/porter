@@ -6,7 +6,7 @@ import {
 	setSession
 } from '$lib/server/auth';
 import { getConfig, updateConfig } from '$lib/server/store';
-import { hasPorterInstallation, listInstallationRepos } from '$lib/server/github';
+import { listInstallationRepos, resolvePorterInstallationStatus } from '$lib/server/github';
 import { saveUserOAuthToken } from '$lib/server/oauth-tokens';
 import type { RequestHandler } from './$types';
 
@@ -96,12 +96,18 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 			console.error('Persisting OAuth token failed:', error);
 		}
 
-		let hasInstallation = false;
+		let installStatus: 'installed' | 'not_installed' | 'indeterminate' = 'indeterminate';
 		try {
-			hasInstallation = await hasPorterInstallation(accessToken);
+			const resolution = await resolvePorterInstallationStatus(accessToken, {
+				attempts: 2,
+				delayMs: 250
+			});
+			installStatus = resolution.status;
 		} catch (error) {
 			console.error('GitHub installation fetch failed:', error);
 		}
+
+		const hasInstallation = installStatus === 'installed';
 
 		setSession(cookies, {
 			user: {
@@ -144,6 +150,9 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		}
 
 		if (!hasInstallation) {
+			if (installStatus === 'indeterminate') {
+				throw redirect(302, '/auth?error=install_check_failed');
+			}
 			throw redirect(302, '/auth?error=install_required');
 		}
 

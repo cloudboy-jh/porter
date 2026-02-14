@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import { randomUUID } from 'crypto';
 import { env } from '$env/dynamic/private';
 import { getSession, setOAuthState, setSession } from '$lib/server/auth';
-import { hasPorterInstallation } from '$lib/server/github';
+import { resolvePorterInstallationStatus } from '$lib/server/github';
 import type { RequestHandler } from './$types';
 
 const getGitHubAppInstallUrl = () => {
@@ -25,18 +25,34 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	const session = getSession(cookies);
 	const forceReconnect = url.searchParams.get('force') === '1';
 	if (session) {
-		let refreshedHasInstallation = session.hasInstallation;
+		if (session.hasInstallation && !forceReconnect) {
+			throw redirect(302, '/');
+		}
+
+		let installStatus: 'installed' | 'not_installed' | 'indeterminate' = 'not_installed';
 		if (!forceReconnect) {
 			try {
-				refreshedHasInstallation = await hasPorterInstallation(session.token);
-				if (refreshedHasInstallation !== session.hasInstallation) {
-					setSession(cookies, { ...session, hasInstallation: refreshedHasInstallation });
+				const resolution = await resolvePorterInstallationStatus(session.token, {
+					attempts: 2,
+					delayMs: 250
+				});
+				installStatus = resolution.status;
+				if (resolution.status !== 'indeterminate') {
+					const nextHasInstallation = resolution.status === 'installed';
+					if (nextHasInstallation !== session.hasInstallation) {
+						setSession(cookies, { ...session, hasInstallation: nextHasInstallation });
+					}
 				}
 			} catch (error) {
 				console.error('Failed to verify Porter installation before auth redirect:', error);
+				installStatus = 'indeterminate';
 			}
-			if (refreshedHasInstallation) {
+			if (installStatus === 'installed') {
+				setSession(cookies, { ...session, hasInstallation: true });
 				throw redirect(302, '/');
+			}
+			if (installStatus === 'indeterminate') {
+				throw redirect(302, '/auth?error=install_check_failed');
 			}
 		}
 		if (forceReconnect) {
