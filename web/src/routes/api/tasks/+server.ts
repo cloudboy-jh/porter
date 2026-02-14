@@ -17,6 +17,8 @@ import type { TaskStatus } from '$lib/server/types';
 import { dispatchTaskToFly } from '$lib/server/task-dispatch';
 import { clearSession } from '$lib/server/auth';
 import { githubCache } from '$lib/server/cache';
+import { getConfig } from '$lib/server/store';
+import { filterReposBySelection, isRepoSelectedByConfig } from '$lib/server/repo-selection';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ url, locals, cookies }) => {
@@ -27,12 +29,16 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 
 	try {
 		const status = url.searchParams.get('status') as TaskStatus | null;
-		const { repositories } = await listInstallationRepos(session.token);
+		const [{ repositories }, config] = await Promise.all([
+			listInstallationRepos(session.token),
+			getConfig(session.token)
+		]);
+		const scopedRepos = filterReposBySelection(config, repositories);
 		
 		// Limit breadth to reduce GitHub API fan-out in production.
-		const limitedRepos = repositories.slice(0, 8);
-		if (repositories.length > 8) {
-			console.warn(`[Rate Limit Protection] Limiting to 8 repos out of ${repositories.length} total`);
+		const limitedRepos = scopedRepos.slice(0, 8);
+		if (scopedRepos.length > 8) {
+			console.warn(`[Rate Limit Protection] Limiting to 8 repos out of ${scopedRepos.length} total`);
 		}
 		
 		// Process repos sequentially to avoid burst
@@ -119,6 +125,17 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 	try {
 		if (!repoOwner || !repoName) {
 			return json({ error: 'repoOwner and repoName are required' }, { status: 400 });
+		}
+
+		const config = await getConfig(session.token);
+		if (!isRepoSelectedByConfig(config, { owner: repoOwner, name: repoName })) {
+			return json(
+				{
+					error: 'repo_not_selected',
+					message: 'Repository is not selected in Settings. Add it under Settings > Repositories first.'
+				},
+				{ status: 403 }
+			);
 		}
 
 		const normalizedPriority =

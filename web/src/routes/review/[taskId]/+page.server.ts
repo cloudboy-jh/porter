@@ -11,7 +11,10 @@ import {
 	listIssuesWithLabel
 } from '$lib/server/github';
 import { clearSession } from '$lib/server/auth';
+import { getConfig } from '$lib/server/store';
+import { filterReposBySelection } from '$lib/server/repo-selection';
 import type { PageServerLoad } from './$types';
+import type { PorterConfig } from '$lib/server/types';
 
 const PER_PAGE = 100;
 
@@ -57,9 +60,10 @@ const fetchRawContent = async (
 	return response.text();
 };
 
-const findTaskById = async (token: string, taskId: string) => {
+const findTaskById = async (token: string, taskId: string, config: PorterConfig) => {
 	const { repositories } = await listInstallationRepos(token);
-	for (const repo of repositories) {
+	const scopedRepos = filterReposBySelection(config, repositories);
+	for (const repo of scopedRepos) {
 		const [openIssues, closedIssues] = await Promise.all([
 			listIssuesWithLabel(token, repo.owner, repo.name, 'open'),
 			listIssuesWithLabel(token, repo.owner, repo.name, 'closed')
@@ -83,7 +87,8 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 
 	try {
 		const taskId = params.taskId;
-		const task = await findTaskById(session.token, taskId);
+		const config = await getConfig(session.token);
+		const task = await findTaskById(session.token, taskId, config);
 		if (!task || task.status !== 'success' || !task.prUrl) {
 			throw redirect(302, '/review');
 		}

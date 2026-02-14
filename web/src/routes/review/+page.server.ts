@@ -9,6 +9,8 @@ import {
 	listIssuesWithLabel
 } from '$lib/server/github';
 import { clearSession } from '$lib/server/auth';
+import { getConfig } from '$lib/server/store';
+import { filterReposBySelection } from '$lib/server/repo-selection';
 import type { Task } from '$lib/server/types';
 import type { PageServerLoad } from './$types';
 
@@ -77,12 +79,16 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 	}
 
 	try {
-		const { repositories } = await listInstallationRepos(session.token);
+		const [{ repositories }, config] = await Promise.all([
+			listInstallationRepos(session.token),
+			getConfig(session.token)
+		]);
+		const scopedRepos = filterReposBySelection(config, repositories);
 		
 		// Limit repos to prevent rate limit exhaustion
-		const reposToCheck = repositories.slice(0, MAX_REPOS_TO_CHECK);
+		const reposToCheck = scopedRepos.slice(0, MAX_REPOS_TO_CHECK);
 		
-		console.log(`[Review Page] Checking ${reposToCheck.length}/${repositories.length} repos`);
+		console.log(`[Review Page] Checking ${reposToCheck.length}/${scopedRepos.length} repos`);
 
 		// Process repos sequentially to avoid burst
 		const allTasks: Task[] = [];

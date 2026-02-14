@@ -9,6 +9,8 @@ import {
 	listIssuesWithLabel
 } from '$lib/server/github';
 import { clearSession } from '$lib/server/auth';
+import { getConfig } from '$lib/server/store';
+import { filterReposBySelection } from '$lib/server/repo-selection';
 import type { RequestHandler } from './$types';
 
 // Limits to prevent rate limit exhaustion
@@ -33,12 +35,16 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 
 	let filteredTasks: ReturnType<typeof buildTaskFromIssue>[] = [];
 	try {
-		const { repositories } = await listInstallationRepos(session.token);
+		const [{ repositories }, config] = await Promise.all([
+			listInstallationRepos(session.token),
+			getConfig(session.token)
+		]);
+		const scopedRepos = filterReposBySelection(config, repositories);
 		
 		// Limit repos to prevent rate limit exhaustion
-		const reposToCheck = repositories.slice(0, MAX_REPOS_TO_CHECK);
-		if (repositories.length > MAX_REPOS_TO_CHECK) {
-			console.warn(`[History] Limiting to ${MAX_REPOS_TO_CHECK} repos out of ${repositories.length} total`);
+		const reposToCheck = scopedRepos.slice(0, MAX_REPOS_TO_CHECK);
+		if (scopedRepos.length > MAX_REPOS_TO_CHECK) {
+			console.warn(`[History] Limiting to ${MAX_REPOS_TO_CHECK} repos out of ${scopedRepos.length} total`);
 		}
 		
 		console.log(`[History] Loading tasks from ${reposToCheck.length} repos`);

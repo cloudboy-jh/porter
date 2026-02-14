@@ -14,6 +14,7 @@ import { githubCache } from '$lib/server/cache';
 import { parsePorterCommand } from '$lib/server/porter-command';
 import { dispatchTaskToFly } from '$lib/server/task-dispatch';
 import { getConfig } from '$lib/server/store';
+import { isRepoSelectedByConfig } from '$lib/server/repo-selection';
 import { getUserOAuthTokenByWebhookUser } from '$lib/server/oauth-tokens';
 import { buildWrapPrompt } from '$lib/server/wrap';
 
@@ -88,6 +89,9 @@ export const POST = async ({ request }: { request: Request }) => {
 
 	const repoOwner = repo.owner?.login ?? 'unknown';
 	const repoName = repo.name ?? 'unknown';
+	if (!isRepoSelectedByConfig(activeConfig, { owner: repoOwner, name: repoName })) {
+		return json({ status: 'repo_not_selected' }, { status: 200 });
+	}
 	const issueNumber = issue.number ?? 0;
 	const defaultAgent =
 		activeConfig.onboarding?.enabledAgents?.[0] ??
