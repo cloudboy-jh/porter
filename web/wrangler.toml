@@ -15,4 +15,4 @@ watch_dir = ["src", "static", "svelte.config.js", "vite.config.ts", "package.jso
 [[d1_databases]]
 binding = "DB"
 database_name = "porter-prod"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "0760c6f4-79c4-45d8-8164-3fd73c4f2973"
