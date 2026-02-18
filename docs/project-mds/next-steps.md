@@ -26,7 +26,7 @@
 - [x] Persist onboarding configuration
 - [x] Collapse onboarding into /auth with auto-configured repos/agents
 - [x] Unified settings page for API keys
-- [x] Gist creation/management for credential storage
+- [x] Initial Gist-based credential storage (legacy)
 - [x] Validate Fly credentials before proceeding
 - [x] UI/UX polish (task feed + review feed + auth)
 
@@ -49,15 +49,35 @@
 ## Notes
 
 - Cloud execution is Fly Machines only; remove Modal references going forward.
-- BYOC-only: users provide Fly + model API keys via a user-owned Gist.
+- Persistence migration in progress: D1 is primary for settings/secrets; gist is optional mirror only.
 
 ## Next Focus
 
-### Launch Readiness
-- run one production dry-run from real `@porter` issue comment to merged PR
-- verify required env vars exist in deployment (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `PORTER_OAUTH_TOKEN_SECRET`)
-- monitor first live callbacks and watchdog timeout events in logs
+### Launch-critical (Auth + Config)
+- [ ] wire Cloudflare D1 binding (`DB`) into server runtime and typed platform env
+- [ ] implement D1 config repository (`users`, `user_settings`, `user_secrets`) for read/write/update
+- [ ] migrate `getConfig`/`updateConfig` flows from gist-first to D1-first
+- [ ] keep gist sync best-effort only (no 503 on mirror failure)
+- [ ] migrate oauth token persistence from temp file to durable D1 table
+- [ ] add startup check endpoint for required env and D1 connectivity
+- [ ] add auth diagnostics endpoint (granted scopes + installation status + actionable error)
+- [ ] update reconnect UX to clearly separate auth, install, and scope problems
+
+### Launch-critical (Container / Fly lifecycle)
+- [ ] finalize machine startup contract validation (`TASK_ID`, repo info, callback secrets, provider keys)
+- [ ] ensure deterministic key injection from decrypted D1 secrets to machine env
+- [ ] verify app auto-create/reuse flow for org token mode and deploy mode
+- [ ] tighten machine state transitions (`queued` -> `running` -> terminal) with watchdog + callback reconciliation
+- [ ] run production dry-run from real `@porter` mention through merged PR
+- [ ] add failure-mode assertions for callback retry/idempotency and stale machine cleanup
+
+### Launch-critical (Settings UI)
+- [ ] update copy from "stored in Gist" to "encrypted and stored by Porter"
+- [ ] show masked key status from D1 (`configured` / `not configured`) without returning raw secrets
+- [ ] add key-management actions (add/update/remove) backed by `user_secrets`
+- [ ] surface non-blocking warnings when optional gist mirror fails
+- [ ] add explicit save/validate states for Fly token + app name using D1-backed persistence
 
 ### Nice-to-have follow-ups
-- add targeted tests for watchdog and oauth token store edge cases
-- tighten observability around machine lifecycle metrics
+- [ ] add targeted tests for watchdog and oauth token edge cases under D1 persistence
+- [ ] tighten observability around machine lifecycle metrics and auth failures

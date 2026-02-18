@@ -11,3 +11,8 @@ binding = "ASSETS"
 command = "bun install --frozen-lockfile && bun run build"
 cwd = "."
 watch_dir = ["src", "static", "svelte.config.js", "vite.config.ts", "package.json", "bun.lock", "tsconfig.json"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "porter-prod"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"

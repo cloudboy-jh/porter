@@ -41,11 +41,12 @@ GitHub (Issues, PRs, Webhooks)
 | Layer | Technology |
 |-------|------------|
 | Web App | SvelteKit + Bun |
-| Hosting | Vercel |
+| Hosting | Cloudflare (Workers) |
 | Auth | GitHub OAuth |
 | Execution | Fly Machines |
 | Container | Docker (Node 20 + Agent CLIs) |
-| Config Storage | GitHub Gist (user-owned) |
+| Config Storage | Cloudflare D1 (primary) + encrypted secrets |
+| Optional Mirror | GitHub Gist (best-effort, non-blocking) |
 
 ---
 
@@ -115,7 +116,7 @@ curl -X POST "$CALLBACK_URL" \
 
 1. User comments `@porter opencode` on GitHub issue
 2. GitHub webhook hits Porter
-3. Porter reads user config from their Gist (API keys, preferences)
+3. Porter reads user config from D1 (API keys encrypted at rest; gist mirror optional)
 4. Porter builds enriched prompt from issue context
 5. Porter calls Fly Machines API to create container
 6. Container: clones repo, runs agent, agent creates PR
@@ -190,8 +191,8 @@ POST /api/callbacks/complete # Receives completion from container
 ### Config
 
 ```
-GET /api/config              # Get user config from Gist
-PUT /api/config              # Update user config in Gist
+GET /api/config              # Get user config from D1
+PUT /api/config              # Update user config in D1
 ```
 
 ---
@@ -275,7 +276,7 @@ Reference issue #{issue_number} in the PR description.
 
 1. Sign in with GitHub OAuth
 2. Install Porter GitHub App on repos
-3. Create config Gist with API keys
+3. Save encrypted config and keys in Porter settings (D1-backed)
 4. Add Fly token to config
 5. Comment `@porter opencode` on any issue
 
@@ -283,18 +284,37 @@ Reference issue #{issue_number} in the PR description.
 
 ## Credential Storage
 
-All credentials stored in user-owned private GitHub Gist:
+All credentials are stored server-side in Cloudflare D1 with encryption-at-rest for secret values.
+GitHub Gist is optional mirror/export only and is not required for save success.
+
+Schema overview:
+
+- `users`: GitHub identity and profile metadata
+- `user_settings`: non-secret user config JSON
+- `user_secrets`: encrypted provider secrets (`encrypted_value`, `iv`, `tag`, `alg`, `key_version`)
+
+Example non-secret settings shape:
 
 ```json
 {
-  "fly_token": "...",
-  "anthropic_api_key": "...",
-  "amp_api_key": "...",
-  "default_agent": "opencode"
+  "version": "1.0.0",
+  "executionMode": "cloud",
+  "flyAppName": "porter-prod",
+  "agents": {
+    "opencode": { "enabled": true, "priority": "normal" },
+    "claude-code": { "enabled": true, "priority": "normal" },
+    "amp": { "enabled": false, "priority": "normal" }
+  },
+  "settings": { "maxRetries": 3, "taskTimeout": 90, "pollInterval": 10 },
+  "onboarding": {
+    "completed": true,
+    "selectedRepos": [],
+    "enabledAgents": ["opencode", "claude-code"]
+  }
 }
 ```
 
-Porter reads Gist at runtime, injects into container env vars.
+Porter decrypts and injects needed keys at runtime into container env vars.
 
 ---
 
@@ -333,7 +353,7 @@ Porter is free. Users pay for:
 - SvelteKit scaffold
 - GitHub OAuth
 - Task list UI
-- Gist config management
+- D1-backed config and key management
 
 ### Phase 3: GitHub App
 - App registration
