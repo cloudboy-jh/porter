@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 
-import { getConfig, updateProviderCredentials } from '$lib/server/store';
+import { getConfigSecretStatus, updateProviderCredentials } from '$lib/server/store';
 import type { PorterConfig } from '$lib/server/types';
 
 export const GET = async ({ locals }: { locals: App.Locals }) => {
@@ -8,8 +8,8 @@ export const GET = async ({ locals }: { locals: App.Locals }) => {
 		return json({ error: 'unauthorized' }, { status: 401 });
 	}
 
-	const config = await getConfig(locals.session.token);
-	return json(config.providerCredentials ?? {});
+	const status = await getConfigSecretStatus(locals.session.token);
+	return json(status.providerCredentials ?? {});
 };
 
 export const PUT = async ({ request, locals }: { request: Request; locals: App.Locals }) => {
@@ -18,6 +18,7 @@ export const PUT = async ({ request, locals }: { request: Request; locals: App.L
 	}
 
 	const payload = (await request.json()) as PorterConfig['providerCredentials'];
-	const updated = await updateProviderCredentials(locals.session.token, payload ?? {});
-	return json(updated.providerCredentials ?? {});
+	await updateProviderCredentials(locals.session.token, payload ?? {});
+	const status = await getConfigSecretStatus(locals.session.token);
+	return json(status.providerCredentials ?? {});
 };

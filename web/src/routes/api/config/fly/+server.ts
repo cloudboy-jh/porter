@@ -49,7 +49,7 @@ export const PUT = async ({ request, locals }: { request: Request; locals: App.L
 		}
 
 		return json({
-			flyToken: updated.flyToken ?? '',
+			flyToken: '',
 			flyAppName: updated.flyAppName ?? '',
 			validation,
 			setupMode

@@ -27,6 +27,7 @@
 
 	let catalog = $state<ProviderCatalogResponse>({ featured: [], all: [], featuredIds: [] });
 	let providerCredentials = $state<Record<string, Record<string, string>>>({});
+	let providerCredentialStatus = $state<Record<string, Record<string, 'configured' | 'not_configured'>>>({});
 	let search = $state('');
 	let showAll = $state(false);
 	let loading = $state(false);
@@ -48,7 +49,13 @@
 	const getIconUrl = (provider: ProviderCatalogEntry) =>
 		`https://www.google.com/s2/favicons?domain=${provider.domain}&sz=64`;
 
-	const mask = (value: string) => (value.trim() ? '••••••••••' : 'Not configured');
+	const mask = (providerId: string, envKey: string) => {
+		const draft = providerCredentials[providerId]?.[envKey] ?? '';
+		if (draft.trim()) return 'Pending update';
+		return providerCredentialStatus[providerId]?.[envKey] === 'configured'
+			? 'Configured'
+			: 'Not configured';
+	};
 
 	const load = async () => {
 		loading = true;
@@ -62,7 +69,11 @@
 				catalog = (await catalogResponse.json()) as ProviderCatalogResponse;
 			}
 			if (credentialsResponse.ok) {
-				providerCredentials = (await credentialsResponse.json()) as Record<string, Record<string, string>>;
+				providerCredentialStatus = (await credentialsResponse.json()) as Record<
+					string,
+					Record<string, 'configured' | 'not_configured'>
+				>;
+				providerCredentials = {};
 			}
 		} catch (error) {
 			console.error('Failed to load credential catalog:', error);
@@ -105,7 +116,11 @@
 				status = 'Failed to save credentials.';
 				return;
 			}
-			providerCredentials = (await response.json()) as Record<string, Record<string, string>>;
+			providerCredentialStatus = (await response.json()) as Record<
+				string,
+				Record<string, 'configured' | 'not_configured'>
+			>;
+			providerCredentials = {};
 			status = 'Credentials saved.';
 			onsaved?.();
 		} catch (error) {
@@ -165,7 +180,7 @@
 								<div class="grid gap-2 sm:grid-cols-[minmax(220px,0.8fr)_minmax(0,1fr)] sm:items-center">
 									<div>
 										<p class="text-xs font-medium text-foreground">{envKey}</p>
-										<p class="text-[11px] text-muted-foreground">{mask(providerCredentials[provider.id]?.[envKey] ?? '')}</p>
+										<p class="text-[11px] text-muted-foreground">{mask(provider.id, envKey)}</p>
 									</div>
 									<Input
 										type="password"

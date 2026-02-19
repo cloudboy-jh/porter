@@ -15,9 +15,10 @@ Universal agent orchestrator for GitHub Issues. Porter brings the @mention workf
 
 ## What it does
 
-- Dispatch tasks from GitHub issues or the dashboard.
-- Run agents in cloud containers (Fly Machines) with repo context.
-- Track progress, logs, and PR output in a single UI.
+- Dispatch tasks from GitHub issue comments (`@porter ...`) or the dashboard.
+- Run agents in Fly Machines containers with launch-contract validation and callback reconciliation.
+- Store settings/secrets in Cloudflare D1 (encrypted secret values); optional GitHub Gist mirror is non-blocking.
+- Track task status, callback attempts, and PR output in one UI.
 
 ## Local development
 
@@ -32,6 +33,13 @@ Webhook-to-callback local smoke test:
 ```bash
 cd web
 bun run smoke:webhook-callback
+```
+
+Run test suite:
+
+```bash
+cd web
+bun run test
 ```
 
 ## Worker image (Phase 1)
@@ -61,8 +69,9 @@ For local smoke tests, see `worker/README.md`.
 
 ## Docs
 
-- Product spec: `project-mds/main-spec.md`
-- Daily plan: `project-mds/next-steps.md`
+- Product spec: `docs/project-mds/main-spec.md`
+- Roadmap / next work: `docs/project-mds/next-steps.md`
+- Docs handoff spec: `docs/project-mds/astro-docs.md`
 
 
 <p align="center">

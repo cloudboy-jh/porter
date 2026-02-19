@@ -9,7 +9,11 @@ import {
 import { env } from '$env/dynamic/private';
 import { destroyFlyMachine } from '$lib/server/fly';
 import { githubCache } from '$lib/server/cache';
-import { listRunningExecutionsOlderThan, removeExecutionContext } from '$lib/server/execution';
+import {
+	listRunningExecutionsOlderThan,
+	markExecutionTerminal,
+	removeExecutionContext
+} from '$lib/server/execution';
 
 const WATCHDOG_INTERVAL_MS = 60 * 1000;
 const WATCHDOG_MAX_AGE_MS = 17 * 60 * 1000;
@@ -99,6 +103,7 @@ const processStaleExecution = async (execution: {
 		console.error(`[Watchdog] Failed to update issue for stale execution ${execution.executionId}:`, error);
 	}
 
+	await markExecutionTerminal(execution.executionId, 'timed_out');
 	await removeExecutionContext(execution.executionId);
 };
 

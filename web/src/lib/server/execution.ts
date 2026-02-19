@@ -10,6 +10,7 @@ type ExecutionPriority = 'low' | 'normal' | 'high';
 
 export type ExecutionContext = {
 	executionId: string;
+	status: 'queued' | 'running' | 'success' | 'failed' | 'timed_out';
 	callbackToken: string;
 	owner: string;
 	repo: string;
@@ -25,6 +26,8 @@ export type ExecutionContext = {
 	flyToken?: string;
 	flyAppName?: string;
 	createdAt: string;
+	startedAt?: string;
+	finishedAt?: string;
 	machineId?: string;
 };
 
@@ -48,6 +51,25 @@ let storeLoaded = false;
 
 const signCallbackToken = (executionId: string) =>
 	createHmac('sha256', callbackSecret).update(executionId).digest('hex');
+
+const validateLaunchContract = (
+	context: ExecutionContext,
+	input: LaunchInput,
+	agentEnv: Record<string, string>
+) => {
+	const missing: string[] = [];
+	if (!context.executionId) missing.push('TASK_ID');
+	if (!context.owner || !context.repo) missing.push('REPO_FULL_NAME');
+	if (!context.githubToken) missing.push('GITHUB_TOKEN');
+	if (!context.callbackToken) missing.push('CALLBACK_TOKEN');
+	if (!input.callbackBaseUrl) missing.push('CALLBACK_URL');
+	if (!input.flyToken) missing.push('Fly token');
+	if (!input.flyAppName) missing.push('Fly app name');
+	if (!Object.keys(agentEnv).length) missing.push('provider key');
+	if (missing.length) {
+		throw new Error(`Machine launch contract validation failed: missing ${missing.join(', ')}`);
+	}
+};
 
 const loadExecutionStore = async () => {
 	if (storeLoaded) return;
@@ -91,6 +113,7 @@ export const createExecutionContext = (input: {
 	const callbackToken = signCallbackToken(executionId);
 	const context: ExecutionContext = {
 		executionId,
+		status: 'queued',
 		callbackToken,
 		owner: input.owner,
 		repo: input.repo,
@@ -131,10 +154,28 @@ export const listRunningExecutionsOlderThan = async (maxAgeMs: number) => {
 	await loadExecutionStore();
 	const cutoff = Date.now() - maxAgeMs;
 	return Array.from(pendingExecutions.values()).filter((execution) => {
+		if (execution.status !== 'running') return false;
 		if (!execution.machineId) return false;
-		const startedAt = new Date(execution.createdAt).getTime();
+		const startedAt = new Date(execution.startedAt ?? execution.createdAt).getTime();
 		return Number.isFinite(startedAt) && startedAt < cutoff;
 	});
+};
+
+export const markExecutionTerminal = async (
+	executionId: string,
+	status: 'success' | 'failed' | 'timed_out'
+) => {
+	await loadExecutionStore();
+	const existing = pendingExecutions.get(executionId);
+	if (!existing) return null;
+	const updated: ExecutionContext = {
+		...existing,
+		status,
+		finishedAt: new Date().toISOString()
+	};
+	pendingExecutions.set(executionId, updated);
+	await persistExecutionStore();
+	return updated;
 };
 
 export const removeExecutionContext = async (executionId: string) => {
@@ -159,6 +200,7 @@ export const launchExecutionMachine = async (context: ExecutionContext, input: L
 	if (input.anthropicKey?.trim()) agentEnv.ANTHROPIC_API_KEY = input.anthropicKey.trim();
 	if (input.ampKey?.trim()) agentEnv.AMP_API_KEY = input.ampKey.trim();
 	if (input.openaiKey?.trim()) agentEnv.OPENAI_API_KEY = input.openaiKey.trim();
+	validateLaunchContract(context, input, agentEnv);
 	const machine = await createFlyMachine(input.flyToken, input.flyAppName, {
 		config: {
 			image: workerImage,
@@ -188,7 +230,12 @@ export const launchExecutionMachine = async (context: ExecutionContext, input: L
 		}
 	});
 
-	const updated: ExecutionContext = { ...context, machineId: machine.id };
+	const updated: ExecutionContext = {
+		...context,
+		status: 'running',
+		startedAt: new Date().toISOString(),
+		machineId: machine.id
+	};
 	pendingExecutions.set(context.executionId, updated);
 	await persistExecutionStore();
 

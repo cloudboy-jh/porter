@@ -1,6 +1,6 @@
 # Next Steps (Feb 11, 2026)
 
-## Where we are (per `project-mds/main-spec.md`)
+## Where we are (per `docs/project-mds/main-spec.md`)
 
 ### Phase 1: Core Infrastructure
 - [x] Docker image with all agents (Node 20 + CLI installs)
@@ -49,35 +49,39 @@
 ## Notes
 
 - Cloud execution is Fly Machines only; remove Modal references going forward.
-- Persistence migration in progress: D1 is primary for settings/secrets; gist is optional mirror only.
+- D1 is the primary persistence layer for settings/secrets/oauth token lookup; gist is optional mirror only.
 
 ## Next Focus
 
-### Launch-critical (Auth + Config)
-- [ ] wire Cloudflare D1 binding (`DB`) into server runtime and typed platform env
-- [ ] implement D1 config repository (`users`, `user_settings`, `user_secrets`) for read/write/update
-- [ ] migrate `getConfig`/`updateConfig` flows from gist-first to D1-first
-- [ ] keep gist sync best-effort only (no 503 on mirror failure)
-- [ ] migrate oauth token persistence from temp file to durable D1 table
-- [ ] add startup check endpoint for required env and D1 connectivity
-- [ ] add auth diagnostics endpoint (granted scopes + installation status + actionable error)
-- [ ] update reconnect UX to clearly separate auth, install, and scope problems
+### Launch-critical (Auth / Session + Config / Secrets)
+- [x] wire Cloudflare D1 binding (`DB`) into server runtime and typed platform env
+- [x] implement D1 config repository (`users`, `user_settings`, `user_secrets`) for read/write/update
+- [x] migrate `getConfig`/`updateConfig` flows from gist-first to D1-first
+- [x] keep gist sync best-effort only (no 503 on mirror failure)
+- [x] migrate oauth token persistence from temp file to durable D1 table
+- [x] add startup check endpoint for required env and D1 connectivity
+- [x] add auth diagnostics endpoint (granted scopes + installation status + actionable error)
+- [x] update reconnect UX to clearly separate auth, install, and scope problems
 
-### Launch-critical (Container / Fly lifecycle)
-- [ ] finalize machine startup contract validation (`TASK_ID`, repo info, callback secrets, provider keys)
-- [ ] ensure deterministic key injection from decrypted D1 secrets to machine env
+### Launch-critical (Container / Fly Lifecycle)
+- [x] finalize machine startup contract validation (`TASK_ID`, repo info, callback secrets, provider keys)
+- [x] ensure deterministic key injection from decrypted D1 secrets to machine env
 - [ ] verify app auto-create/reuse flow for org token mode and deploy mode
-- [ ] tighten machine state transitions (`queued` -> `running` -> terminal) with watchdog + callback reconciliation
+- [x] tighten machine state transitions (`queued` -> `running` -> terminal) with watchdog + callback reconciliation
 - [ ] run production dry-run from real `@porter` mention through merged PR
 - [ ] add failure-mode assertions for callback retry/idempotency and stale machine cleanup
 
 ### Launch-critical (Settings UI)
-- [ ] update copy from "stored in Gist" to "encrypted and stored by Porter"
-- [ ] show masked key status from D1 (`configured` / `not configured`) without returning raw secrets
-- [ ] add key-management actions (add/update/remove) backed by `user_secrets`
-- [ ] surface non-blocking warnings when optional gist mirror fails
-- [ ] add explicit save/validate states for Fly token + app name using D1-backed persistence
+- [x] update copy from "stored in Gist" to "encrypted and stored by Porter"
+- [x] show masked key status from D1 (`configured` / `not configured`) without returning raw secrets
+- [x] add key-management actions (add/update/remove) backed by `user_secrets`
+- [x] surface non-blocking warnings when optional gist mirror fails
+- [x] add explicit save/validate states for Fly token + app name using D1-backed persistence
 
 ### Nice-to-have follow-ups
 - [ ] add targeted tests for watchdog and oauth token edge cases under D1 persistence
 - [ ] tighten observability around machine lifecycle metrics and auth failures
+
+### Docs sync guardrail
+- [x] `docs/project-mds/astro-docs.md` aligned to current architecture and handoff workflow
+- [x] `docs/project-mds/main-spec.md` aligned to current runtime behavior and endpoint surface

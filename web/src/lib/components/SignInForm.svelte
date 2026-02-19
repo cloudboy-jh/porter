@@ -79,6 +79,17 @@ fly tokens create org --name "porter" --expiry 30d`;
         Reconnect GitHub ->
       </a>
     </div>
+  {:else if authErrorCode === 'missing_scopes'}
+    <div class="rounded-lg border border-[#c95500]/30 bg-[#2a1a12]/70 px-4 py-3 text-sm text-[#f5f1ed]">
+      <p class="font-medium">GitHub authorization is missing required scopes.</p>
+      <p class="mt-1 text-xs text-[#c8b8ad]">Reconnect GitHub to grant repo, org, and gist scopes required for Porter automation.</p>
+      <a
+        href="/api/auth/github?force=1"
+        class="mt-3 inline-block text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b] hover:text-[#ffc08d]"
+      >
+        Reconnect GitHub ->
+      </a>
+    </div>
   {/if}
 
   <div class="flex w-full flex-col items-center gap-3">

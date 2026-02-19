@@ -1,9 +1,9 @@
 # Porter - Main Specification
 
-**Version:** 3.0.0
+**Version:** 3.2.0
 **Status:** Active Development
 **Architecture:** SvelteKit + Fly Machines
-**Last Updated:** February 2, 2026
+**Last Updated:** February 18, 2026
 
 ---
 
@@ -45,7 +45,7 @@ GitHub (Issues, PRs, Webhooks)
 | Auth | GitHub OAuth |
 | Execution | Fly Machines |
 | Container | Docker (Node 20 + Agent CLIs) |
-| Config Storage | Cloudflare D1 (primary) + encrypted secrets |
+| Config Storage | Cloudflare D1 (primary; settings + secrets + oauth token lookup) |
 | Optional Mirror | GitHub Gist (best-effort, non-blocking) |
 
 ---
@@ -116,13 +116,14 @@ curl -X POST "$CALLBACK_URL" \
 
 1. User comments `@porter opencode` on GitHub issue
 2. GitHub webhook hits Porter
-3. Porter reads user config from D1 (API keys encrypted at rest; gist mirror optional)
+3. Porter resolves commenter OAuth token via D1 (`user_oauth_tokens`) and loads D1-backed config/secrets
 4. Porter builds enriched prompt from issue context
-5. Porter calls Fly Machines API to create container
-6. Container: clones repo, runs agent, agent creates PR
-7. Container calls Porter callback with result
-8. Porter comments on issue with PR link
-9. Machine auto-destroys on exit
+5. Porter validates machine launch contract (`TASK_ID`, repo metadata, callback token/url, required provider keys, Fly credentials)
+6. Porter calls Fly Machines API to create container
+7. Container clones repo, runs agent, and prepares changes
+8. Container calls Porter callback with result payload
+9. Porter reconciles callback/watchdog state, updates labels/comments, and links PR
+10. Machine auto-destroys on exit; stale running tasks are timed out by watchdog
 
 ---
 
@@ -173,13 +174,25 @@ Content-Type: application/json
 POST /api/webhooks/github    # Receives issue_comment events
 ```
 
+### Auth / Session
+
+```
+GET  /api/auth/github                # OAuth start / reconnect
+GET  /api/auth/github/callback       # OAuth callback
+GET  /api/auth/github/installed      # Post-install redirect handling
+GET  /api/auth/diagnostics           # Scope + installation diagnostics
+POST /api/auth/logout                # Clear session
+```
+
 ### Tasks
 
 ```
 GET    /api/tasks            # List tasks
 POST   /api/tasks            # Create task (internal)
-GET    /api/tasks/:id        # Get task
-DELETE /api/tasks/:id        # Cancel task
+GET    /api/tasks/history    # History/task feed
+GET    /api/tasks/:id/status # Task status
+POST   /api/tasks/:id/retry  # Retry task
+POST   /api/tasks/:id/stop   # Stop task
 ```
 
 ### Callbacks
@@ -193,6 +206,31 @@ POST /api/callbacks/complete # Receives completion from container
 ```
 GET /api/config              # Get user config from D1
 PUT /api/config              # Update user config in D1
+PUT /api/config/credentials             # Legacy credential surface (status-based response)
+GET /api/config/provider-credentials     # Per-provider secret status map
+PUT /api/config/provider-credentials     # Save provider credentials
+PUT /api/config/fly                     # Save/validate Fly credentials
+GET /api/config/providers               # Provider catalog
+POST /api/config/validate/anthropic     # Anthropic key validation
+POST /api/config/validate/fly           # Fly credential validation
+```
+
+### GitHub Data
+
+```
+GET /api/github/summary
+GET /api/github/repositories
+GET /api/github/installations
+GET /api/github/orgs
+GET /api/github/profile
+GET /api/github/issues/:owner/:repo/:number
+```
+
+### Ops / Health
+
+```
+GET /api/startup/check      # Required env + D1 readiness check
+GET /api/rate-limit         # GitHub API rate-limit info
 ```
 
 ---
@@ -202,24 +240,35 @@ PUT /api/config              # Update user config in D1
 ```typescript
 interface Task {
   id: string
-  status: "queued" | "running" | "complete" | "failed"
-  repo: string
+  status: "queued" | "running" | "success" | "failed" | "timed_out"
+  repoOwner: string
+  repoName: string
   issueNumber: number
+  issueTitle: string
+  issueBody: string
   agent: string
-  prompt: string
-  machineId?: string
+  priority: number
+  progress: number
+  createdBy: string
+  branch?: string
   prUrl?: string
-  createdAt: Date
-  completedAt?: Date
-  error?: string
+  callbackAttempts?: number
+  callbackMaxAttempts?: number
+  callbackLastHttpCode?: number
+  createdAt: string
+  startedAt?: string
+  completedAt?: string
+  errorMessage?: string
 }
 
-interface UserConfig {
+interface PorterConfig {
+  version: string
+  executionMode: "cloud" | "priority"
   flyToken: string
-  anthropicKey: string
-  ampKey?: string
-  openaiKey?: string
-  defaultAgent: string
+  flyAppName?: string
+  agents: Record<string, { enabled: boolean; priority?: "low" | "normal" | "high" }>
+  providerCredentials?: Record<string, Record<string, string>>
+  settings: { maxRetries: number; taskTimeout: number; pollInterval: number }
 }
 ```
 
@@ -264,11 +313,17 @@ Reference issue #{issue_number} in the PR description.
 ### Command Syntax
 
 ```
-@porter <agent>
 @porter opencode
 @porter claude
 @porter amp
+@porter opencode --priority=high fix flaky test runner
+@porter --priority=low clean up docs typos
 ```
+
+Notes:
+
+- If no agent is supplied, Porter defaults to `opencode`.
+- Supported priorities: `low`, `normal`, `high`.
 
 ---
 
@@ -289,9 +344,10 @@ GitHub Gist is optional mirror/export only and is not required for save success.
 
 Schema overview:
 
-- `users`: GitHub identity and profile metadata
+- `users`: user identity key and metadata anchor
 - `user_settings`: non-secret user config JSON
 - `user_secrets`: encrypted provider secrets (`encrypted_value`, `iv`, `tag`, `alg`, `key_version`)
+- `user_oauth_tokens`: encrypted OAuth tokens keyed by `github_user_id` and normalized login
 
 Example non-secret settings shape:
 
@@ -371,9 +427,9 @@ Porter is free. Users pay for:
 
 ## Open Questions
 
-1. How do agents handle PR creation? (Need to verify each agent's git workflow)
-2. Should Porter create the branch/PR or let agents do it?
-3. Rate limiting strategy for free tier abuse prevention
+1. Verify production dry-run from real `@porter` mention through merged PR after D1 migration.
+2. Add deeper failure-mode assertions for callback idempotency and stale-machine cleanup.
+3. Expand lifecycle/auth observability (metrics + alerting thresholds) for launch.
 
 ---
 

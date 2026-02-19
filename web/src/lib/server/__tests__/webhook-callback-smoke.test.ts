@@ -103,6 +103,7 @@ describe('local webhook/callback smoke', () => {
 		});
 		const consumeExecutionContext = vi.fn().mockResolvedValue(null);
 		const verifyCallbackToken = vi.fn().mockReturnValue(true);
+		const markExecutionTerminal = vi.fn().mockResolvedValue(null);
 		const addIssueComment = vi.fn().mockResolvedValue({});
 		const buildPorterComment = vi.fn().mockReturnValue('comment');
 		const buildPorterLabels = vi.fn().mockReturnValue(['porter:task', 'porter:success']);
@@ -113,6 +114,7 @@ describe('local webhook/callback smoke', () => {
 		vi.doMock('$lib/server/execution', () => ({
 			getExecutionContext,
 			consumeExecutionContext,
+			markExecutionTerminal,
 			verifyCallbackToken
 		}));
 		vi.doMock('$lib/server/cache', () => ({ githubCache: { clearPattern: vi.fn() } }));

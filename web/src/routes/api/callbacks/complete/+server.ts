@@ -13,6 +13,7 @@ import {
 import {
 	consumeExecutionContext,
 	getExecutionContext,
+	markExecutionTerminal,
 	verifyCallbackToken
 } from '$lib/server/execution';
 import { githubCache } from '$lib/server/cache';
@@ -43,7 +44,7 @@ export const POST = async ({ request }: { request: Request }) => {
 
 	const execution = await getExecutionContext(executionId);
 	if (!execution) {
-		return json({ error: 'unknown execution' }, { status: 404 });
+		return json({ ok: true, ignored: 'unknown_execution' });
 	}
 
 	const callbackToken =
@@ -70,6 +71,7 @@ export const POST = async ({ request }: { request: Request }) => {
 	const prExists = toNonNegativeInt(payload.pr_exists) ?? 0;
 
 	if (!isSuccess) {
+		await markExecutionTerminal(executionId, 'failed');
 		const failureComment = `❌ Porter failed: ${summary}`;
 		const failedMetadata: PorterTaskMetadata = {
 			taskId: `${execution.owner}/${execution.repo}#${execution.issueNumber}`,
@@ -159,6 +161,7 @@ export const POST = async ({ request }: { request: Request }) => {
 	failureStage: prUrl ? undefined : 'pr'
 	};
 
+	await markExecutionTerminal(executionId, prUrl ? 'success' : 'failed');
 	await updateLabelsAndComment(execution.githubToken, execution.owner, execution.repo, execution.issueNumber, metadata);
 	await consumeExecutionContext(executionId);
 	githubCache.clearPattern(`issues:${execution.owner}/${execution.repo}`);

@@ -45,6 +45,13 @@
 		flyToken?: string;
 		flyAppName?: string;
 		gistUrl?: string;
+		warnings?: string[];
+		secretStatus?: {
+			providerCredentials?: Record<string, Record<string, 'configured' | 'not_configured'>>;
+			legacy?: Record<string, 'configured' | 'not_configured'>;
+			flyToken?: 'configured' | 'not_configured';
+			flyAppName?: 'configured' | 'not_configured';
+		};
 		onboarding?: {
 			completed: boolean;
 			selectedRepos: Array<{
@@ -64,6 +71,13 @@
 	};
 	type EditableField = 'flyToken' | 'flyAppName' | 'anthropic' | 'amp' | 'openai';
 	type RepoFilter = 'all' | 'selected' | 'unselected' | 'private' | 'public';
+	type AuthDiagnostics = {
+		ok: boolean;
+		missingScopes: string[];
+		installationStatus: 'installed' | 'not_installed' | 'indeterminate';
+		action: 'ok' | 'reconnect' | 'install_app' | 'check_runtime';
+		reason?: string | null;
+	};
 
 	let { data } = $props<{ data: PageData }>();
 
@@ -74,7 +88,15 @@
 	let selectedRepoIds = $state<number[]>([]);
 	let configSnapshot = $state<ConfigSnapshot | null>(null);
 	let gistUrl = $state<string | null>(null);
+	let configWarnings = $state<string[]>([]);
+	let secretStatus = $state<NonNullable<ConfigSnapshot['secretStatus']>>({
+		providerCredentials: {},
+		legacy: {},
+		flyToken: 'not_configured',
+		flyAppName: 'not_configured'
+	});
 	let githubSummary = $state<GithubSummary>({});
+	let authDiagnostics = $state<AuthDiagnostics | null>(null);
 
 	let editingField = $state<EditableField | null>(null);
 	let draftValue = $state('');
@@ -193,6 +215,21 @@
 		}
 	};
 
+	const isFieldConfigured = (field: EditableField) => {
+		switch (field) {
+			case 'flyToken':
+				return secretStatus.flyToken === 'configured';
+			case 'flyAppName':
+				return secretStatus.flyAppName === 'configured';
+			case 'anthropic':
+				return secretStatus.legacy?.anthropic === 'configured';
+			case 'openai':
+				return secretStatus.legacy?.openai === 'configured';
+			case 'amp':
+				return secretStatus.legacy?.amp === 'configured';
+		}
+	};
+
 	const getFieldLabel = (field: EditableField) => {
 		switch (field) {
 			case 'flyToken':
@@ -237,9 +274,8 @@
 	const isSecretField = (field: EditableField) => field !== 'flyAppName';
 
 	const formatFieldValue = (field: EditableField) => {
-		const value = getFieldValue(field).trim();
-		if (!value) return 'Not configured';
-		if (!isSecretField(field)) return value;
+		if (!isFieldConfigured(field)) return 'Not configured';
+		if (!isSecretField(field)) return getFieldValue(field).trim();
 		return '••••••••••';
 	};
 
@@ -293,18 +329,22 @@
 				return;
 			}
 			const payload = (await response.json()) as ConfigSnapshot;
-			credentials = payload.credentials ?? {};
-			fly = { flyToken: payload.flyToken, flyAppName: payload.flyAppName };
+			credentials = {};
+			fly = { flyToken: '', flyAppName: payload.flyAppName };
 			configSnapshot = payload;
 			gistUrl = payload.gistUrl ?? null;
-			if (!gistUrl) {
-				credentialStatus = 'Config persistence unavailable. Reconnect GitHub to grant gist access.';
-			}
+			configWarnings = payload.warnings ?? [];
+			secretStatus = payload.secretStatus ?? {
+				providerCredentials: {},
+				legacy: {},
+				flyToken: 'not_configured',
+				flyAppName: 'not_configured'
+			};
 			selectedRepoIds = payload.onboarding?.selectedRepos?.map((repo) => repo.id) ?? [];
-			if ((payload.credentials?.anthropic ?? '').trim()) {
+			if (secretStatus.legacy?.anthropic === 'configured') {
 				anthropicValidated = false;
 			}
-			if (payload.flyToken && payload.flyAppName) {
+			if (secretStatus.flyToken === 'configured' && (payload.flyAppName ?? '').trim()) {
 				await validateFly(false);
 			}
 		} catch (error) {
@@ -351,6 +391,23 @@
 				error,
 				message: githubStatus
 			});
+		}
+	};
+
+	const loadAuthDiagnostics = async () => {
+		try {
+			const response = await fetch('/api/auth/diagnostics');
+			if (response.status === 401) {
+				window.location.href = '/auth';
+				return;
+			}
+			if (!response.ok) {
+				authDiagnostics = null;
+				return;
+			}
+			authDiagnostics = (await response.json()) as AuthDiagnostics;
+		} catch {
+			authDiagnostics = null;
 		}
 	};
 
@@ -417,11 +474,16 @@
 				credentialStatus = payload.message ?? 'Failed to save credentials.';
 				return false;
 			}
-			credentials = (await response.json()) as Credentials;
+			const payload = (await response.json()) as {
+				ok?: boolean;
+				secretStatus?: ConfigSnapshot['secretStatus'];
+			};
+			secretStatus = payload.secretStatus ?? secretStatus;
 			credentialStatus = 'Credentials updated.';
-			if ((credentials.anthropic ?? '').trim()) {
+			if (secretStatus.legacy?.anthropic === 'configured') {
 				anthropicValidated = false;
 			}
+			credentials = {};
 			await loadAgents(true);
 			return true;
 		} catch (error) {
@@ -553,8 +615,8 @@
 	};
 
 	const getFieldStatus = (field: EditableField) => {
-		const value = getFieldValue(field).trim();
-		if (!value) {
+		const configured = isFieldConfigured(field);
+		if (!configured && editingField !== field) {
 			return null;
 		}
 
@@ -569,10 +631,10 @@
 			if (anthropicValidated) {
 				return { ready: true, label: 'Validated' };
 			}
-			return { ready: false, label: 'Not tested' };
+			return { ready: false, label: configured ? 'Configured' : 'Not tested' };
 		}
 
-		return { ready: false, label: 'Not tested' };
+		return { ready: false, label: configured ? 'Configured' : 'Not tested' };
 	};
 
 	const toggleRepoSelection = (id: number) => {
@@ -647,13 +709,14 @@
 		flySetupMode = normalizeSetupMode($page.url.searchParams.get('setup'));
 	});
 
-	onMount(() => {
+		onMount(() => {
 		flySetupMode = normalizeSetupMode($page.url.searchParams.get('setup'));
 		loadAgents(true);
 		if (isConnected) {
 			loadConfig();
 			loadRepositories();
 			loadGithubSummary();
+			loadAuthDiagnostics();
 		}
 	});
 </script>
@@ -679,7 +742,7 @@
 							<div class="flex items-start justify-between gap-3">
 								<div>
 									<p class={sectionLabelClass}>Credentials</p>
-									<p class="mt-1 text-sm text-muted-foreground">API keys and tokens stored in your private GitHub Gist.</p>
+									<p class="mt-1 text-sm text-muted-foreground">API keys and tokens are encrypted and stored by Porter.</p>
 								</div>
 								<Button size="sm" onclick={() => (showCredentialsModal = true)}>Manage Credentials</Button>
 							</div>
@@ -747,9 +810,9 @@
 														oninput={(event) => (draftValue = (event.target as HTMLInputElement).value)}
 													/>
 												{:else}
-													{#if getFieldValue(field as EditableField).trim()}
-														<p class="text-sm text-muted-foreground">{formatFieldValue(field as EditableField)}</p>
-													{:else}
+											{#if isFieldConfigured(field as EditableField)}
+													<p class="text-sm text-muted-foreground">{formatFieldValue(field as EditableField)}</p>
+											{:else}
 														<div class="flex items-center gap-2 text-sm text-muted-foreground" title="Not configured">
 															<span class="h-2 w-2 rounded-full bg-amber-500"></span>
 															<span>Not configured</span>
@@ -765,8 +828,8 @@
 													<Button variant="ghost" size="sm" onclick={cancelEditField}>Cancel</Button>
 												{:else}
 													<Button variant="outline" size="sm" onclick={() => startEditField(field as EditableField)}>
-														{getFieldValue(field as EditableField).trim() ? 'Edit' : 'Add'}
-													</Button>
+													{isFieldConfigured(field as EditableField) ? 'Update' : 'Add'}
+												</Button>
 												{/if}
 											</div>
 										</div>
@@ -785,15 +848,18 @@
 							</div>
 
 							<div class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-								{#if gistUrl}
-									<a href={gistUrl} target="_blank" rel="noreferrer" class="font-medium text-primary hover:text-primary/80">
-										View Gist ↗
-									</a>
-								{:else}
-									<span>Gist unavailable (reconnect GitHub to grant gist access)</span>
-								{/if}
-								<span>Need another provider? Use Manage Credentials.</span>
-								{#if credentialStatus}<span>{credentialStatus}</span>{/if}
+							{#if gistUrl}
+								<a href={gistUrl} target="_blank" rel="noreferrer" class="font-medium text-primary hover:text-primary/80">
+									View optional gist mirror ↗
+								</a>
+							{:else}
+								<span>Gist mirror is optional and currently unavailable.</span>
+							{/if}
+							{#if configWarnings.length}
+								<span>{configWarnings[0]}</span>
+							{/if}
+							<span>Need another provider? Use Manage Credentials.</span>
+							{#if credentialStatus}<span>{credentialStatus}</span>{/if}
 								{#if flyStatus}<span>{flyStatus}</span>{/if}
 								{#if flyValidating}<span>Validating Fly...</span>{/if}
 							</div>
@@ -880,10 +946,10 @@
 							</div>
 								<div class="flex items-center justify-between text-sm">
 									<span class="flex items-center gap-2">
-										{#if (credentials.anthropic ?? '').trim()}<CheckCircle size={16} weight="fill" class="text-emerald-500" />{:else}<WarningCircle size={16} weight="fill" class="text-amber-500" />{/if}
+									{#if secretStatus.legacy?.anthropic === 'configured'}<CheckCircle size={16} weight="fill" class="text-emerald-500" />{:else}<WarningCircle size={16} weight="fill" class="text-amber-500" />{/if}
 										LLM Keys
 									</span>
-									<span class="text-muted-foreground">{(credentials.anthropic ?? '').trim() ? 'Anthropic configured' : 'Missing Anthropic key'}</span>
+									<span class="text-muted-foreground">{secretStatus.legacy?.anthropic === 'configured' ? 'Anthropic configured' : 'Missing Anthropic key'}</span>
 								</div>
 								<div class="flex items-center justify-between text-sm">
 									<span class="flex items-center gap-2">
@@ -923,6 +989,14 @@
 							</div>
 							{#if githubStatus}
 								<p class="text-xs text-muted-foreground">{githubStatus}</p>
+							{/if}
+							{#if authDiagnostics}
+								<p class="text-xs text-muted-foreground">
+									Auth: {authDiagnostics.action === 'ok' ? 'healthy' : authDiagnostics.action === 'reconnect' ? 'reconnect required (scope)' : authDiagnostics.action === 'install_app' ? 'app install required' : 'runtime check required'}
+								</p>
+								{#if authDiagnostics.missingScopes.length > 0}
+									<p class="text-xs text-muted-foreground">Missing scopes: {authDiagnostics.missingScopes.join(', ')}</p>
+								{/if}
 							{/if}
 						</section>
 

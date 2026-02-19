@@ -7,11 +7,15 @@ declare global {
 		session: import('$lib/server/auth').Session | null;
 		requestId: string;
 	}
+	interface Platform {
+		env?: {
+			DB?: import('$lib/server/d1').D1Database;
+		};
+	}
 	interface PageData {
 		session: import('$lib/server/auth').Session | null;
 	}
 	// interface PageState {}
-	// interface Platform {}
 	}
 }
 

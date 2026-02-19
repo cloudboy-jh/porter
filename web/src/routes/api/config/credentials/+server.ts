@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 
-import { updateCredentials } from '$lib/server/store';
+import { getConfigSecretStatus, updateCredentials } from '$lib/server/store';
 import type { PorterConfig } from '$lib/server/types';
 
 export const PUT = async ({ request, locals }: { request: Request; locals: App.Locals }) => {
@@ -9,8 +9,9 @@ export const PUT = async ({ request, locals }: { request: Request; locals: App.L
 	}
 	try {
 		const payload = (await request.json()) as PorterConfig['credentials'];
-		const updated = await updateCredentials(locals.session.token, payload ?? {});
-		return json(updated.credentials ?? {});
+		await updateCredentials(locals.session.token, payload ?? {});
+		const status = await getConfigSecretStatus(locals.session.token);
+		return json({ ok: true, secretStatus: status });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to save credentials.';
 		return json({ error: 'failed', message }, { status: 503 });

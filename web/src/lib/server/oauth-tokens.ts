@@ -1,138 +1,120 @@
-import { randomBytes, webcrypto } from 'crypto';
-import { promises as fs } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { env } from '$env/dynamic/private';
+import { ensureD1Schema, getD1Database } from '$lib/server/d1';
+import { decryptSecretValue, encryptSecretValue } from '$lib/server/secret-crypto';
 
 type StoredToken = {
-	userId: number;
-	login: string;
-	encryptedToken: string;
+	github_user_id: number;
+	github_login: string;
+	encrypted_token: string;
 	iv: string;
 	tag: string;
-	updatedAt: string;
+	updated_at: string;
 };
 
-const tokenStorePath =
-	env.PORTER_OAUTH_TOKEN_STORE_PATH ?? join(tmpdir(), 'porter-oauth-tokens.json');
-const tokenSecret = env.PORTER_OAUTH_TOKEN_SECRET ?? env.SESSION_SECRET ?? 'porter-oauth-secret';
-
-const tokenStore = new Map<number, StoredToken>();
-let loaded = false;
-
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
-
-const toBase64 = (value: Uint8Array) => Buffer.from(value).toString('base64');
-const fromBase64 = (value: string) => Uint8Array.from(Buffer.from(value, 'base64'));
-
-let cachedKeyPromise: Promise<CryptoKey> | null = null;
-
-const getKey = async () => {
-	if (cachedKeyPromise) return cachedKeyPromise;
-	cachedKeyPromise = (async () => {
-		const secretBytes = encoder.encode(tokenSecret);
-		const digest = await webcrypto.subtle.digest('SHA-256', secretBytes);
-		return webcrypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, [
-			'encrypt',
-			'decrypt'
-		]);
-	})();
-	return cachedKeyPromise;
-};
-
-const encrypt = async (value: string) => {
-	const key = await getKey();
-	const iv = Uint8Array.from(randomBytes(12));
-	const encrypted = await webcrypto.subtle.encrypt(
-		{ name: 'AES-GCM', iv, tagLength: 128 },
-		key,
-		encoder.encode(value)
-	);
-	const encryptedBytes = new Uint8Array(encrypted);
-	const tagLength = 16;
-	const ciphertext = encryptedBytes.slice(0, -tagLength);
-	const tag = encryptedBytes.slice(-tagLength);
-	return {
-		encryptedToken: toBase64(ciphertext),
-		iv: toBase64(iv),
-		tag: toBase64(tag)
-	};
-};
-
-const decrypt = async (input: { encryptedToken: string; iv: string; tag: string }) => {
-	const key = await getKey();
-	const iv = fromBase64(input.iv);
-	const ciphertext = fromBase64(input.encryptedToken);
-	const tag = fromBase64(input.tag);
-	const combined = new Uint8Array(ciphertext.length + tag.length);
-	combined.set(ciphertext, 0);
-	combined.set(tag, ciphertext.length);
-	const decrypted = await webcrypto.subtle.decrypt(
-		{ name: 'AES-GCM', iv, tagLength: 128 },
-		key,
-		combined
-	);
-	return decoder.decode(decrypted);
-};
-
-const loadTokenStore = async () => {
-	if (loaded) return;
-	loaded = true;
-	try {
-		const raw = await fs.readFile(tokenStorePath, 'utf8');
-		const parsed = JSON.parse(raw) as StoredToken[];
-		for (const item of parsed) {
-			tokenStore.set(item.userId, item);
-		}
-	} catch {
-		// ignore missing or malformed store
-	}
-};
-
-const persistTokenStore = async () => {
-	try {
-		const serialized = JSON.stringify(Array.from(tokenStore.values()));
-		await fs.writeFile(tokenStorePath, serialized, 'utf8');
-	} catch (error) {
-		console.error('Failed to persist oauth token store:', error);
-	}
-};
+const fallbackStore = new Map<number, StoredToken>();
 
 export const saveUserOAuthToken = async (input: {
 	userId: number;
 	login: string;
 	token: string;
 }) => {
-	await loadTokenStore();
-	const encrypted = await encrypt(input.token);
-	tokenStore.set(input.userId, {
-		userId: input.userId,
-		login: input.login.toLowerCase(),
-		updatedAt: new Date().toISOString(),
-		...encrypted
-	});
-	await persistTokenStore();
+	const encrypted = await encryptSecretValue(input.token);
+	const now = new Date().toISOString();
+	const db = getD1Database();
+	if (!db) {
+		fallbackStore.set(input.userId, {
+			github_user_id: input.userId,
+			github_login: input.login,
+			encrypted_token: encrypted.encryptedValue,
+			iv: encrypted.iv,
+			tag: encrypted.tag,
+			updated_at: now
+		});
+		return;
+	}
+	await ensureD1Schema(db);
+
+	await db
+		.prepare(
+			`INSERT INTO user_oauth_tokens
+			 (github_user_id, github_login, github_login_norm, encrypted_token, iv, tag, alg, key_version, updated_at)
+			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+			 ON CONFLICT(github_user_id) DO UPDATE SET
+			   github_login = excluded.github_login,
+			   github_login_norm = excluded.github_login_norm,
+			   encrypted_token = excluded.encrypted_token,
+			   iv = excluded.iv,
+			   tag = excluded.tag,
+			   alg = excluded.alg,
+			   key_version = excluded.key_version,
+			   updated_at = excluded.updated_at`
+		)
+		.bind(
+			input.userId,
+			input.login,
+			input.login.trim().toLowerCase(),
+			encrypted.encryptedValue,
+			encrypted.iv,
+			encrypted.tag,
+			encrypted.alg,
+			encrypted.keyVersion,
+			now
+		)
+		.run();
+};
+
+const decryptTokenRow = async (row: StoredToken | null) => {
+	if (!row) return null;
+	try {
+		return await decryptSecretValue({
+			encryptedValue: row.encrypted_token,
+			iv: row.iv,
+			tag: row.tag
+		});
+	} catch {
+		return null;
+	}
 };
 
 export const getUserOAuthTokenByWebhookUser = async (input: {
 	userId?: number;
 	login?: string;
 }) => {
-	await loadTokenStore();
-	if (input.userId && tokenStore.has(input.userId)) {
-		const item = tokenStore.get(input.userId)!;
-		return decrypt(item);
+	const db = getD1Database();
+	if (!db) {
+		if (input.userId && fallbackStore.has(input.userId)) {
+			return decryptTokenRow(fallbackStore.get(input.userId) ?? null);
+		}
+		const normalizedLogin = input.login?.trim().toLowerCase();
+		if (!normalizedLogin) return null;
+		for (const row of fallbackStore.values()) {
+			if (row.github_login.trim().toLowerCase() === normalizedLogin) {
+				return decryptTokenRow(row);
+			}
+		}
+		return null;
+	}
+	await ensureD1Schema(db);
+
+	if (input.userId) {
+		const row = await db
+			.prepare(
+				'SELECT github_user_id, github_login, encrypted_token, iv, tag, updated_at FROM user_oauth_tokens WHERE github_user_id = ?1'
+			)
+			.bind(input.userId)
+			.first<StoredToken>();
+		const token = await decryptTokenRow(row ?? null);
+		if (token) return token;
 	}
 
 	const normalizedLogin = input.login?.trim().toLowerCase();
 	if (!normalizedLogin) return null;
 
-	for (const item of tokenStore.values()) {
-		if (item.login === normalizedLogin) {
-			return decrypt(item);
-		}
-	}
+	const row = await db
+		.prepare(
+			'SELECT github_user_id, github_login, encrypted_token, iv, tag, updated_at FROM user_oauth_tokens WHERE github_login_norm = ?1'
+		)
+		.bind(normalizedLogin)
+		.first<StoredToken>();
 
-	return null;
+	return decryptTokenRow(row ?? null);
 };

@@ -3,6 +3,8 @@ import { loadConfigFromGist, saveConfigToGist } from './gist';
 import type { PorterConfig, Task, TaskLog, TaskStatus } from './types';
 import type { AgentConfig } from '$lib/types/agent';
 import { AGENT_REGISTRY } from '$lib/constants/agent-registry';
+import { ensureD1Schema, getD1Database } from './d1';
+import { decryptSecretValue, deriveUserKey, encryptSecretValue } from './secret-crypto';
 
 let tasks: Task[] = [];
 
@@ -40,6 +42,7 @@ const baseConfig: PorterConfig = {
 
 const configCache = new Map<string, PorterConfig>();
 const configLoaded = new Set<string>();
+const configWarnings = new Map<string, string[]>();
 
 const normalizeCredential = (value?: string) => {
 	if (!value) return undefined;
@@ -125,6 +128,176 @@ const normalizeAgentConfig = (agents: PorterConfig['agents']) => {
 		}
 	}
 	return next;
+};
+
+const setConfigWarning = (token: string, message?: string) => {
+	if (!message) {
+		configWarnings.delete(token);
+		return;
+	}
+	const existing = configWarnings.get(token) ?? [];
+	configWarnings.set(token, Array.from(new Set([...existing, message])));
+};
+
+type D1SettingRow = {
+	config_json: string;
+};
+
+type D1SecretRow = {
+	provider_id: string;
+	env_key: string;
+	encrypted_value: string;
+	iv: string;
+	tag: string;
+};
+
+const sanitizeConfigForSettingsTable = (config: PorterConfig): PorterConfig => ({
+	...config,
+	credentials: {},
+	providerCredentials: {}
+});
+
+const ensureUserRow = async (token: string) => {
+	const db = getD1Database();
+	if (!db) return null;
+	await ensureD1Schema(db);
+	const now = new Date().toISOString();
+	const userKey = deriveUserKey(token);
+	await db
+		.prepare(
+			`INSERT INTO users (user_key, created_at, updated_at)
+			 VALUES (?1, ?2, ?2)
+			 ON CONFLICT(user_key) DO UPDATE SET updated_at = excluded.updated_at`
+		)
+		.bind(userKey, now)
+		.run();
+	return { db, userKey };
+};
+
+const loadConfigFromD1 = async (token: string): Promise<PorterConfig | null> => {
+	const db = getD1Database();
+	if (!db) return null;
+	await ensureD1Schema(db);
+	const userKey = deriveUserKey(token);
+	const settingRow = await db
+		.prepare('SELECT config_json FROM user_settings WHERE user_key = ?1')
+		.bind(userKey)
+		.first<D1SettingRow>();
+	if (!settingRow?.config_json) {
+		return null;
+	}
+
+	const parsed = JSON.parse(settingRow.config_json) as PorterConfig;
+	const secretsRows = await db
+		.prepare(
+			'SELECT provider_id, env_key, encrypted_value, iv, tag FROM user_secrets WHERE user_key = ?1'
+		)
+		.bind(userKey)
+		.all<D1SecretRow>();
+
+	const providerCredentials: PorterConfig['providerCredentials'] = {};
+	for (const row of secretsRows.results ?? []) {
+		try {
+			const decrypted = await decryptSecretValue({
+				encryptedValue: row.encrypted_value,
+				iv: row.iv,
+				tag: row.tag
+			});
+			if (!providerCredentials[row.provider_id]) {
+				providerCredentials[row.provider_id] = {};
+			}
+			providerCredentials[row.provider_id][row.env_key] = decrypted;
+		} catch {
+			// skip malformed secret rows
+		}
+	}
+
+	const merged = {
+		...parsed,
+		providerCredentials
+	};
+	merged.credentials = mapProvidersToLegacyCredentials(providerCredentials, parsed.credentials);
+	return merged;
+};
+
+const saveConfigToD1 = async (token: string, config: PorterConfig): Promise<boolean> => {
+	const userCtx = await ensureUserRow(token);
+	if (!userCtx) return false;
+	const { db, userKey } = userCtx;
+	const now = new Date().toISOString();
+	const configForSettings = sanitizeConfigForSettingsTable(config);
+
+	await db
+		.prepare(
+			`INSERT INTO user_settings (user_key, config_json, updated_at)
+			 VALUES (?1, ?2, ?3)
+			 ON CONFLICT(user_key) DO UPDATE SET
+			   config_json = excluded.config_json,
+			   updated_at = excluded.updated_at`
+		)
+		.bind(userKey, JSON.stringify(configForSettings), now)
+		.run();
+
+	await db.prepare('DELETE FROM user_secrets WHERE user_key = ?1').bind(userKey).run();
+	for (const [providerId, entries] of Object.entries(config.providerCredentials ?? {})) {
+		for (const [envKey, rawValue] of Object.entries(entries)) {
+			const value = normalizeCredential(rawValue);
+			if (!value) continue;
+			const encrypted = await encryptSecretValue(value);
+			await db
+				.prepare(
+					`INSERT INTO user_secrets
+					 (user_key, provider_id, env_key, encrypted_value, iv, tag, alg, key_version, updated_at)
+					 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
+				)
+				.bind(
+					userKey,
+					providerId,
+					envKey,
+					encrypted.encryptedValue,
+					encrypted.iv,
+					encrypted.tag,
+					encrypted.alg,
+					encrypted.keyVersion,
+					now
+				)
+				.run();
+		}
+	}
+
+	return true;
+};
+
+export const getConfigWarnings = (token: string) => configWarnings.get(token) ?? [];
+
+export const getConfigSecretStatus = async (token: string) => {
+	const activeConfig = await getConfig(token);
+	const statusByProvider: Record<string, Record<string, 'configured' | 'not_configured'>> = {};
+	for (const [providerId, values] of Object.entries(activeConfig.providerCredentials ?? {})) {
+		statusByProvider[providerId] = {};
+		for (const [envKey, value] of Object.entries(values)) {
+			statusByProvider[providerId][envKey] = normalizeCredential(value)
+				? 'configured'
+				: 'not_configured';
+		}
+	}
+
+	const legacyStatus: Record<'anthropic' | 'openai' | 'amp', 'configured' | 'not_configured'> = {
+		anthropic: normalizeCredential(activeConfig.credentials?.anthropic)
+			? 'configured'
+			: 'not_configured',
+		openai: normalizeCredential(activeConfig.credentials?.openai)
+			? 'configured'
+			: 'not_configured',
+		amp: normalizeCredential(activeConfig.credentials?.amp) ? 'configured' : 'not_configured'
+	};
+
+	return {
+		providerCredentials: statusByProvider,
+		legacy: legacyStatus,
+		flyToken: normalizeCredential(activeConfig.flyToken) ? 'configured' : 'not_configured',
+		flyAppName: normalizeCredential(activeConfig.flyAppName) ? 'configured' : 'not_configured'
+	};
 };
 
 export const listTasks = (status?: TaskStatus): Task[] => {
@@ -229,34 +402,72 @@ export const getAgentStatus = async (token: string, name: string): Promise<Agent
 
 export const getConfig = async (token: string): Promise<PorterConfig> => {
 	if (!configLoaded.has(token)) {
-		const gistConfig = (await loadConfigFromGist(token, baseConfig)) ?? {};
-		const hasLegacyModal = Object.prototype.hasOwnProperty.call(gistConfig as Record<string, unknown>, 'modal');
+		let loadedConfig: Partial<PorterConfig> = {};
+		let hasLegacyModal = false;
+		const d1Config = await loadConfigFromD1(token);
+		if (d1Config) {
+			loadedConfig = d1Config;
+		} else {
+			const gistConfig = (await loadConfigFromGist(token, baseConfig)) ?? {};
+			hasLegacyModal = Object.prototype.hasOwnProperty.call(
+				gistConfig as Record<string, unknown>,
+				'modal'
+			);
+			loadedConfig = gistConfig as PorterConfig;
+			const mergedForMigration = {
+				...baseConfig,
+				...(gistConfig as PorterConfig),
+				agents: normalizeAgentConfig((gistConfig as PorterConfig).agents ?? baseConfig.agents),
+				providerCredentials: normalizeProviderCredentials(
+					Object.keys((gistConfig as PorterConfig).providerCredentials ?? {}).length
+						? (gistConfig as PorterConfig).providerCredentials
+						: mapLegacyCredentialsToProviders((gistConfig as PorterConfig).credentials)
+				),
+				flyToken: normalizeFlyToken((gistConfig as PorterConfig).flyToken),
+				flyAppName: normalizeFlyAppName((gistConfig as PorterConfig).flyAppName)
+			};
+			mergedForMigration.credentials = mapProvidersToLegacyCredentials(
+				mergedForMigration.providerCredentials,
+				(gistConfig as PorterConfig).credentials
+			);
+			try {
+				await saveConfigToD1(token, mergedForMigration);
+			} catch {
+				setConfigWarning(token, 'D1 migration write failed.');
+			}
+		}
+
 		const merged = {
 			...baseConfig,
-			...(gistConfig as PorterConfig),
-			agents: normalizeAgentConfig((gistConfig as PorterConfig).agents ?? baseConfig.agents),
+			...(loadedConfig as PorterConfig),
+			agents: normalizeAgentConfig((loadedConfig as PorterConfig).agents ?? baseConfig.agents),
 			providerCredentials: normalizeProviderCredentials(
-				Object.keys((gistConfig as PorterConfig).providerCredentials ?? {}).length
-					? (gistConfig as PorterConfig).providerCredentials
-					: mapLegacyCredentialsToProviders((gistConfig as PorterConfig).credentials)
+				Object.keys((loadedConfig as PorterConfig).providerCredentials ?? {}).length
+					? (loadedConfig as PorterConfig).providerCredentials
+					: mapLegacyCredentialsToProviders((loadedConfig as PorterConfig).credentials)
 			),
-			flyToken: normalizeFlyToken((gistConfig as PorterConfig).flyToken),
-			flyAppName: normalizeFlyAppName((gistConfig as PorterConfig).flyAppName)
+			flyToken: normalizeFlyToken((loadedConfig as PorterConfig).flyToken),
+			flyAppName: normalizeFlyAppName((loadedConfig as PorterConfig).flyAppName)
 		};
 		merged.credentials = mapProvidersToLegacyCredentials(
 			merged.providerCredentials,
-			(gistConfig as PorterConfig).credentials
+			(loadedConfig as PorterConfig).credentials
 		);
 		configCache.set(token, merged);
 		configLoaded.add(token);
 		if (hasLegacyModal) {
-			await saveConfigToGist(token, merged);
+			try {
+				await saveConfigToGist(token, merged);
+			} catch {
+				setConfigWarning(token, 'Gist mirror update failed after legacy config migration.');
+			}
 		}
 	}
 	return configCache.get(token) ?? baseConfig;
 };
 
 export const updateConfig = async (token: string, next: PorterConfig): Promise<PorterConfig> => {
+	setConfigWarning(token);
 	const normalized = {
 		...next,
 		agents: normalizeAgentConfig(next.agents ?? {}),
@@ -268,10 +479,20 @@ export const updateConfig = async (token: string, next: PorterConfig): Promise<P
 		normalized.providerCredentials,
 		next.credentials
 	);
-	const persisted = await saveConfigToGist(token, normalized);
-	if (!persisted) {
-		throw new Error('Failed to persist config to GitHub Gist. Reconnect GitHub and verify gist access.');
+	const d1Persisted = await saveConfigToD1(token, normalized);
+	if (!d1Persisted) {
+		throw new Error('Failed to persist config to Cloudflare D1. Ensure DB binding is configured.');
 	}
+
+	try {
+		const gistPersisted = await saveConfigToGist(token, normalized);
+		if (!gistPersisted) {
+			setConfigWarning(token, 'Optional gist mirror is unavailable. D1 save succeeded.');
+		}
+	} catch {
+		setConfigWarning(token, 'Optional gist mirror failed. D1 save succeeded.');
+	}
+
 	configCache.set(token, normalized);
 	configLoaded.add(token);
 	return normalized;
@@ -314,9 +535,24 @@ export const updateProviderCredentials = async (
 	providerCredentials: PorterConfig['providerCredentials']
 ) => {
 	const activeConfig = await getConfig(token);
+	const merged: PorterConfig['providerCredentials'] = {
+		...(activeConfig.providerCredentials ?? {})
+	};
+	for (const [providerId, values] of Object.entries(providerCredentials ?? {})) {
+		const nextValues: Record<string, string> = {
+			...(merged[providerId] ?? {})
+		};
+		for (const [envKey, rawValue] of Object.entries(values ?? {})) {
+			const value = normalizeCredential(rawValue);
+			if (value) nextValues[envKey] = value;
+			else delete nextValues[envKey];
+		}
+		if (Object.keys(nextValues).length > 0) merged[providerId] = nextValues;
+		else delete merged[providerId];
+	}
 	await updateConfig(token, {
 		...activeConfig,
-		providerCredentials: providerCredentials ?? {}
+		providerCredentials: merged
 	});
 	return getConfig(token);
 };

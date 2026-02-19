@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 
-import { getConfig, updateConfig } from '$lib/server/store';
+import { getConfig, getConfigSecretStatus, getConfigWarnings, updateConfig } from '$lib/server/store';
 import { getConfigGistUrl } from '$lib/server/gist';
 import type { PorterConfig } from '$lib/server/types';
 
@@ -9,8 +9,18 @@ export const GET = async ({ locals }: { locals: App.Locals }) => {
 		return json({ error: 'unauthorized' }, { status: 401 });
 	}
 	const config = await getConfig(locals.session.token);
+	const secretStatus = await getConfigSecretStatus(locals.session.token);
+	const warnings = getConfigWarnings(locals.session.token);
 	const gistUrl = await getConfigGistUrl(locals.session.token);
-	return json({ ...config, gistUrl });
+	return json({
+		...config,
+		flyToken: '',
+		credentials: {},
+		providerCredentials: {},
+		secretStatus,
+		warnings,
+		gistUrl
+	});
 };
 
 export const PUT = async ({ request, locals }: { request: Request; locals: App.Locals }) => {

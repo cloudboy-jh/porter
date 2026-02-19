@@ -1,84 +1,94 @@
 # Astro Docs - Handoff Spec
 
-**Version:** 0.1.0
-**Status:** Draft
-**Owner Repo:** Separate docs repository
-**Purpose:** Centralize product documentation so updates track product changes over time.
+**Version:** 0.2.0  
+**Status:** Active  
+**Owner Repo:** Separate docs repository  
+**Purpose:** Keep public/product docs aligned with shipping Porter behavior.
 
 ---
 
 ## Overview
 
-Astro Docs is the standalone documentation application for Porter. It lives in a separate repository and consumes curated content from this repo (specs, roadmap, and UI notes) to keep docs accurate as the product evolves.
+Astro Docs is the standalone documentation app for Porter. It should track the product as it exists today (D1-backed config/secrets, Fly Machines execution, GitHub App + OAuth flows), not legacy implementation details.
 
-This spec defines the handoff boundary between the product repo and the docs repo, plus a lightweight workflow for syncing content.
+This handoff spec defines:
 
----
-
-## Source of Truth
-
-These files in this repo are the canonical inputs for docs:
-
-- `project-mds/main-spec.md` (core product spec)
-- `project-mds/next-steps.md` (short-term roadmap and UI polish notes)
-- `project-mds/astro-docs.md` (this handoff spec)
-
-Docs in the Astro repository should summarize and reformat this content, not replace it.
+1. canonical source files in this repo,
+2. what content belongs in the docs repo,
+3. the minimum sync workflow for every product change.
 
 ---
 
-## Content Scope (Docs Repo)
+## Source of Truth (this repo)
 
-The docs app should include:
+Use these files as canonical inputs:
+
+- `docs/project-mds/main-spec.md` (current architecture + runtime behavior)
+- `docs/project-mds/next-steps.md` (active launch-critical checklist)
+- `docs/project-mds/astro-docs.md` (handoff contract)
+
+Docs in the Astro repo should summarize/reformat this source material, not introduce divergent product decisions.
+
+---
+
+## Required Coverage (docs repo)
 
 1. **Product Overview**
-   - What Porter is, core value proposition, supported agents.
+   - What Porter does, who it is for, supported agents.
 2. **Architecture**
-   - High-level system design, execution flow, Fly Machines integration.
-3. **User Guide**
-   - How to install the GitHub App, connect repos, run agents, review PRs.
-4. **Settings Reference**
-   - Execution environment, GitHub connection, agent configuration.
-5. **API Reference (v1)**
-   - Public endpoints and webhook expectations.
-6. **Roadmap**
-   - Short-term and phase-based roadmap (from `next-steps.md`).
+   - Webhook -> dispatch -> Fly Machine -> callback -> PR/comment flow.
+   - Cloudflare Worker + D1 + Fly boundaries.
+3. **Authentication & Authorization**
+   - GitHub OAuth sign-in, required scopes, GitHub App installation requirements.
+   - Reconnect/install diagnostics and failure modes.
+4. **Settings & Secrets**
+   - D1-backed settings model (`users`, `user_settings`, `user_secrets`, `user_oauth_tokens`).
+   - Encrypted secret handling and status-only UI behavior.
+   - Optional GitHub Gist mirror semantics (best-effort, non-blocking).
+5. **Operations**
+   - Startup readiness checks, migration expectations, and runtime troubleshooting.
+6. **API Reference (v1 internal/public surfaces)**
+   - Webhook/callback/config/task/auth diagnostics endpoints.
+7. **Roadmap**
+   - Launch-critical and nice-to-have items from `next-steps.md`.
 
 ---
 
 ## Handoff Workflow
 
-1. **Update product specs here.**
-2. **Summarize into docs content** in the Astro repo:
-   - Pull key changes from `main-spec.md` and `next-steps.md`.
-   - Update affected sections, keep the same structure.
-3. **Publish docs updates** with a short changelog note.
+1. Update product spec files in this repo first.
+2. Sync Astro docs sections affected by the change.
+3. Add short changelog note in docs repo for user-visible behavior changes.
 
 Guidelines:
-- Keep docs derived from spec content; do not introduce new product decisions only in docs.
-- Prefer concise summaries with deep links back to relevant sections in the spec.
-- Use consistent naming (Porter, Fly Machines, agents, routes, settings sections).
+
+- Keep language implementation-accurate; avoid speculative docs.
+- Prefer short, direct sections with links back to spec files.
+- Preserve naming consistency (`Porter`, `Fly Machines`, `D1`, `GitHub App`, `OAuth`).
 
 ---
 
-## Suggested Docs Structure (Astro Repo)
+## Suggested Docs Structure (Astro repo)
 
-```
+```text
 docs/
-  index.mdx            # Overview
-  architecture.mdx     # System design + flow
-  user-guide/
-    install.mdx
-    connect-github.mdx
-    run-agents.mdx
-    review-prs.mdx
+  index.mdx
+  architecture/
+    overview.mdx
+    execution-flow.mdx
+    data-model.mdx
+  auth/
+    oauth-and-installation.mdx
+    troubleshooting.mdx
   settings/
-    execution.mdx
-    github.mdx
-    agents.mdx
+    providers-and-secrets.mdx
+    fly-setup.mdx
   api/
     overview.mdx
     endpoints.mdx
+  operations/
+    startup-readiness.mdx
+    migrations-and-rollout.mdx
   roadmap.mdx
 ```
 
@@ -86,18 +96,17 @@ docs/
 
 ## Sync Checklist
 
-- [ ] Spec changes reviewed in `project-mds/main-spec.md`
-- [ ] Roadmap changes reviewed in `project-mds/next-steps.md`
-- [ ] Docs pages updated to reflect changes
-- [ ] Publish docs with a short changelog note
+- [ ] `main-spec.md` reviewed for architecture/API/storage changes
+- [ ] `next-steps.md` reviewed for roadmap/status changes
+- [ ] affected docs pages updated
+- [ ] docs changelog note added
 
 ---
 
-## Open Questions
+## Current Known Gaps to Reflect in Docs
 
-1. Should the docs repo consume spec content automatically (CI sync) or manually?
-2. Do we want a public changelog page in the docs app?
-3. Should the docs site include UI screenshots, or rely on text-only for now?
+1. Production dry-run path (real `@porter` mention -> merged PR) is still open in `next-steps.md`.
+2. Additional failure-mode tests and observability hardening remain in progress.
 
 ---
 
