@@ -151,6 +151,12 @@ type D1SecretRow = {
 	tag: string;
 };
 
+type D1ColumnInfo = {
+	name?: string;
+	notnull?: number;
+	dflt_value?: unknown;
+};
+
 type ConfigIdentity = {
 	githubUserId?: number;
 	githubLogin?: string;
@@ -183,25 +189,69 @@ const ensureUserRow = async (token: string, identity?: ConfigIdentity) => {
 	await ensureD1Schema(db);
 	const now = new Date().toISOString();
 	const resolved = resolvePersistenceIdentity(token, identity);
-	await db
-		.prepare(
-			`INSERT INTO users (user_key, created_at, updated_at)
-			 VALUES (?1, ?2, ?2)
-			 ON CONFLICT(user_key) DO UPDATE SET updated_at = excluded.updated_at`
-		)
-		.bind(resolved.userKey, now)
-		.run();
-	if (resolved.githubUserId || resolved.githubLogin) {
+	const userColumns = await db.prepare('PRAGMA table_info(users)').all<D1ColumnInfo>();
+	const columnRows = userColumns.results ?? [];
+	const columnNames = new Set(
+		columnRows.map((column) => String(column.name ?? '').trim()).filter(Boolean)
+	);
+	const githubIdColumn = columnRows.find((column) => String(column.name ?? '').trim() === 'github_id');
+	const hasLegacyGithubId = columnNames.has('github_id');
+	const requiresLegacyGithubId = Boolean(githubIdColumn && githubIdColumn.notnull === 1 && githubIdColumn.dflt_value == null);
+
+	if (requiresLegacyGithubId && !resolved.githubUserId) {
+		throw new Error('D1 users.github_id requires a GitHub user id but none was available for this write.');
+	}
+
+	if (hasLegacyGithubId) {
 		await db
 			.prepare(
-				`UPDATE users
-				 SET github_user_id = COALESCE(?2, github_user_id),
-				     github_login = COALESCE(?3, github_login),
-				     updated_at = ?4
-				 WHERE user_key = ?1`
+				`INSERT INTO users (user_key, github_id, created_at, updated_at)
+				 VALUES (?1, ?2, ?3, ?3)
+				 ON CONFLICT(user_key) DO UPDATE SET
+				   github_id = COALESCE(excluded.github_id, users.github_id),
+				   updated_at = excluded.updated_at`
 			)
-			.bind(resolved.userKey, resolved.githubUserId ?? null, resolved.githubLogin ?? null, now)
+			.bind(resolved.userKey, resolved.githubUserId ?? null, now)
 			.run();
+	} else {
+		await db
+			.prepare(
+				`INSERT INTO users (user_key, created_at, updated_at)
+				 VALUES (?1, ?2, ?2)
+				 ON CONFLICT(user_key) DO UPDATE SET updated_at = excluded.updated_at`
+			)
+			.bind(resolved.userKey, now)
+			.run();
+	}
+	if (resolved.githubUserId || resolved.githubLogin) {
+		const query = hasLegacyGithubId
+			? `UPDATE users
+			   SET github_user_id = COALESCE(?2, github_user_id),
+			       github_login = COALESCE(?3, github_login),
+			       updated_at = ?4,
+			       github_id = COALESCE(?5, github_id)
+			   WHERE user_key = ?1`
+			: `UPDATE users
+			   SET github_user_id = COALESCE(?2, github_user_id),
+			       github_login = COALESCE(?3, github_login),
+			       updated_at = ?4
+			   WHERE user_key = ?1`;
+		const statement = db.prepare(query);
+		if (hasLegacyGithubId) {
+			await statement
+				.bind(
+					resolved.userKey,
+					resolved.githubUserId ?? null,
+					resolved.githubLogin ?? null,
+					now,
+					resolved.githubUserId ?? null
+				)
+				.run();
+		} else {
+			await statement
+				.bind(resolved.userKey, resolved.githubUserId ?? null, resolved.githubLogin ?? null, now)
+				.run();
+		}
 	}
 	return { db, userKey: resolved.userKey };
 };

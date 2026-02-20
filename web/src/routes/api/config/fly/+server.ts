@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 
 import { updateFlyConfig } from '$lib/server/store';
 import { normalizeGitHubError } from '$lib/server/github';
+import { logEvent, serializeError, tokenFingerprint } from '$lib/server/logging';
 import {
 	validateFlyCredentialsWithMode,
 	type FlySetupMode,
@@ -11,7 +12,9 @@ import {
 const normalizeSetupMode = (value?: string): FlySetupMode => (value === 'deploy' ? 'deploy' : 'org');
 
 export const PUT = async ({ request, locals }: { request: Request; locals: App.Locals }) => {
+	const requestId = locals.requestId;
 	if (!locals.session) {
+		logEvent('warn', 'api.config.fly', 'unauthorized', { requestId });
 		return json({ error: 'unauthorized' }, { status: 401 });
 	}
 	try {
@@ -63,6 +66,14 @@ export const PUT = async ({ request, locals }: { request: Request; locals: App.L
 		const normalized = normalizeGitHubError(error, {
 			defaultMessage: error instanceof Error ? error.message : 'Failed to save Fly settings.',
 			reconnectUrl: '/api/auth/github?force=1'
+		});
+		logEvent('error', 'api.config.fly', 'update_failed', {
+			requestId,
+			userId: locals.session.user.id,
+			login: locals.session.user.login,
+			token: tokenFingerprint(locals.session.token),
+			normalized,
+			error: serializeError(error)
 		});
 		return json(
 			{

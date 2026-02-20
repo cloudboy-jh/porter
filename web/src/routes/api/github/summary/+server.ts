@@ -9,13 +9,16 @@ import {
 	isGitHubRateLimitError,
 	listInstallationRepos
 } from '$lib/server/github';
+import { logEvent, serializeError, tokenFingerprint } from '$lib/server/logging';
 import type { RequestHandler } from './$types';
 
 const reconnectUrl = '/api/auth/github?force=1';
 
 export const GET: RequestHandler = async ({ locals, cookies }) => {
+	const requestId = locals.requestId;
 	const session = locals.session;
 	if (!session) {
+		logEvent('warn', 'api.github.summary', 'unauthorized', { requestId });
 		return json({ error: 'unauthorized' }, { status: 401 });
 	}
 
@@ -37,14 +40,51 @@ export const GET: RequestHandler = async ({ locals, cookies }) => {
 		const user = userResult.value;
 		const warnings: string[] = [];
 		const emails = isRejected(emailsResult) ? [] : emailsResult.value;
-		if (isRejected(emailsResult)) warnings.push('Could not load GitHub email addresses.');
+		if (isRejected(emailsResult)) {
+			warnings.push('Could not load GitHub email addresses.');
+			logEvent('warn', 'api.github.summary', 'emails_load_failed', {
+				requestId,
+				userId: session.user.id,
+				login: session.user.login,
+				token: tokenFingerprint(session.token),
+				error: serializeError(emailsResult.reason)
+			});
+		}
 		const orgs = isRejected(orgsResult) ? [] : orgsResult.value;
-		if (isRejected(orgsResult)) warnings.push('Could not load GitHub organizations.');
+		if (isRejected(orgsResult)) {
+			warnings.push('Could not load GitHub organizations.');
+			logEvent('warn', 'api.github.summary', 'orgs_load_failed', {
+				requestId,
+				userId: session.user.id,
+				login: session.user.login,
+				token: tokenFingerprint(session.token),
+				error: serializeError(orgsResult.reason)
+			});
+		}
 		const reposData = isRejected(reposResult)
 			? { repositories: [], installations: { total_count: 0, installations: [] as Array<{ id: number }> }, warnings: [] as Array<{ message: string }> }
 			: reposResult.value;
-		if (isRejected(reposResult)) warnings.push('Could not load installation repositories.');
+		if (isRejected(reposResult)) {
+			warnings.push('Could not load installation repositories.');
+			logEvent('warn', 'api.github.summary', 'repos_load_failed', {
+				requestId,
+				userId: session.user.id,
+				login: session.user.login,
+				token: tokenFingerprint(session.token),
+				error: serializeError(reposResult.reason)
+			});
+		}
 		if (reposData.warnings?.length) warnings.push('Some installations could not be queried. Reconnect GitHub to refresh access.');
+
+		logEvent('info', 'api.github.summary', 'loaded', {
+			requestId,
+			userId: session.user.id,
+			login: session.user.login,
+			repositoryCount: reposData.repositories.length,
+			organizationCount: orgs.length,
+			warningCount: warnings.length,
+			token: tokenFingerprint(session.token)
+		});
 
 		const primaryEmail =
 			emails.find((email) => email.primary && email.verified)?.email ??
@@ -71,10 +111,24 @@ export const GET: RequestHandler = async ({ locals, cookies }) => {
 		});
 	} catch (error) {
 		if (isGitHubAuthError(error)) {
+			logEvent('warn', 'api.github.summary', 'github_auth_error', {
+				requestId,
+				userId: session.user.id,
+				login: session.user.login,
+				token: tokenFingerprint(session.token),
+				error: serializeError(error)
+			});
 			clearSession(cookies);
 			return json({ error: 'unauthorized', action: 'reauth' }, { status: 401 });
 		}
 		if (isGitHubRateLimitError(error)) {
+			logEvent('warn', 'api.github.summary', 'github_rate_limit', {
+				requestId,
+				userId: session.user.id,
+				login: session.user.login,
+				token: tokenFingerprint(session.token),
+				error: serializeError(error)
+			});
 			const status = getRateLimitStatus();
 			const resetDate = new Date(status.reset * 1000);
 			const minutesUntil = Math.ceil((status.reset * 1000 - Date.now()) / 60000);
@@ -88,6 +142,13 @@ export const GET: RequestHandler = async ({ locals, cookies }) => {
 			);
 		}
 		if (isGitHubPermissionError(error)) {
+			logEvent('warn', 'api.github.summary', 'github_permission_error', {
+				requestId,
+				userId: session.user.id,
+				login: session.user.login,
+				token: tokenFingerprint(session.token),
+				error: serializeError(error)
+			});
 			return json(
 				{
 					error: 'insufficient_permissions',
@@ -101,7 +162,13 @@ export const GET: RequestHandler = async ({ locals, cookies }) => {
 				{ status: 403 }
 			);
 		}
-		console.error('Failed to load GitHub summary:', error);
+		logEvent('error', 'api.github.summary', 'load_failed', {
+			requestId,
+			userId: session.user.id,
+			login: session.user.login,
+			token: tokenFingerprint(session.token),
+			error: serializeError(error)
+		});
 		return json({ error: 'failed' }, { status: 500 });
 	}
 };

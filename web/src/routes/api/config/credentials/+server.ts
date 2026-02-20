@@ -2,10 +2,13 @@ import { json } from '@sveltejs/kit';
 
 import { getConfigSecretStatus, updateCredentials } from '$lib/server/store';
 import { normalizeGitHubError } from '$lib/server/github';
+import { logEvent, serializeError, tokenFingerprint } from '$lib/server/logging';
 import type { PorterConfig } from '$lib/server/types';
 
 export const PUT = async ({ request, locals }: { request: Request; locals: App.Locals }) => {
+	const requestId = locals.requestId;
 	if (!locals.session) {
+		logEvent('warn', 'api.config.credentials', 'unauthorized', { requestId });
 		return json({ error: 'unauthorized' }, { status: 401 });
 	}
 	try {
@@ -16,11 +19,25 @@ export const PUT = async ({ request, locals }: { request: Request; locals: App.L
 		};
 		await updateCredentials(locals.session.token, payload ?? {}, identity);
 		const status = await getConfigSecretStatus(locals.session.token, identity);
+		logEvent('info', 'api.config.credentials', 'updated', {
+			requestId,
+			userId: locals.session.user.id,
+			login: locals.session.user.login,
+			token: tokenFingerprint(locals.session.token)
+		});
 		return json({ ok: true, secretStatus: status });
 	} catch (error) {
 		const normalized = normalizeGitHubError(error, {
 			defaultMessage: error instanceof Error ? error.message : 'Failed to save credentials.',
 			reconnectUrl: '/api/auth/github?force=1'
+		});
+		logEvent('error', 'api.config.credentials', 'update_failed', {
+			requestId,
+			userId: locals.session.user.id,
+			login: locals.session.user.login,
+			token: tokenFingerprint(locals.session.token),
+			normalized,
+			error: serializeError(error)
 		});
 		return json(
 			{
