@@ -9,7 +9,7 @@ export type D1PreparedStatement = {
 
 export type D1Database = {
 	prepare: (query: string) => D1PreparedStatement;
-	exec: (query: string) => Promise<unknown>;
+	exec?: (query: string) => Promise<unknown>;
 	batch?: (statements: D1PreparedStatement[]) => Promise<unknown>;
 };
 
@@ -129,7 +129,7 @@ const ensureD1Columns = async (db: D1Database) => {
 		const existing = new Set((rows.results ?? []).map((row) => String(row.name ?? '').trim()).filter(Boolean));
 		for (const column of columns) {
 			if (existing.has(column.name)) continue;
-			await db.exec(`ALTER TABLE ${table} ADD COLUMN ${column.name} ${column.definition}`);
+			await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column.name} ${column.definition}`).run();
 		}
 	}
 };
@@ -144,11 +144,11 @@ export const ensureD1Schema = async (dbInput?: D1Database | null) => {
 	if (!db) return;
 	schemaPromise = (async () => {
 		for (const statement of D1_SCHEMA_STATEMENTS) {
-			await db.exec(statement);
+			await db.prepare(statement).run();
 		}
 		await ensureD1Columns(db);
 		for (const statement of D1_POST_SCHEMA_STATEMENTS) {
-			await db.exec(statement);
+			await db.prepare(statement).run();
 		}
 		schemaReady = true;
 	})();
