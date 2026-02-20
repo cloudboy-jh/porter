@@ -137,12 +137,13 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
 				token: accessToken
 			});
 		} catch (error) {
-			logEvent('warn', 'auth.github.callback', 'oauth_token_persist_failed', {
+			logEvent('error', 'auth.github.callback', 'oauth_token_persist_failed', {
 				requestId,
 				userId: user.id,
 				login: user.login,
 				error: serializeError(error)
 			});
+			throw redirect(302, '/auth?error=oauth_persist');
 		}
 
 		let installStatus: 'installed' | 'not_installed' | 'indeterminate' = 'indeterminate';
@@ -190,7 +191,10 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
 
 		if (hasInstallation) {
 			try {
-				const config = await getConfig(accessToken);
+				const config = await getConfig(accessToken, {
+					githubUserId: user.id,
+					githubLogin: user.login
+				});
 				if (!config.onboarding?.completed) {
 					const { repositories } = await listInstallationRepos(accessToken);
 					const selectedRepos = repositories.map((repo) => ({
@@ -209,6 +213,9 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
 								? config.onboarding.enabledAgents
 								: ['opencode', 'claude-code']
 						}
+					}, {
+						githubUserId: user.id,
+						githubLogin: user.login
 					});
 				}
 			} catch (error) {

@@ -87,7 +87,10 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 
 	try {
 		const taskId = params.taskId;
-		const config = await getConfig(session.token);
+		const config = await getConfig(session.token, {
+			githubUserId: session.user.id,
+			githubLogin: session.user.login
+		});
 		const task = await findTaskById(session.token, taskId, config);
 		if (!task || task.status !== 'success' || !task.prUrl) {
 			throw redirect(302, '/review');

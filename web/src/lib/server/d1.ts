@@ -78,6 +78,62 @@ const D1_SCHEMA_STATEMENTS = [
 	'CREATE UNIQUE INDEX IF NOT EXISTS idx_user_oauth_login_norm ON user_oauth_tokens(github_login_norm)'
 ] as const;
 
+const D1_REQUIRED_COLUMNS: Record<string, Array<{ name: string; definition: string }>> = {
+	users: [
+		{ name: 'user_key', definition: 'TEXT' },
+		{ name: 'github_user_id', definition: 'INTEGER' },
+		{ name: 'github_login', definition: 'TEXT' },
+		{ name: 'created_at', definition: 'TEXT' },
+		{ name: 'updated_at', definition: 'TEXT' }
+	],
+	user_settings: [
+		{ name: 'user_key', definition: 'TEXT' },
+		{ name: 'config_json', definition: 'TEXT' },
+		{ name: 'updated_at', definition: 'TEXT' }
+	],
+	user_secrets: [
+		{ name: 'user_key', definition: 'TEXT' },
+		{ name: 'provider_id', definition: 'TEXT' },
+		{ name: 'env_key', definition: 'TEXT' },
+		{ name: 'encrypted_value', definition: 'TEXT' },
+		{ name: 'iv', definition: 'TEXT' },
+		{ name: 'tag', definition: 'TEXT' },
+		{ name: 'alg', definition: 'TEXT' },
+		{ name: 'key_version', definition: 'TEXT' },
+		{ name: 'updated_at', definition: 'TEXT' }
+	],
+	user_oauth_tokens: [
+		{ name: 'github_user_id', definition: 'INTEGER' },
+		{ name: 'github_login', definition: 'TEXT' },
+		{ name: 'github_login_norm', definition: 'TEXT' },
+		{ name: 'encrypted_token', definition: 'TEXT' },
+		{ name: 'iv', definition: 'TEXT' },
+		{ name: 'tag', definition: 'TEXT' },
+		{ name: 'alg', definition: 'TEXT' },
+		{ name: 'key_version', definition: 'TEXT' },
+		{ name: 'updated_at', definition: 'TEXT' }
+	]
+};
+
+const D1_POST_SCHEMA_STATEMENTS = [
+	'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_user_key ON users(user_key)',
+	'CREATE UNIQUE INDEX IF NOT EXISTS idx_user_settings_user_key ON user_settings(user_key)',
+	'CREATE UNIQUE INDEX IF NOT EXISTS idx_user_oauth_user_id ON user_oauth_tokens(github_user_id)',
+	'CREATE INDEX IF NOT EXISTS idx_users_github_user_id ON users(github_user_id)',
+	'CREATE INDEX IF NOT EXISTS idx_users_github_login ON users(github_login)'
+] as const;
+
+const ensureD1Columns = async (db: D1Database) => {
+	for (const [table, columns] of Object.entries(D1_REQUIRED_COLUMNS)) {
+		const rows = await db.prepare(`PRAGMA table_info(${table})`).all<{ name?: string }>();
+		const existing = new Set((rows.results ?? []).map((row) => String(row.name ?? '').trim()).filter(Boolean));
+		for (const column of columns) {
+			if (existing.has(column.name)) continue;
+			await db.exec(`ALTER TABLE ${table} ADD COLUMN ${column.name} ${column.definition}`);
+		}
+	}
+};
+
 let schemaReady = false;
 let schemaPromise: Promise<void> | null = null;
 
@@ -88,6 +144,10 @@ export const ensureD1Schema = async (dbInput?: D1Database | null) => {
 	if (!db) return;
 	schemaPromise = (async () => {
 		for (const statement of D1_SCHEMA_STATEMENTS) {
+			await db.exec(statement);
+		}
+		await ensureD1Columns(db);
+		for (const statement of D1_POST_SCHEMA_STATEMENTS) {
 			await db.exec(statement);
 		}
 		schemaReady = true;

@@ -87,6 +87,8 @@ export class GitHubRequestError extends Error {
 		githubRequestId?: string;
 		rateLimitRemaining?: string;
 		rateLimitReset?: string;
+		oauthScopes?: string;
+		acceptedOauthScopes?: string;
 	};
 
 	constructor(
@@ -100,6 +102,8 @@ export class GitHubRequestError extends Error {
 			githubRequestId?: string;
 			rateLimitRemaining?: string;
 			rateLimitReset?: string;
+			oauthScopes?: string;
+			acceptedOauthScopes?: string;
 		}
 	) {
 		super(message);
@@ -126,6 +130,24 @@ const getGitHubErrorPayload = (body?: string): { message?: string } => {
 const isRateLimitMessage = (message?: string) =>
 	Boolean(message && /rate limit|secondary rate limit/i.test(message));
 
+const parseScopes = (value?: string) =>
+	(value ?? '')
+		.split(',')
+		.map((scope) => scope.trim())
+		.filter(Boolean);
+
+const hasMissingAcceptedScopes = (error: GitHubRequestError) => {
+	const acceptedScopes = parseScopes(error.meta?.acceptedOauthScopes);
+	const grantedScopes = parseScopes(error.meta?.oauthScopes);
+	if (!acceptedScopes.length || !grantedScopes.length) return false;
+	return acceptedScopes.some((scope) => !grantedScopes.includes(scope));
+};
+
+const getGitHubErrorScopeHints = (error: GitHubRequestError) => ({
+	grantedScopes: parseScopes(error.meta?.oauthScopes),
+	acceptedScopes: parseScopes(error.meta?.acceptedOauthScopes)
+});
+
 export const getGitHubErrorMessage = (error: unknown, fallback = 'GitHub request failed') => {
 	if (!(error instanceof GitHubRequestError)) return fallback;
 	const payload = getGitHubErrorPayload(error.body);
@@ -143,6 +165,101 @@ export const isGitHubRateLimitError = (error: unknown) =>
 
 export const isGitHubPermissionError = (error: unknown) =>
 	error instanceof GitHubRequestError && error.status === 403 && !isGitHubRateLimitError(error);
+
+const isIntegrationPermissionError = (error: GitHubRequestError) => {
+	const message = getGitHubErrorPayload(error.body).message ?? '';
+	return /resource not accessible by integration|not accessible by integration/i.test(message);
+};
+
+export type NormalizedGitHubError = {
+	httpStatus: number;
+	error: 'unauthorized' | 'rate_limit' | 'missing_scope' | 'insufficient_app_permissions' | 'insufficient_permissions' | 'failed';
+	action?: 'reauth' | 'reconnect';
+	actionUrl?: string;
+	message: string;
+	scopeHints?: {
+		grantedScopes: string[];
+		acceptedScopes: string[];
+	};
+};
+
+export const normalizeGitHubError = (
+	error: unknown,
+	options?: {
+		permissionFallbackMessage?: string;
+		rateLimitFallbackMessage?: string;
+		defaultMessage?: string;
+		reconnectUrl?: string;
+	}
+): NormalizedGitHubError => {
+	if (isGitHubAuthError(error)) {
+		return {
+			httpStatus: 401,
+			error: 'unauthorized',
+			action: 'reauth',
+			message: 'GitHub session expired. Please reconnect your account.'
+		};
+	}
+
+	if (isGitHubRateLimitError(error)) {
+		const status = getRateLimitStatus();
+		const resetDate = new Date(status.reset * 1000);
+		const minutesUntil = Math.max(Math.ceil((status.reset * 1000 - Date.now()) / 60000), 0);
+		return {
+			httpStatus: 429,
+			error: 'rate_limit',
+			message:
+				options?.rateLimitFallbackMessage ??
+				`GitHub API rate limit exceeded. Resets in ${minutesUntil} minutes at ${resetDate.toLocaleTimeString()}.`
+		};
+	}
+
+	if (error instanceof GitHubRequestError && hasMissingAcceptedScopes(error)) {
+		return {
+			httpStatus: 403,
+			error: 'missing_scope',
+			action: 'reconnect',
+			actionUrl: options?.reconnectUrl,
+			message:
+				getGitHubErrorMessage(error, 'GitHub OAuth scopes are missing. Reconnect GitHub to grant required scopes.'),
+			scopeHints: getGitHubErrorScopeHints(error)
+		};
+	}
+
+	if (error instanceof GitHubRequestError && isIntegrationPermissionError(error)) {
+		return {
+			httpStatus: 403,
+			error: 'insufficient_app_permissions',
+			action: 'reconnect',
+			actionUrl: options?.reconnectUrl,
+			message: getGitHubErrorMessage(
+				error,
+				'GitHub App permissions are insufficient for this action. Update app permissions and reinstall app access.'
+			)
+		};
+	}
+
+	if (isGitHubPermissionError(error)) {
+		return {
+			httpStatus: 403,
+			error: 'insufficient_permissions',
+			action: 'reconnect',
+			actionUrl: options?.reconnectUrl,
+			message:
+				options?.permissionFallbackMessage ??
+				getGitHubErrorMessage(
+					error,
+					'GitHub denied access. Reconnect GitHub to refresh permissions and installation access.'
+				)
+		};
+	}
+
+	return {
+		httpStatus: 500,
+		error: 'failed',
+		message: options?.defaultMessage ?? 'GitHub request failed.'
+	};
+};
 
 export type PorterTaskStatus = 'queued' | 'running' | 'success' | 'failed' | 'timed_out';
 
@@ -208,7 +325,9 @@ export const fetchGitHub = async <T>(path: string, token: string, init?: Request
 			method,
 			githubRequestId: response.headers.get('x-github-request-id') ?? undefined,
 			rateLimitRemaining: response.headers.get('x-ratelimit-remaining') ?? undefined,
-			rateLimitReset: response.headers.get('x-ratelimit-reset') ?? undefined
+			rateLimitReset: response.headers.get('x-ratelimit-reset') ?? undefined,
+			oauthScopes: response.headers.get('x-oauth-scopes') ?? undefined,
+			acceptedOauthScopes: response.headers.get('x-accepted-oauth-scopes') ?? undefined
 		};
 		logEvent('error', 'github.api', 'request_failed', {
 			status: response.status,

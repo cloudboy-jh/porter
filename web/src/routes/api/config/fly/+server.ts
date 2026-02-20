@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 
 import { updateFlyConfig } from '$lib/server/store';
+import { normalizeGitHubError } from '$lib/server/github';
 import {
 	validateFlyCredentialsWithMode,
 	type FlySetupMode,
@@ -20,11 +21,15 @@ export const PUT = async ({ request, locals }: { request: Request; locals: App.L
 			validate?: boolean;
 			setupMode?: FlySetupMode;
 		};
+		const identity = {
+			githubUserId: locals.session.user.id,
+			githubLogin: locals.session.user.login
+		};
 		const setupMode = normalizeSetupMode(payload?.setupMode);
 		let updated = await updateFlyConfig(locals.session.token, {
 			flyToken: payload?.flyToken ?? '',
 			flyAppName: payload?.flyAppName ?? ''
-		});
+		}, identity);
 
 		let validation: FlyValidationResult = {
 			ok: false,
@@ -44,7 +49,7 @@ export const PUT = async ({ request, locals }: { request: Request; locals: App.L
 				updated = await updateFlyConfig(locals.session.token, {
 					flyToken: updated.flyToken ?? '',
 					flyAppName: resolvedAppName
-				});
+				}, identity);
 			}
 		}
 
@@ -55,7 +60,18 @@ export const PUT = async ({ request, locals }: { request: Request; locals: App.L
 			setupMode
 		});
 	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Failed to save Fly settings.';
-		return json({ error: 'failed', message }, { status: 503 });
+		const normalized = normalizeGitHubError(error, {
+			defaultMessage: error instanceof Error ? error.message : 'Failed to save Fly settings.',
+			reconnectUrl: '/api/auth/github?force=1'
+		});
+		return json(
+			{
+				error: normalized.error,
+				message: normalized.message,
+				action: normalized.action,
+				actionUrl: normalized.actionUrl
+			},
+			{ status: normalized.httpStatus === 500 ? 503 : normalized.httpStatus }
+		);
 	}
 };

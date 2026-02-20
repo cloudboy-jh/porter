@@ -8,6 +8,7 @@ import {
 	buildPorterComment,
 	createInstallationAccessToken,
 	fetchRepoFileContent,
+	normalizeGitHubError,
 	type PorterTaskMetadata
 } from '$lib/server/github';
 import { githubCache } from '$lib/server/cache';
@@ -68,73 +69,41 @@ export const POST = async ({ request }: { request: Request }) => {
 		return new Response('Not authorized', { status: 200 });
 	}
 
-	const issue = payload.issue ?? {};
-	const repo = payload.repository ?? {};
-	const installationId = Number(payload.installation?.id ?? 0);
-	if (!installationId) {
-		return json({ status: 'missing_installation' }, { status: 200 });
-	}
-
-	const oauthToken = await getUserOAuthTokenByWebhookUser({
-		userId: Number(payload.comment?.user?.id ?? 0),
-		login: payload.comment?.user?.login
-	});
-	if (!oauthToken) {
-		return json({ status: 'missing_user_oauth' }, { status: 200 });
-	}
-
-	const activeConfig = await getConfig(oauthToken);
-	const installationAuth = await createInstallationAccessToken(installationId);
-	const installationToken = installationAuth.token;
-
-	const repoOwner = repo.owner?.login ?? 'unknown';
-	const repoName = repo.name ?? 'unknown';
-	if (!isRepoSelectedByConfig(activeConfig, { owner: repoOwner, name: repoName })) {
-		return json({ status: 'repo_not_selected' }, { status: 200 });
-	}
-	const issueNumber = issue.number ?? 0;
-	const defaultAgent =
-		activeConfig.onboarding?.enabledAgents?.[0] ??
-		Object.entries(activeConfig.agents ?? {}).find(([, config]) => Boolean(config?.enabled))?.[0] ??
-		'opencode';
-	const agent = command.agentExplicit ? command.agent : defaultAgent;
-
-	const agentsMd = await fetchRepoFileContent(installationToken, repoOwner, repoName, 'AGENTS.md');
-	const enrichedPrompt = buildWrapPrompt({
-		issueTitle: issue.title ?? 'Untitled issue',
-		issueBody: issue.body ?? '',
-		issueNumber,
-		agent,
-		extraInstructions: command.extraInstructions,
-		agentsMd
-	});
-
-	const repoUrl = `https://x-access-token:${installationToken}@github.com/${repoOwner}/${repoName}.git`;
-
-	const dispatchResult = await dispatchTaskToFly({
-		githubToken: installationToken,
-		configToken: oauthToken,
-		repoOwner,
-		repoName,
-		issueNumber,
-		agent,
-		priority: command.priority,
-		prompt: command.extraInstructions,
-		enrichedPrompt,
-		issueBody: issue.body ?? '',
-		issueTitle: issue.title,
-		runtimeConfig: {
-			flyToken: activeConfig.flyToken,
-			flyAppName: activeConfig.flyAppName,
-			credentials: activeConfig.credentials
-		},
-		installationId,
-		repoCloneUrl: repoUrl,
-		baseBranch: repo.default_branch ?? 'main',
-		requireReadyAgent: true
-	});
-
 	try {
+		const issue = payload.issue ?? {};
+		const repo = payload.repository ?? {};
+		const installationId = Number(payload.installation?.id ?? 0);
+		if (!installationId) {
+			return json({ status: 'missing_installation' }, { status: 200 });
+		}
+
+		const oauthToken = await getUserOAuthTokenByWebhookUser({
+			userId: Number(payload.comment?.user?.id ?? 0),
+			login: payload.comment?.user?.login
+		});
+		if (!oauthToken) {
+			return json({ status: 'missing_user_oauth' }, { status: 200 });
+		}
+
+		const activeConfig = await getConfig(oauthToken, {
+			githubUserId: Number(payload.comment?.user?.id ?? 0) || undefined,
+			githubLogin: payload.comment?.user?.login
+		});
+		const installationAuth = await createInstallationAccessToken(installationId);
+		const installationToken = installationAuth.token;
+
+		const repoOwner = repo.owner?.login ?? 'unknown';
+		const repoName = repo.name ?? 'unknown';
+		if (!isRepoSelectedByConfig(activeConfig, { owner: repoOwner, name: repoName })) {
+			return json({ status: 'repo_not_selected' }, { status: 200 });
+		}
+		const issueNumber = issue.number ?? 0;
+		const defaultAgent =
+			activeConfig.onboarding?.enabledAgents?.[0] ??
+			Object.entries(activeConfig.agents ?? {}).find(([, config]) => Boolean(config?.enabled))?.[0] ??
+			'opencode';
+		const agent = command.agentExplicit ? command.agent : defaultAgent;
+
 		await addIssueCommentReaction(
 			installationToken,
 			repoOwner,
@@ -142,26 +111,80 @@ export const POST = async ({ request }: { request: Request }) => {
 			Number(payload.comment?.id),
 			'eyes'
 		);
-	} catch {
-		if (dispatchResult.ok) {
+
+		const agentsMd = await fetchRepoFileContent(installationToken, repoOwner, repoName, 'AGENTS.md');
+		const enrichedPrompt = buildWrapPrompt({
+			issueTitle: issue.title ?? 'Untitled issue',
+			issueBody: issue.body ?? '',
+			issueNumber,
+			agent,
+			extraInstructions: command.extraInstructions,
+			agentsMd
+		});
+
+		const repoUrl = `https://x-access-token:${installationToken}@github.com/${repoOwner}/${repoName}.git`;
+
+		const dispatchResult = await dispatchTaskToFly({
+			githubToken: installationToken,
+			configToken: oauthToken,
+			repoOwner,
+			repoName,
+			issueNumber,
+			agent,
+			priority: command.priority,
+			prompt: command.extraInstructions,
+			enrichedPrompt,
+			issueBody: issue.body ?? '',
+			issueTitle: issue.title,
+			runtimeConfig: {
+				flyToken: activeConfig.flyToken,
+				flyAppName: activeConfig.flyAppName,
+				credentials: activeConfig.credentials
+			},
+			installationId,
+			repoCloneUrl: repoUrl,
+			baseBranch: repo.default_branch ?? 'main',
+			requireReadyAgent: true
+		});
+
+		if (!dispatchResult.ok) {
 			const metadata: PorterTaskMetadata = {
 				taskId: dispatchResult.taskId,
 				agent,
 				priority: command.priority,
-				status: 'running',
-				progress: 5,
+				status: 'failed',
+				progress: 100,
 				createdAt: new Date().toISOString(),
 				updatedAt: new Date().toISOString(),
-				summary: 'Porter picked this up and started running it.'
+				summary: dispatchResult.summary
 			};
-			const comment = buildPorterComment('Porter picked this up and started running it.', metadata);
+			const comment = buildPorterComment(dispatchResult.summary, metadata);
 			await addIssueComment(installationToken, repoOwner, repoName, issueNumber, comment);
 		}
+
+		githubCache.clearPattern(`issues:${repoOwner}/${repoName}`);
+		console.log(`[Webhook] ${dispatchResult.status} task ${dispatchResult.taskId}`);
+
+		return json({ status: 'accepted', taskId: dispatchResult.taskId }, { status: 202 });
+	} catch (error) {
+		const normalized = normalizeGitHubError(error, {
+			reconnectUrl: '/api/auth/github?force=1',
+			defaultMessage: 'Webhook task dispatch failed.'
+		});
+		if (normalized.error === 'failed') {
+			console.error('Webhook dispatch failed:', error);
+			return json({ status: 'failed', error: normalized.error, message: normalized.message }, { status: 500 });
+		}
+		return json(
+			{
+				status: 'rejected',
+				error: normalized.error,
+				message: normalized.message,
+				action: normalized.action,
+				actionUrl: normalized.actionUrl,
+				scopeHints: normalized.scopeHints
+			},
+			{ status: 202 }
+		);
 	}
-
-	// Clear cache so the new task appears immediately
-	githubCache.clearPattern(`issues:${repoOwner}/${repoName}`);
-	console.log(`[Webhook] ${dispatchResult.status} task ${dispatchResult.taskId}`);
-
-	return json({ status: 'accepted', taskId: dispatchResult.taskId }, { status: 202 });
 };

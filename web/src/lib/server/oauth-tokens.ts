@@ -1,5 +1,6 @@
 import { ensureD1Schema, getD1Database } from '$lib/server/d1';
 import { decryptSecretValue, encryptSecretValue } from '$lib/server/secret-crypto';
+import { env } from '$env/dynamic/private';
 
 type StoredToken = {
 	github_user_id: number;
@@ -11,6 +12,7 @@ type StoredToken = {
 };
 
 const fallbackStore = new Map<number, StoredToken>();
+const allowFallbackStore = (env.NODE_ENV ?? '').toLowerCase() !== 'production';
 
 export const saveUserOAuthToken = async (input: {
 	userId: number;
@@ -21,6 +23,9 @@ export const saveUserOAuthToken = async (input: {
 	const now = new Date().toISOString();
 	const db = getD1Database();
 	if (!db) {
+		if (!allowFallbackStore) {
+			throw new Error('D1 binding `DB` is required to persist OAuth tokens in production.');
+		}
 		fallbackStore.set(input.userId, {
 			github_user_id: input.userId,
 			github_login: input.login,
@@ -81,6 +86,9 @@ export const getUserOAuthTokenByWebhookUser = async (input: {
 }) => {
 	const db = getD1Database();
 	if (!db) {
+		if (!allowFallbackStore) {
+			return null;
+		}
 		if (input.userId && fallbackStore.has(input.userId)) {
 			return decryptTokenRow(fallbackStore.get(input.userId) ?? null);
 		}

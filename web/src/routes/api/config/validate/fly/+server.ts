@@ -11,7 +11,10 @@ export const GET = async ({ locals, url }: { locals: App.Locals; url: URL }) => 
 		return json({ error: 'unauthorized' }, { status: 401 });
 	}
 	const setupMode = normalizeSetupMode(url.searchParams.get('mode'));
-	const config = await getConfig(locals.session.token);
+	const config = await getConfig(locals.session.token, {
+		githubUserId: locals.session.user.id,
+		githubLogin: locals.session.user.login
+	});
 	const validation = await validateFlyCredentialsWithMode(config.flyToken ?? '', config.flyAppName ?? '', {
 		mode: setupMode
 	});

@@ -16,6 +16,35 @@ const requiredEnv = [
 type TableCheck = {
 	name: string;
 	present: boolean;
+	columnsOk: boolean;
+	missingColumns: string[];
+};
+
+const requiredSchema: Record<string, string[]> = {
+	users: ['user_key', 'github_user_id', 'github_login', 'created_at', 'updated_at'],
+	user_settings: ['user_key', 'config_json', 'updated_at'],
+	user_secrets: [
+		'user_key',
+		'provider_id',
+		'env_key',
+		'encrypted_value',
+		'iv',
+		'tag',
+		'alg',
+		'key_version',
+		'updated_at'
+	],
+	user_oauth_tokens: [
+		'github_user_id',
+		'github_login',
+		'github_login_norm',
+		'encrypted_token',
+		'iv',
+		'tag',
+		'alg',
+		'key_version',
+		'updated_at'
+	]
 };
 
 export const GET = async () => {
@@ -35,14 +64,35 @@ export const GET = async () => {
 			await ensureD1Schema(db);
 			await db.prepare('SELECT 1 as ok').first();
 			d1Connected = true;
-			const requiredTables = ['users', 'user_settings', 'user_secrets', 'user_oauth_tokens'];
+			const requiredTables = Object.keys(requiredSchema);
 			const tableResults = await Promise.all(
 				requiredTables.map(async (name) => {
 					const row = await db
 						.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?1")
 						.bind(name)
 						.first<{ name: string }>();
-					return { name, present: Boolean(row?.name) } satisfies TableCheck;
+					if (!row?.name) {
+						return {
+							name,
+							present: false,
+							columnsOk: false,
+							missingColumns: [...requiredSchema[name]]
+						} satisfies TableCheck;
+					}
+
+					const columnRows = await db
+						.prepare(`PRAGMA table_info(${name})`)
+						.all<{ name?: string }>();
+					const existingColumns = new Set(
+						(columnRows.results ?? []).map((column) => String(column.name ?? '').trim()).filter(Boolean)
+					);
+					const missingColumns = requiredSchema[name].filter((column) => !existingColumns.has(column));
+					return {
+						name,
+						present: true,
+						columnsOk: missingColumns.length === 0,
+						missingColumns
+					} satisfies TableCheck;
 				})
 			);
 			tableChecks = tableResults;
@@ -51,7 +101,10 @@ export const GET = async () => {
 		}
 	}
 
-	const ok = missingEnv.length === 0 && d1Connected && tableChecks.every((table) => table.present);
+	const ok =
+		missingEnv.length === 0 &&
+		d1Connected &&
+		tableChecks.every((table) => table.present && table.columnsOk);
 
 	return json({
 		ok,

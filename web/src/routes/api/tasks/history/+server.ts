@@ -37,7 +37,10 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 	try {
 		const [{ repositories }, config] = await Promise.all([
 			listInstallationRepos(session.token),
-			getConfig(session.token)
+			getConfig(session.token, {
+				githubUserId: session.user.id,
+				githubLogin: session.user.login
+			})
 		]);
 		const scopedRepos = filterReposBySelection(config, repositories);
 		

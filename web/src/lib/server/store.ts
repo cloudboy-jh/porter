@@ -151,34 +151,66 @@ type D1SecretRow = {
 	tag: string;
 };
 
+type ConfigIdentity = {
+	githubUserId?: number;
+	githubLogin?: string;
+};
+
+const resolvePersistenceIdentity = (token: string, identity?: ConfigIdentity) => {
+	const githubUserId =
+		typeof identity?.githubUserId === 'number' && Number.isFinite(identity.githubUserId)
+			? Math.trunc(identity.githubUserId)
+			: undefined;
+	const githubLogin = normalizeCredential(identity?.githubLogin);
+	const keySeed = githubUserId ? `github:${githubUserId}` : `token:${token}`;
+	return {
+		cacheKey: keySeed,
+		userKey: deriveUserKey(keySeed),
+		githubUserId,
+		githubLogin
+	};
+};
+
 const sanitizeConfigForSettingsTable = (config: PorterConfig): PorterConfig => ({
 	...config,
 	credentials: {},
 	providerCredentials: {}
 });
 
-const ensureUserRow = async (token: string) => {
+const ensureUserRow = async (token: string, identity?: ConfigIdentity) => {
 	const db = getD1Database();
 	if (!db) return null;
 	await ensureD1Schema(db);
 	const now = new Date().toISOString();
-	const userKey = deriveUserKey(token);
+	const resolved = resolvePersistenceIdentity(token, identity);
 	await db
 		.prepare(
 			`INSERT INTO users (user_key, created_at, updated_at)
 			 VALUES (?1, ?2, ?2)
 			 ON CONFLICT(user_key) DO UPDATE SET updated_at = excluded.updated_at`
 		)
-		.bind(userKey, now)
+		.bind(resolved.userKey, now)
 		.run();
-	return { db, userKey };
+	if (resolved.githubUserId || resolved.githubLogin) {
+		await db
+			.prepare(
+				`UPDATE users
+				 SET github_user_id = COALESCE(?2, github_user_id),
+				     github_login = COALESCE(?3, github_login),
+				     updated_at = ?4
+				 WHERE user_key = ?1`
+			)
+			.bind(resolved.userKey, resolved.githubUserId ?? null, resolved.githubLogin ?? null, now)
+			.run();
+	}
+	return { db, userKey: resolved.userKey };
 };
 
-const loadConfigFromD1 = async (token: string): Promise<PorterConfig | null> => {
+const loadConfigFromD1 = async (token: string, identity?: ConfigIdentity): Promise<PorterConfig | null> => {
 	const db = getD1Database();
 	if (!db) return null;
 	await ensureD1Schema(db);
-	const userKey = deriveUserKey(token);
+	const userKey = resolvePersistenceIdentity(token, identity).userKey;
 	const settingRow = await db
 		.prepare('SELECT config_json FROM user_settings WHERE user_key = ?1')
 		.bind(userKey)
@@ -220,8 +252,12 @@ const loadConfigFromD1 = async (token: string): Promise<PorterConfig | null> => 
 	return merged;
 };
 
-const saveConfigToD1 = async (token: string, config: PorterConfig): Promise<boolean> => {
-	const userCtx = await ensureUserRow(token);
+const saveConfigToD1 = async (
+	token: string,
+	config: PorterConfig,
+	identity?: ConfigIdentity
+): Promise<boolean> => {
+	const userCtx = await ensureUserRow(token, identity);
 	if (!userCtx) return false;
 	const { db, userKey } = userCtx;
 	const now = new Date().toISOString();
@@ -268,10 +304,13 @@ const saveConfigToD1 = async (token: string, config: PorterConfig): Promise<bool
 	return true;
 };
 
-export const getConfigWarnings = (token: string) => configWarnings.get(token) ?? [];
+export const getConfigWarnings = (token: string, identity?: ConfigIdentity) => {
+	const { cacheKey } = resolvePersistenceIdentity(token, identity);
+	return configWarnings.get(cacheKey) ?? [];
+};
 
-export const getConfigSecretStatus = async (token: string) => {
-	const activeConfig = await getConfig(token);
+export const getConfigSecretStatus = async (token: string, identity?: ConfigIdentity) => {
+	const activeConfig = await getConfig(token, identity);
 	const statusByProvider: Record<string, Record<string, 'configured' | 'not_configured'>> = {};
 	for (const [providerId, values] of Object.entries(activeConfig.providerCredentials ?? {})) {
 		statusByProvider[providerId] = {};
@@ -388,23 +427,29 @@ const buildAgentConfig = (entry: (typeof AGENT_REGISTRY)[number], activeConfig: 
 	} satisfies AgentConfig;
 };
 
-export const listAgents = async (token: string): Promise<AgentConfig[]> => {
-	const activeConfig = await getConfig(token);
+export const listAgents = async (token: string, identity?: ConfigIdentity): Promise<AgentConfig[]> => {
+	const activeConfig = await getConfig(token, identity);
 	return AGENT_REGISTRY.map((entry) => buildAgentConfig(entry, activeConfig));
 };
 
-export const scanAgentsNow = async (token: string): Promise<AgentConfig[]> => listAgents(token);
+export const scanAgentsNow = async (token: string, identity?: ConfigIdentity): Promise<AgentConfig[]> =>
+	listAgents(token, identity);
 
-export const getAgentStatus = async (token: string, name: string): Promise<AgentConfig | null> => {
-	const agents = await listAgents(token);
+export const getAgentStatus = async (
+	token: string,
+	name: string,
+	identity?: ConfigIdentity
+): Promise<AgentConfig | null> => {
+	const agents = await listAgents(token, identity);
 	return agents.find((agent) => agent.name === name) ?? null;
 };
 
-export const getConfig = async (token: string): Promise<PorterConfig> => {
-	if (!configLoaded.has(token)) {
+export const getConfig = async (token: string, identity?: ConfigIdentity): Promise<PorterConfig> => {
+	const { cacheKey } = resolvePersistenceIdentity(token, identity);
+	if (!configLoaded.has(cacheKey)) {
 		let loadedConfig: Partial<PorterConfig> = {};
 		let hasLegacyModal = false;
-		const d1Config = await loadConfigFromD1(token);
+		const d1Config = await loadConfigFromD1(token, identity);
 		if (d1Config) {
 			loadedConfig = d1Config;
 		} else {
@@ -431,9 +476,9 @@ export const getConfig = async (token: string): Promise<PorterConfig> => {
 				(gistConfig as PorterConfig).credentials
 			);
 			try {
-				await saveConfigToD1(token, mergedForMigration);
+				await saveConfigToD1(token, mergedForMigration, identity);
 			} catch {
-				setConfigWarning(token, 'D1 migration write failed.');
+				setConfigWarning(cacheKey, 'D1 migration write failed.');
 			}
 		}
 
@@ -453,21 +498,26 @@ export const getConfig = async (token: string): Promise<PorterConfig> => {
 			merged.providerCredentials,
 			(loadedConfig as PorterConfig).credentials
 		);
-		configCache.set(token, merged);
-		configLoaded.add(token);
+		configCache.set(cacheKey, merged);
+		configLoaded.add(cacheKey);
 		if (hasLegacyModal) {
 			try {
 				await saveConfigToGist(token, merged);
 			} catch {
-				setConfigWarning(token, 'Gist mirror update failed after legacy config migration.');
+				setConfigWarning(cacheKey, 'Gist mirror update failed after legacy config migration.');
 			}
 		}
 	}
-	return configCache.get(token) ?? baseConfig;
+	return configCache.get(cacheKey) ?? baseConfig;
 };
 
-export const updateConfig = async (token: string, next: PorterConfig): Promise<PorterConfig> => {
-	setConfigWarning(token);
+export const updateConfig = async (
+	token: string,
+	next: PorterConfig,
+	identity?: ConfigIdentity
+): Promise<PorterConfig> => {
+	const { cacheKey } = resolvePersistenceIdentity(token, identity);
+	setConfigWarning(cacheKey);
 	const normalized = {
 		...next,
 		agents: normalizeAgentConfig(next.agents ?? {}),
@@ -479,7 +529,7 @@ export const updateConfig = async (token: string, next: PorterConfig): Promise<P
 		normalized.providerCredentials,
 		next.credentials
 	);
-	const d1Persisted = await saveConfigToD1(token, normalized);
+	const d1Persisted = await saveConfigToD1(token, normalized, identity);
 	if (!d1Persisted) {
 		throw new Error('Failed to persist config to Cloudflare D1. Ensure DB binding is configured.');
 	}
@@ -487,19 +537,23 @@ export const updateConfig = async (token: string, next: PorterConfig): Promise<P
 	try {
 		const gistPersisted = await saveConfigToGist(token, normalized);
 		if (!gistPersisted) {
-			setConfigWarning(token, 'Optional gist mirror is unavailable. D1 save succeeded.');
+			setConfigWarning(cacheKey, 'Optional gist mirror is unavailable. D1 save succeeded.');
 		}
 	} catch {
-		setConfigWarning(token, 'Optional gist mirror failed. D1 save succeeded.');
+		setConfigWarning(cacheKey, 'Optional gist mirror failed. D1 save succeeded.');
 	}
 
-	configCache.set(token, normalized);
-	configLoaded.add(token);
+	configCache.set(cacheKey, normalized);
+	configLoaded.add(cacheKey);
 	return normalized;
 };
 
-export const updateAgentSettings = async (token: string, agents: AgentConfig[]): Promise<AgentConfig[]> => {
-	const activeConfig = await getConfig(token);
+export const updateAgentSettings = async (
+	token: string,
+	agents: AgentConfig[],
+	identity?: ConfigIdentity
+): Promise<AgentConfig[]> => {
+	const activeConfig = await getConfig(token, identity);
 	const nextAgents = { ...activeConfig.agents };
 	for (const agent of agents) {
 		nextAgents[agent.name] = {
@@ -511,12 +565,16 @@ export const updateAgentSettings = async (token: string, agents: AgentConfig[]):
 	await updateConfig(token, {
 		...activeConfig,
 		agents: nextAgents
-	});
-	return listAgents(token);
+	}, identity);
+	return listAgents(token, identity);
 };
 
-export const updateCredentials = async (token: string, credentials: PorterConfig['credentials']) => {
-	const activeConfig = await getConfig(token);
+export const updateCredentials = async (
+	token: string,
+	credentials: PorterConfig['credentials'],
+	identity?: ConfigIdentity
+) => {
+	const activeConfig = await getConfig(token, identity);
 	const nextCredentials = { ...activeConfig.credentials, ...credentials };
 	const nextProviderCredentials = {
 		...activeConfig.providerCredentials,
@@ -526,15 +584,16 @@ export const updateCredentials = async (token: string, credentials: PorterConfig
 		...activeConfig,
 		credentials: nextCredentials,
 		providerCredentials: nextProviderCredentials
-	});
-	return getConfig(token);
+	}, identity);
+	return getConfig(token, identity);
 };
 
 export const updateProviderCredentials = async (
 	token: string,
-	providerCredentials: PorterConfig['providerCredentials']
+	providerCredentials: PorterConfig['providerCredentials'],
+	identity?: ConfigIdentity
 ) => {
-	const activeConfig = await getConfig(token);
+	const activeConfig = await getConfig(token, identity);
 	const merged: PorterConfig['providerCredentials'] = {
 		...(activeConfig.providerCredentials ?? {})
 	};
@@ -553,21 +612,22 @@ export const updateProviderCredentials = async (
 	await updateConfig(token, {
 		...activeConfig,
 		providerCredentials: merged
-	});
-	return getConfig(token);
+	}, identity);
+	return getConfig(token, identity);
 };
 
 export const updateFlyConfig = async (
 	token: string,
-	input: { flyToken?: string; flyAppName?: string }
+	input: { flyToken?: string; flyAppName?: string },
+	identity?: ConfigIdentity
 ): Promise<PorterConfig> => {
-	const activeConfig = await getConfig(token);
+	const activeConfig = await getConfig(token, identity);
 	const nextToken = normalizeFlyToken(input.flyToken);
 	const nextApp = normalizeFlyAppName(input.flyAppName);
 	await updateConfig(token, {
 		...activeConfig,
 		flyToken: nextToken,
 		flyAppName: nextApp
-	});
-	return getConfig(token);
+	}, identity);
+	return getConfig(token, identity);
 };
