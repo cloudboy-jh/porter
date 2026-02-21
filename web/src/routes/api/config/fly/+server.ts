@@ -64,7 +64,7 @@ export const PUT = async ({ request, locals }: { request: Request; locals: App.L
 		});
 	} catch (error) {
 		const normalized = normalizeGitHubError(error, {
-			defaultMessage: error instanceof Error ? error.message : 'Failed to save Fly settings.',
+			defaultMessage: 'Failed to save Fly settings. Reconnect GitHub and try again.',
 			reconnectUrl: '/api/auth/github?force=1'
 		});
 		logEvent('error', 'api.config.fly', 'update_failed', {

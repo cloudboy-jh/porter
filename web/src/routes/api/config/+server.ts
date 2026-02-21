@@ -83,7 +83,7 @@ export const PUT = async ({ request, locals }: { request: Request; locals: App.L
 		return json(updated);
 	} catch (error) {
 		const normalized = normalizeGitHubError(error, {
-			defaultMessage: error instanceof Error ? error.message : 'Failed to save config.',
+			defaultMessage: 'Failed to save config. Reconnect GitHub and try again.',
 			reconnectUrl: '/api/auth/github?force=1'
 		});
 		logEvent('error', 'api.config', 'update_failed', {

@@ -195,24 +195,46 @@ const ensureUserRow = async (token: string, identity?: ConfigIdentity) => {
 		columnRows.map((column) => String(column.name ?? '').trim()).filter(Boolean)
 	);
 	const githubIdColumn = columnRows.find((column) => String(column.name ?? '').trim() === 'github_id');
+	const githubLoginColumn = columnRows.find((column) => String(column.name ?? '').trim() === 'github_login');
 	const hasLegacyGithubId = columnNames.has('github_id');
 	const requiresLegacyGithubId = Boolean(githubIdColumn && githubIdColumn.notnull === 1 && githubIdColumn.dflt_value == null);
+	const requiresLegacyGithubLogin = Boolean(
+		githubLoginColumn && githubLoginColumn.notnull === 1 && githubLoginColumn.dflt_value == null
+	);
 
 	if (requiresLegacyGithubId && !resolved.githubUserId) {
 		throw new Error('D1 users.github_id requires a GitHub user id but none was available for this write.');
 	}
 
+	if (requiresLegacyGithubLogin && !resolved.githubLogin) {
+		throw new Error('D1 users.github_login requires a GitHub login but none was available for this write.');
+	}
+
 	if (hasLegacyGithubId) {
-		await db
-			.prepare(
-				`INSERT INTO users (user_key, github_id, created_at, updated_at)
-				 VALUES (?1, ?2, ?3, ?3)
-				 ON CONFLICT(user_key) DO UPDATE SET
-				   github_id = COALESCE(excluded.github_id, users.github_id),
-				   updated_at = excluded.updated_at`
-			)
-			.bind(resolved.userKey, resolved.githubUserId ?? null, now)
-			.run();
+		if (requiresLegacyGithubLogin) {
+			await db
+				.prepare(
+					`INSERT INTO users (user_key, github_id, github_login, created_at, updated_at)
+					 VALUES (?1, ?2, ?3, ?4, ?4)
+					 ON CONFLICT(user_key) DO UPDATE SET
+					   github_id = COALESCE(excluded.github_id, users.github_id),
+					   github_login = COALESCE(excluded.github_login, users.github_login),
+					   updated_at = excluded.updated_at`
+				)
+				.bind(resolved.userKey, resolved.githubUserId ?? null, resolved.githubLogin ?? null, now)
+				.run();
+		} else {
+			await db
+				.prepare(
+					`INSERT INTO users (user_key, github_id, created_at, updated_at)
+					 VALUES (?1, ?2, ?3, ?3)
+					 ON CONFLICT(user_key) DO UPDATE SET
+					   github_id = COALESCE(excluded.github_id, users.github_id),
+					   updated_at = excluded.updated_at`
+				)
+				.bind(resolved.userKey, resolved.githubUserId ?? null, now)
+				.run();
+		}
 	} else {
 		await db
 			.prepare(

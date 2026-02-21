@@ -28,7 +28,7 @@ export const PUT = async ({ request, locals }: { request: Request; locals: App.L
 		return json({ ok: true, secretStatus: status });
 	} catch (error) {
 		const normalized = normalizeGitHubError(error, {
-			defaultMessage: error instanceof Error ? error.message : 'Failed to save credentials.',
+			defaultMessage: 'Failed to save credentials. Reconnect GitHub and try again.',
 			reconnectUrl: '/api/auth/github?force=1'
 		});
 		logEvent('error', 'api.config.credentials', 'update_failed', {
