@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type { Component } from 'svelte';
 	import { X } from 'phosphor-svelte';
 
 	interface Props {
@@ -24,7 +23,7 @@
 <div class="flex items-center gap-3">
 	{#if Icon}
 		<div class="flex h-9 w-9 items-center justify-center rounded-2xl border border-border/70 bg-muted/70">
-			<svelte:component this={Icon} size={18} weight="bold" class={iconClass} />
+			<Icon size={18} weight="bold" class={iconClass} />
 		</div>
 	{/if}
 	<div class="space-y-0.5">

@@ -27,6 +27,9 @@
 	let isOpen = $state(false);
 
 	const displayLabel = $derived(displayValue ?? label);
+	const idBase = $derived(label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+	const fromId = $derived(`${idBase || 'date'}-from`);
+	const toId = $derived(`${idBase || 'date'}-to`);
 
 	const handlePreset = (preset: string) => {
 		selectedPreset = preset;
@@ -76,16 +79,16 @@
 				{/each}
 			</div>
 			<div class="grid gap-2">
-				<label class="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+				<label for={fromId} class="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
 					From
 				</label>
-				<Input type="date" bind:value={dateFrom} oninput={handleInput} />
+				<Input id={fromId} type="date" bind:value={dateFrom} oninput={handleInput} />
 			</div>
 			<div class="grid gap-2">
-				<label class="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+				<label for={toId} class="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
 					To
 				</label>
-				<Input type="date" bind:value={dateTo} oninput={handleInput} />
+				<Input id={toId} type="date" bind:value={dateTo} oninput={handleInput} />
 			</div>
 			<div class="flex items-center justify-between">
 				<Button variant="ghost" size="sm" onclick={handleClear}>

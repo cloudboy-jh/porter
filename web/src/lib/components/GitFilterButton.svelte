@@ -59,6 +59,7 @@
 	};
 
 	const displayLabel = $derived(displayValue ?? selected ?? label);
+	const Icon = $derived(icon);
 
 	$effect(() => {
 		if (isOpen) searchQuery = '';
@@ -73,10 +74,10 @@
 				onmousedown={(event) => event.preventDefault()}
 				class={`flex items-center gap-2 rounded-full px-2.5 py-1.5 text-xs font-medium transition hover:bg-muted/60 ${toneClass}`}
 			>
-				<div class="relative flex h-5 w-5 items-center justify-center">
-					<span class="absolute inset-0 rounded-full bg-current opacity-10"></span>
-					<svelte:component this={icon} size={14} weight="bold" class="relative text-current" />
-				</div>
+			<div class="relative flex h-5 w-5 items-center justify-center">
+				<span class="absolute inset-0 rounded-full bg-current opacity-10"></span>
+				<Icon size={14} weight="bold" class="relative text-current" />
+			</div>
 				<span class="text-xs font-medium">{displayLabel}</span>
 				<CaretDown size={12} weight="bold" class="opacity-70" />
 			</button>

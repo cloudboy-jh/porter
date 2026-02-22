@@ -38,7 +38,7 @@
 - [x] Issue comment parsing for @porter commands
 - [x] PR link commenting on completion
 - [x] Installation-token auth for repo clone/push/PR creation
-- [x] OAuth-token lookup for commenter private Gist config
+- [x] OAuth-token lookup for commenter D1-backed config/secrets access
 
 ### Phase 4: Polish
 - [x] Error handling and retries (entrypoint + callback hardening)
@@ -49,7 +49,7 @@
 ## Notes
 
 - Cloud execution is Fly Machines only; remove Modal references going forward.
-- D1 is the primary persistence layer for settings/secrets/oauth token lookup; gist is optional mirror only.
+- D1 is the authoritative persistence layer for settings/secrets/oauth token lookup; gist remains compatibility-only and non-blocking.
 
 ## Next Focus
 
@@ -60,8 +60,8 @@
 - [x] keep gist sync best-effort only (no 503 on mirror failure)
 - [x] migrate oauth token persistence from temp file to durable D1 table
 - [x] add startup check endpoint for required env and D1 connectivity
-- [x] add auth diagnostics endpoint (granted scopes + installation status + actionable error)
-- [x] update reconnect UX to clearly separate auth, install, and scope problems
+- [x] add auth diagnostics endpoint (installation/runtime status + actionable next action)
+- [x] remove scope-missing noise from settings and rely on installation/runtime health indicators
 
 ### Launch-critical (Container / Fly Lifecycle)
 - [x] finalize machine startup contract validation (`TASK_ID`, repo info, callback secrets, provider keys)
@@ -75,8 +75,9 @@
 - [x] update copy from "stored in Gist" to "encrypted and stored by Porter"
 - [x] show masked key status from D1 (`configured` / `not configured`) without returning raw secrets
 - [x] add key-management actions (add/update/remove) backed by `user_secrets`
-- [x] surface non-blocking warnings when optional gist mirror fails
+- [x] remove gist mirror messaging from settings UX
 - [x] add explicit save/validate states for Fly token + app name using D1-backed persistence
+- [x] convert Fly setup guidance to accordion UI and production copy
 
 ### Nice-to-have follow-ups
 - [ ] add targeted tests for watchdog and oauth token edge cases under D1 persistence

@@ -343,7 +343,7 @@
 					<p class="mt-1 text-sm font-semibold text-foreground">Pick repository and issue</p>
 				</div>
 				<div class="space-y-2">
-					<label class="text-sm font-medium">Repository</label>
+					<p class="text-sm font-medium">Repository</p>
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger class="w-full">
 							<div
@@ -472,7 +472,7 @@
 				{#if showAdvanced}
 					<div class="mt-4 space-y-4">
 						<div class="space-y-2">
-							<label class="text-sm font-medium">Priority</label>
+							<p class="text-sm font-medium">Priority</p>
 							<RadioGroup.Root bind:value={priority} class="flex gap-2">
 								<label class="flex-1 cursor-pointer">
 									<RadioGroup.Item value="low" class="peer sr-only" />

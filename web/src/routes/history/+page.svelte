@@ -542,7 +542,7 @@
 					<div
 						class={`flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-border/40 ${stat.tone}`}
 					>
-						<svelte:component this={stat.icon} size={18} weight="bold" />
+						<stat.icon size={18} weight="bold" />
 					</div>
 				</Card.Content>
 			</Card.Root>

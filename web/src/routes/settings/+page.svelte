@@ -44,8 +44,6 @@
 		credentials?: Credentials;
 		flyToken?: string;
 		flyAppName?: string;
-		gistUrl?: string;
-		warnings?: string[];
 		secretStatus?: {
 			providerCredentials?: Record<string, Record<string, 'configured' | 'not_configured'>>;
 			legacy?: Record<string, 'configured' | 'not_configured'>;
@@ -73,9 +71,8 @@
 	type RepoFilter = 'all' | 'selected' | 'unselected' | 'private' | 'public';
 	type AuthDiagnostics = {
 		ok: boolean;
-		missingScopes: string[];
 		installationStatus: 'installed' | 'not_installed' | 'indeterminate';
-		action: 'ok' | 'reconnect' | 'install_app' | 'check_runtime';
+		action: 'ok' | 'install_app' | 'check_runtime';
 		reason?: string | null;
 	};
 
@@ -87,8 +84,6 @@
 	let repositories = $state<RepoSummary[]>([]);
 	let selectedRepoIds = $state<number[]>([]);
 	let configSnapshot = $state<ConfigSnapshot | null>(null);
-	let gistUrl = $state<string | null>(null);
-	let configWarnings = $state<string[]>([]);
 	let secretStatus = $state<NonNullable<ConfigSnapshot['secretStatus']>>({
 		providerCredentials: {},
 		legacy: {},
@@ -106,6 +101,7 @@
 	let repoStatus = $state('');
 	let githubStatus = $state('');
 	let flySetupMode = $state<FlySetupMode>('org');
+	let setupSection = $state<'quick' | 'terminal'>('quick');
 	let flyCliCopied = $state(false);
 
 	let credentialSaving = $state(false);
@@ -172,6 +168,10 @@
 		} catch {
 			flyCliCopied = false;
 		}
+	};
+
+	const toggleSetupSection = (section: 'quick' | 'terminal') => {
+		setupSection = section;
 	};
 
 	const logSettingsError = (
@@ -332,8 +332,6 @@
 			credentials = {};
 			fly = { flyToken: '', flyAppName: payload.flyAppName };
 			configSnapshot = payload;
-			gistUrl = payload.gistUrl ?? null;
-			configWarnings = payload.warnings ?? [];
 			secretStatus = payload.secretStatus ?? {
 				providerCredentials: {},
 				legacy: {},
@@ -747,48 +745,74 @@
 								<Button size="sm" onclick={() => (showCredentialsModal = true)}>Manage Credentials</Button>
 							</div>
 
-							<div class="grid gap-3 sm:grid-cols-2">
-								<div class="rounded-xl border border-primary/35 bg-primary/10 p-3">
-									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Quick setup</p>
-									<p class="mt-1 text-sm font-medium text-foreground">Grab an org token</p>
-									<p class="mt-1 text-xs text-muted-foreground">Use one org token. Porter validates it, creates the Fly app when missing, and launches task machines.</p>
-									<a
-										href="https://fly.io/dashboard/personal/tokens"
-										target="_blank"
-										rel="noreferrer"
-										class="mt-2 inline-block text-xs font-medium text-primary hover:text-primary/80"
+							<div class="space-y-3">
+								<div class="rounded-xl border border-border/50 bg-card/20">
+									<button
+										type="button"
+										class="flex w-full items-center justify-between px-4 py-3 text-left"
+										onclick={() => toggleSetupSection('quick')}
 									>
-										Open Fly tokens ↗
-									</a>
+										<div>
+											<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Quick setup</p>
+											<p class="mt-1 text-sm font-medium text-foreground">Create a Fly org token</p>
+										</div>
+										<span class="text-xs text-muted-foreground">{setupSection === 'quick' ? 'Open' : 'Expand'}</span>
+									</button>
+									{#if setupSection === 'quick'}
+										<div class="border-t border-border/40 px-4 pb-4">
+											<p class="pt-3 text-xs text-muted-foreground">Generate an org token in Fly and save it here to enable machine provisioning and task execution.</p>
+											<a
+												href="https://fly.io/dashboard/personal/tokens"
+												target="_blank"
+												rel="noreferrer"
+												class="mt-2 inline-block text-xs font-medium text-primary hover:text-primary/80"
+											>
+												Open Fly tokens ↗
+											</a>
+										</div>
+									{/if}
 								</div>
-								<div class="rounded-xl border border-border/50 bg-card/20 p-3">
-									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Terminal setup</p>
-									<p class="mt-1 text-sm font-medium text-foreground">Generate token in terminal</p>
-									<p class="mt-1 text-xs text-muted-foreground">Prefer terminal? Run this once to mint the same org token.</p>
-									<div class="mt-2 rounded-md border border-border/40 bg-background/70 p-2">
-										<pre class="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-foreground">{flyCliCommand}</pre>
-									</div>
-									<div class="mt-2 flex justify-end">
-										<button
-											type="button"
-											class="inline-flex h-7 w-7 items-center justify-center rounded border border-border/60 text-primary hover:border-primary/50 hover:text-primary/80"
-											onclick={copyFlyCli}
-											aria-label="Copy Fly CLI command"
-											title="Copy command"
-										>
-											{#if flyCliCopied}
-												<Check size={14} weight="bold" />
-											{:else}
-												<Copy size={14} weight="bold" />
-											{/if}
-										</button>
-									</div>
+								<div class="rounded-xl border border-border/50 bg-card/20">
+									<button
+										type="button"
+										class="flex w-full items-center justify-between px-4 py-3 text-left"
+										onclick={() => toggleSetupSection('terminal')}
+									>
+										<div>
+											<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Terminal setup</p>
+											<p class="mt-1 text-sm font-medium text-foreground">Generate token from CLI</p>
+										</div>
+										<span class="text-xs text-muted-foreground">{setupSection === 'terminal' ? 'Open' : 'Expand'}</span>
+									</button>
+									{#if setupSection === 'terminal'}
+										<div class="border-t border-border/40 px-4 pb-4">
+											<p class="pt-3 text-xs text-muted-foreground">Use this command to mint a 30-day org token for Porter.</p>
+											<div class="mt-2 rounded-md border border-border/40 bg-background/70 p-2">
+												<pre class="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-foreground">{flyCliCommand}</pre>
+											</div>
+											<div class="mt-2 flex justify-end">
+												<button
+													type="button"
+													class="inline-flex h-7 w-7 items-center justify-center rounded border border-border/60 text-primary hover:border-primary/50 hover:text-primary/80"
+													onclick={copyFlyCli}
+													aria-label="Copy Fly CLI command"
+													title="Copy command"
+												>
+													{#if flyCliCopied}
+														<Check size={14} weight="bold" />
+													{:else}
+														<Copy size={14} weight="bold" />
+													{/if}
+												</button>
+											</div>
+										</div>
+									{/if}
 								</div>
 							</div>
 
 							<div class="rounded-xl border border-border/50 bg-card/20 p-3 text-xs text-muted-foreground">
 								<p class="font-medium text-foreground">What Porter handles</p>
-								<p class="mt-1">After you save an org token, Porter validates it, creates the Fly app when missing, and reuses that app for task machines.</p>
+								<p class="mt-1">Porter validates your Fly org token, provisions the configured app when required, and reuses that runtime for managed task machines.</p>
 							</div>
 
 							<div class="divide-y divide-border/30 rounded-xl border border-border/50 bg-card/30">
@@ -848,17 +872,6 @@
 							</div>
 
 							<div class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-							{#if gistUrl}
-								<a href={gistUrl} target="_blank" rel="noreferrer" class="font-medium text-primary hover:text-primary/80">
-									View optional gist mirror ↗
-								</a>
-							{:else}
-								<span>Gist mirror is optional and currently unavailable.</span>
-							{/if}
-							{#if configWarnings.length}
-								<span>{configWarnings[0]}</span>
-							{/if}
-							<span>Need another provider? Use Manage Credentials.</span>
 							{#if credentialStatus}<span>{credentialStatus}</span>{/if}
 								{#if flyStatus}<span>{flyStatus}</span>{/if}
 								{#if flyValidating}<span>Validating Fly...</span>{/if}
@@ -992,11 +1005,8 @@
 							{/if}
 							{#if authDiagnostics}
 								<p class="text-xs text-muted-foreground">
-									Auth: {authDiagnostics.action === 'ok' ? 'healthy' : authDiagnostics.action === 'reconnect' ? 'reconnect required (scope)' : authDiagnostics.action === 'install_app' ? 'app install required' : 'runtime check required'}
+									Auth: {authDiagnostics.action === 'ok' ? 'healthy' : authDiagnostics.action === 'install_app' ? 'app install required' : 'runtime check required'}
 								</p>
-								{#if authDiagnostics.missingScopes.length > 0}
-									<p class="text-xs text-muted-foreground">Missing scopes: {authDiagnostics.missingScopes.join(', ')}</p>
-								{/if}
 							{/if}
 						</section>
 

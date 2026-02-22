@@ -8,18 +8,17 @@
 	import type { PageData } from './$types';
 
 	let { data } = $props<{ data: PageData }>();
-	const sessionUser = data?.session?.user;
 
 	let user = $state({
-		name: sessionUser?.name ?? sessionUser?.login ?? 'GitHub user',
-		handle: sessionUser?.login ? `@${sessionUser.login}` : 'Not connected',
-		email: sessionUser?.email ?? 'Email unavailable',
+		name: 'GitHub user',
+		handle: 'Not connected',
+		email: 'Email unavailable',
 		role: 'Workspace Admin'
 	});
 
 	let github = $state({
-		connected: Boolean(sessionUser),
-		handle: sessionUser?.login ? `@${sessionUser.login}` : 'Not connected',
+		connected: false,
+		handle: 'Not connected',
 		lastSync: 'Just now',
 		orgCount: 0,
 		repoCount: 0,
@@ -39,7 +38,20 @@
 	};
 
 	onMount(async () => {
+		const sessionUser = data?.session?.user;
 		if (!sessionUser) return;
+		user = {
+			...user,
+			name: sessionUser.name ?? sessionUser.login,
+			handle: `@${sessionUser.login}`,
+			email: sessionUser.email ?? user.email
+		};
+		github = {
+			...github,
+			connected: true,
+			handle: `@${sessionUser.login}`,
+			lastSync: 'Just now'
+		};
 		try {
 			const response = await fetch('/api/github/summary');
 			if (!response.ok) return;

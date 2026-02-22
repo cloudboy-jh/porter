@@ -1,7 +1,6 @@
 import { json } from '@sveltejs/kit';
 
 import { getConfig, getConfigSecretStatus, getConfigWarnings, updateConfig } from '$lib/server/store';
-import { getConfigGistUrl } from '$lib/server/gist';
 import { normalizeGitHubError } from '$lib/server/github';
 import { logEvent, serializeError, tokenFingerprint } from '$lib/server/logging';
 import type { PorterConfig } from '$lib/server/types';
@@ -20,7 +19,6 @@ export const GET = async ({ locals }: { locals: App.Locals }) => {
 		const config = await getConfig(locals.session.token, identity);
 		const secretStatus = await getConfigSecretStatus(locals.session.token, identity);
 		const warnings = getConfigWarnings(locals.session.token, identity);
-		const gistUrl = await getConfigGistUrl(locals.session.token);
 		logEvent('info', 'api.config', 'loaded', {
 			requestId,
 			userId: locals.session.user.id,
@@ -34,8 +32,7 @@ export const GET = async ({ locals }: { locals: App.Locals }) => {
 			credentials: {},
 			providerCredentials: {},
 			secretStatus,
-			warnings,
-			gistUrl
+			warnings
 		});
 	} catch (error) {
 		const normalized = normalizeGitHubError(error, {

@@ -608,11 +608,9 @@ export const updateConfig = async (
 
 	try {
 		const gistPersisted = await saveConfigToGist(token, normalized);
-		if (!gistPersisted) {
-			setConfigWarning(cacheKey, 'Optional gist mirror is unavailable. D1 save succeeded.');
-		}
+		void gistPersisted;
 	} catch {
-		setConfigWarning(cacheKey, 'Optional gist mirror failed. D1 save succeeded.');
+		// Ignore mirror write failures. D1 is authoritative persistence.
 	}
 
 	configCache.set(cacheKey, normalized);

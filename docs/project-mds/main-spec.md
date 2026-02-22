@@ -1,9 +1,9 @@
 # Porter - Main Specification
 
-**Version:** 3.2.0
+**Version:** 3.2.1
 **Status:** Active Development
 **Architecture:** SvelteKit + Fly Machines
-**Last Updated:** February 18, 2026
+**Last Updated:** February 22, 2026
 
 ---
 
@@ -45,8 +45,8 @@ GitHub (Issues, PRs, Webhooks)
 | Auth | GitHub OAuth |
 | Execution | Fly Machines |
 | Container | Docker (Node 20 + Agent CLIs) |
-| Config Storage | Cloudflare D1 (primary; settings + secrets + oauth token lookup) |
-| Optional Mirror | GitHub Gist (best-effort, non-blocking) |
+| Config Storage | Cloudflare D1 (authoritative; settings + secrets + oauth token lookup) |
+| Legacy Mirror | GitHub Gist (best-effort compatibility path; non-blocking) |
 
 ---
 
@@ -180,7 +180,7 @@ POST /api/webhooks/github    # Receives issue_comment events
 GET  /api/auth/github                # OAuth start / reconnect
 GET  /api/auth/github/callback       # OAuth callback
 GET  /api/auth/github/installed      # Post-install redirect handling
-GET  /api/auth/diagnostics           # Scope + installation diagnostics
+GET  /api/auth/diagnostics           # Installation/runtime diagnostics
 POST /api/auth/logout                # Clear session
 ```
 
@@ -340,7 +340,8 @@ Notes:
 ## Credential Storage
 
 All credentials are stored server-side in Cloudflare D1 with encryption-at-rest for secret values.
-GitHub Gist is optional mirror/export only and is not required for save success.
+D1 is the source of truth for settings writes and reads.
+Any GitHub Gist sync path is best-effort compatibility only and is never required for save success.
 
 Schema overview:
 
