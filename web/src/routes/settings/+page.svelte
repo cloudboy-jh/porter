@@ -102,7 +102,8 @@
 	let repoStatus = $state('');
 	let githubStatus = $state('');
 	let flySetupMode = $state<FlySetupMode>('org');
-	let setupExpanded = $state(true);
+	let setupExpanded = $state(false);
+	let showFlyAdvanced = $state(false);
 	let flyCliCopied = $state(false);
 
 	let credentialSaving = $state(false);
@@ -159,6 +160,9 @@
 	const flyCliCommand = `fly auth login\nfly tokens create org --name "porter" --expiry 30d`;
 
 	const normalizeSetupMode = (_value: string | null): FlySetupMode => 'org';
+
+	const flyAppNameRequired = (status?: FlyValidation['status']) =>
+		status === 'missing_app_name' || status === 'app_not_found';
 
 	const copyFlyCli = async () => {
 		try {
@@ -278,6 +282,9 @@
 	};
 
 	const startEditField = (field: EditableField) => {
+		if (field === 'flyAppName') {
+			showFlyAdvanced = true;
+		}
 		editingField = field;
 		draftValue = getFieldValue(field);
 	};
@@ -451,7 +458,10 @@
 		}
 	};
 
-	const saveCredentials = async (nextCredentials: Credentials) => {
+	const saveCredentials = async (
+		nextCredentials: Credentials,
+		successMessage = 'Credentials updated.'
+	) => {
 		credentialSaving = true;
 		credentialStatus = '';
 		try {
@@ -475,7 +485,7 @@
 				secretStatus?: ConfigSnapshot['secretStatus'];
 			};
 			secretStatus = payload.secretStatus ?? secretStatus;
-			credentialStatus = 'Credentials updated.';
+			credentialStatus = successMessage;
 			if (secretStatus.legacy?.anthropic === 'configured') {
 				anthropicValidated = false;
 			}
@@ -505,6 +515,9 @@
 				flyAppName: payload.flyAppName ?? fly.flyAppName,
 				validation: payload
 			};
+			if (flyAppNameRequired(payload.status)) {
+				showFlyAdvanced = true;
+			}
 			if (showMessage) flyStatus = payload.message;
 			if (!response.ok) {
 				logSettingsError('validateFly', {
@@ -530,7 +543,7 @@
 		}
 	};
 
-	const saveFly = async (nextFly: FlyCredentials) => {
+	const saveFly = async (nextFly: FlyCredentials, successPrefix = 'Fly settings saved.') => {
 		flySaving = true;
 		flyStatus = '';
 		try {
@@ -550,6 +563,18 @@
 				return false;
 			}
 			const payload = (await response.json()) as FlyCredentials & { setupMode?: FlySetupMode };
+			if (!payload.validation?.ok) {
+				fly = {
+					...fly,
+					flyAppName: payload.flyAppName,
+					validation: payload.validation
+				};
+				if (flyAppNameRequired(payload.validation?.status)) {
+					showFlyAdvanced = true;
+				}
+				flyStatus = payload.validation?.message ?? 'Failed to validate Fly settings.';
+				return false;
+			}
 			fly = {
 				flyToken: payload.flyToken,
 				flyAppName: payload.flyAppName,
@@ -558,7 +583,8 @@
 			if (payload.setupMode) {
 				flySetupMode = payload.setupMode;
 			}
-			flyStatus = payload.validation?.message ?? 'Fly settings updated.';
+			const detail = payload.validation?.message ?? 'Fly settings updated.';
+			flyStatus = `${successPrefix} ${detail}`.trim();
 			return true;
 		} catch (error) {
 			logSettingsError('saveFly', {
@@ -595,13 +621,16 @@
 		const value = draftValue.trim();
 		if (field === 'flyToken' || field === 'flyAppName') {
 			const nextFly = { ...fly, [field]: value };
-			const ok = await saveFly(nextFly);
+			const ok = await saveFly(
+				nextFly,
+				field === 'flyToken' ? 'Fly token saved.' : 'Fly app name saved.'
+			);
 			if (ok) cancelEditField();
 			return;
 		}
 
 		const nextCredentials = { ...credentials, [field]: value };
-		const ok = await saveCredentials(nextCredentials);
+		const ok = await saveCredentials(nextCredentials, `${getFieldLabel(field)} saved.`);
 		if (ok) {
 			if (field === 'anthropic') {
 				await validateAnthropic();
@@ -680,7 +709,7 @@
 				return;
 			}
 			configSnapshot = (await response.json()) as ConfigSnapshot;
-			repoStatus = 'Repositories updated.';
+			repoStatus = 'Repository access saved.';
 		} catch (error) {
 			logSettingsError('saveRepos', {
 				error,
@@ -701,11 +730,17 @@
 		await goto('/auth');
 	};
 
+	const handleCredentialsSaved = async (message = 'Provider keys saved.') => {
+		credentialStatus = message;
+		await loadConfig();
+		await loadAgents(true);
+	};
+
 	$effect(() => {
 		flySetupMode = normalizeSetupMode($page.url.searchParams.get('setup'));
 	});
 
-		onMount(() => {
+	onMount(() => {
 		flySetupMode = normalizeSetupMode($page.url.searchParams.get('setup'));
 		loadAgents(true);
 		if (isConnected) {
@@ -737,28 +772,28 @@
 						<section id="credentials" class="space-y-4 border-b border-border/20 pb-10">
 							<div class="flex items-start justify-between gap-3">
 								<div>
-									<p class={sectionLabelClass}>Credentials</p>
+									<h2 class="text-lg font-semibold text-foreground">Keys</h2>
 									<p class="mt-1 text-sm text-muted-foreground">API keys and tokens are encrypted and stored by Porter.</p>
 								</div>
-								<Button size="sm" onclick={() => (showCredentialsModal = true)}>Manage Credentials</Button>
+								<Button size="sm" onclick={() => (showCredentialsModal = true)}>Add Provider Keys</Button>
 							</div>
 
-						<div class="rounded-xl border border-border/50 bg-card/20">
+						<div class="rounded-xl border border-border/40 bg-background/30">
 							<button
 								type="button"
 								class="flex w-full items-center justify-between px-4 py-3 text-left"
 								onclick={() => (setupExpanded = !setupExpanded)}
 							>
 								<div>
-									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Setup options</p>
-									<p class="mt-1 text-sm font-medium text-foreground">Quick setup and terminal setup</p>
+									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Optional setup help</p>
+									<p class="mt-1 text-sm text-muted-foreground">Token shortcuts and terminal command</p>
 								</div>
 								<span class="text-xs text-muted-foreground">{setupExpanded ? 'Open' : 'Expand'}</span>
 							</button>
 							{#if setupExpanded}
 								<div class="border-t border-border/40 p-4">
 									<div class="grid gap-3 sm:grid-cols-2">
-										<div class="rounded-xl border border-primary/35 bg-primary/10 p-3">
+										<div class="rounded-xl border border-border/50 bg-background/40 p-3">
 											<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Quick setup</p>
 											<p class="mt-1 text-sm font-medium text-foreground">Grab an org token</p>
 											<p class="mt-1 text-xs text-muted-foreground">Use one org token. Porter validates it, creates the Fly app when missing, and launches task machines.</p>
@@ -771,7 +806,7 @@
 												Open Fly tokens ↗
 											</a>
 										</div>
-										<div class="rounded-xl border border-border/50 bg-card/20 p-3">
+										<div class="rounded-xl border border-border/50 bg-background/40 p-3">
 											<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Terminal setup</p>
 											<p class="mt-1 text-sm font-medium text-foreground">Generate token in terminal</p>
 											<p class="mt-1 text-xs text-muted-foreground">Prefer terminal? Run this once to mint the same org token.</p>
@@ -799,13 +834,8 @@
 							{/if}
 						</div>
 
-							<div class="rounded-xl border border-border/50 bg-card/20 p-3 text-xs text-muted-foreground">
-								<p class="font-medium text-foreground">What Porter handles</p>
-								<p class="mt-1">Porter validates your Fly org token, provisions the configured app when required, and reuses that runtime for managed task machines.</p>
-							</div>
-
 							<div class="divide-y divide-border/30 rounded-xl border border-border/50 bg-card/30">
-								{#each ['flyToken', 'flyAppName', 'anthropic', 'amp', 'openai'] as field}
+								{#each ['flyToken', 'anthropic', 'amp', 'openai'] as field}
 									{@const fieldStatus = getFieldStatus(field as EditableField)}
 									<div class="space-y-2 px-4 py-3">
 										<div class="flex flex-wrap items-center gap-3">
@@ -836,12 +866,18 @@
 											<div class="flex items-center gap-2">
 												{#if editingField === field}
 													<Button size="sm" onclick={() => saveField(field as EditableField)} disabled={credentialSaving || flySaving}>
-														Save
+														{field === 'flyToken' ? 'Connect Fly' : 'Save'}
 													</Button>
 													<Button variant="ghost" size="sm" onclick={cancelEditField}>Cancel</Button>
 												{:else}
 													<Button variant="outline" size="sm" onclick={() => startEditField(field as EditableField)}>
-													{isFieldConfigured(field as EditableField) ? 'Update' : 'Add'}
+													{field === 'flyToken'
+														? isFieldConfigured(field as EditableField)
+															? 'Reconnect Fly'
+															: 'Connect Fly'
+														: isFieldConfigured(field as EditableField)
+															? 'Update'
+															: 'Add'}
 												</Button>
 												{/if}
 											</div>
@@ -858,6 +894,78 @@
 										{/if}
 									</div>
 								{/each}
+							</div>
+
+							<div class="rounded-xl border border-border/50 bg-background/20">
+								<button
+									type="button"
+									class="flex w-full items-center justify-between px-4 py-3 text-left"
+									onclick={() => (showFlyAdvanced = !showFlyAdvanced)}
+								>
+									<div>
+										<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Advanced Fly</p>
+										<p class="mt-1 text-xs text-muted-foreground">
+											{(fly.flyAppName ?? '').trim().length
+												? `Using app ${(fly.flyAppName ?? '').trim()}`
+												: 'Set app name only for deploy or app-scoped tokens.'}
+										</p>
+									</div>
+									<span class="text-xs text-muted-foreground">{showFlyAdvanced ? 'Hide' : 'Edit app name'}</span>
+								</button>
+								{#if showFlyAdvanced}
+									{@const field = 'flyAppName' as EditableField}
+									{@const fieldStatus = getFieldStatus(field)}
+									<div class="border-t border-border/40 px-4 py-3">
+										<div class="space-y-2">
+											<div class="flex flex-wrap items-center gap-3">
+												<div class="min-w-[180px]">
+													<div class="flex items-center gap-2 text-sm font-medium text-foreground">
+														<img src={getFieldIcon(field).src} alt={getFieldIcon(field).alt} class="h-4 w-4 rounded-sm" />
+														<span>{getFieldLabel(field)}</span>
+													</div>
+												</div>
+												<div class="min-w-0 flex-1">
+													{#if editingField === field}
+														<Input
+															value={draftValue}
+															type="text"
+															oninput={(event) => (draftValue = (event.target as HTMLInputElement).value)}
+														/>
+													{:else}
+														{#if isFieldConfigured(field)}
+															<p class="text-sm text-muted-foreground">{formatFieldValue(field)}</p>
+														{:else}
+															<div class="flex items-center gap-2 text-sm text-muted-foreground" title="Not configured">
+																<span class="h-2 w-2 rounded-full bg-amber-500"></span>
+																<span>Not configured</span>
+															</div>
+														{/if}
+													{/if}
+												</div>
+												<div class="flex items-center gap-2">
+													{#if editingField === field}
+														<Button size="sm" onclick={() => saveField(field)} disabled={credentialSaving || flySaving}>Save</Button>
+														<Button variant="ghost" size="sm" onclick={cancelEditField}>Cancel</Button>
+													{:else}
+														<Button variant="outline" size="sm" onclick={() => startEditField(field)}>
+															{isFieldConfigured(field) ? 'Update' : 'Add'}
+														</Button>
+													{/if}
+												</div>
+											</div>
+											{#if fieldStatus}
+												<div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+													{#if fieldStatus.ready}
+														<CheckCircle size={14} weight="fill" class="text-emerald-500" />
+													{:else}
+														<WarningCircle size={14} weight="fill" class="text-amber-500" />
+													{/if}
+													<span>{fieldStatus.label}</span>
+												</div>
+											{/if}
+										</div>
+									</div>
+								{/if}
 							</div>
 
 							<div class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
@@ -1027,7 +1135,7 @@
 			</div>
 
 			<AgentSettingsDialog bind:open={showAgents} bind:agents={agentConfig} />
-			<CredentialsModal bind:open={showCredentialsModal} onsaved={loadConfig} />
+			<CredentialsModal bind:open={showCredentialsModal} onsaved={handleCredentialsSaved} />
 		{/if}
 	</div>
 </main>

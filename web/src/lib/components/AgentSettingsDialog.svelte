@@ -23,30 +23,44 @@
 		agents?: AgentConfig[];
 	} = $props();
 
+	let status = $state('');
+
 	const handleAgentSave = async (config: AgentConfig[]) => {
 		agents = config;
+		status = '';
 		try {
 			const response = await fetch('/api/agents', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(config)
 			});
-			if (!response.ok) return;
+			if (!response.ok) {
+				status = 'Failed to save agent settings.';
+				return;
+			}
 			const data = await response.json();
 			agents = data as AgentConfig[];
+			status = 'Agent settings saved.';
 		} catch (error) {
 			console.error('Saving agent config failed:', error);
+			status = 'Failed to save agent settings.';
 		}
 	};
 
 	const handleAgentRefresh = async () => {
+		status = '';
 		try {
 			const response = await fetch('/api/agents/scan', { method: 'POST' });
-			if (!response.ok) return;
+			if (!response.ok) {
+				status = 'Failed to refresh agents.';
+				return;
+			}
 			const data = await response.json();
 			agents = data as AgentConfig[];
+			status = 'Agents refreshed.';
 		} catch (error) {
 			console.error('Refreshing agents failed:', error);
+			status = 'Failed to refresh agents.';
 		}
 	};
 
@@ -81,6 +95,9 @@
 		</div>
 
 		<Dialog.Footer class="flex-shrink-0 border-t border-border/40 pt-4">
+			{#if status}
+				<p class="mr-auto text-xs text-muted-foreground">{status}</p>
+			{/if}
 			<Button variant="ghost" onclick={() => (open = false)}>Close</Button>
 			<Button onclick={() => handleAgentSave(agents)}>Save Changes</Button>
 		</Dialog.Footer>

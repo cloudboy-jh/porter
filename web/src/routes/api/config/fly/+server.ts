@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 
-import { updateFlyConfig } from '$lib/server/store';
+import { getConfig, updateFlyConfig } from '$lib/server/store';
 import { normalizeGitHubError } from '$lib/server/github';
 import { logEvent, serializeError, tokenFingerprint } from '$lib/server/logging';
 import {
@@ -29,31 +29,44 @@ export const PUT = async ({ request, locals }: { request: Request; locals: App.L
 			githubLogin: locals.session.user.login
 		};
 		const setupMode = normalizeSetupMode(payload?.setupMode);
-		let updated = await updateFlyConfig(locals.session.token, {
-			flyToken: payload?.flyToken ?? '',
-			flyAppName: payload?.flyAppName ?? ''
-		}, identity);
+		const active = await getConfig(locals.session.token, identity);
+		const requestedToken = payload?.flyToken?.trim().length
+			? payload.flyToken
+			: active.flyToken ?? '';
+		const requestedAppName =
+			typeof payload?.flyAppName === 'string' ? payload.flyAppName : active.flyAppName ?? '';
+
+		let updated = active;
 
 		let validation: FlyValidationResult = {
-			ok: false,
-			status: 'missing_token',
-			message: 'Fly token is required.',
+			ok: true,
+			status: 'ready',
+			message: 'Fly settings saved.',
 			appCreated: false,
+			flyAppName: requestedAppName,
 			mode: setupMode
 		};
 
 		if (payload?.validate) {
-			validation = await validateFlyCredentialsWithMode(updated.flyToken ?? '', updated.flyAppName ?? '', {
+			validation = await validateFlyCredentialsWithMode(requestedToken ?? '', requestedAppName ?? '', {
 				mode: setupMode
 			});
-
-			const resolvedAppName = validation.flyAppName?.trim();
-			if (resolvedAppName && resolvedAppName !== (updated.flyAppName ?? '')) {
-				updated = await updateFlyConfig(locals.session.token, {
-					flyToken: updated.flyToken ?? '',
-					flyAppName: resolvedAppName
-				}, identity);
+			if (!validation.ok) {
+				return json({
+					flyToken: '',
+					flyAppName: validation.flyAppName ?? requestedAppName,
+					validation,
+					setupMode
+				});
 			}
+		}
+
+		const resolvedAppName = validation.flyAppName?.trim() || requestedAppName;
+		if (payload?.flyToken !== undefined || payload?.flyAppName !== undefined || payload?.validate) {
+			updated = await updateFlyConfig(locals.session.token, {
+				flyToken: requestedToken,
+				flyAppName: resolvedAppName
+			}, identity);
 		}
 
 		return json({

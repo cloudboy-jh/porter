@@ -33,7 +33,7 @@ export const GET = async ({ locals, url }: { locals: App.Locals; url: URL }) => 
 				mode: setupMode
 			});
 		}
-		return json(validation, { status: validation.ok ? 200 : 400 });
+		return json(validation);
 	} catch (error) {
 		logEvent('error', 'api.config.validate_fly', 'validation_error', {
 			requestId,

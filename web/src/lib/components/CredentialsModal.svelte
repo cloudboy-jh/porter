@@ -22,7 +22,7 @@
 		onsaved
 	}: {
 		open?: boolean;
-		onsaved?: () => void;
+		onsaved?: (message?: string) => void;
 	} = $props();
 
 	let catalog = $state<ProviderCatalogResponse>({ featured: [], all: [], featuredIds: [] });
@@ -121,8 +121,8 @@
 				Record<string, 'configured' | 'not_configured'>
 			>;
 			providerCredentials = {};
-			status = 'Credentials saved.';
-			onsaved?.();
+			status = 'Provider keys saved.';
+			onsaved?.(status);
 		} catch (error) {
 			console.error('Failed to save provider credentials:', error);
 			status = 'Failed to save credentials.';
@@ -141,9 +141,9 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="flex max-h-[88vh] flex-col sm:max-w-5xl">
 		<Dialog.Header class="border-b border-border/40 pb-4">
-			<Dialog.Title>Credentials</Dialog.Title>
+			<Dialog.Title>Provider Keys</Dialog.Title>
 			<Dialog.Description>
-				Set API keys for featured providers, or expand to all OpenCode providers.
+				Add or update API keys for featured providers, or expand to all OpenCode providers.
 			</Dialog.Description>
 		</Dialog.Header>
 
@@ -202,7 +202,7 @@
 				<p class="mr-auto text-xs text-muted-foreground">{status}</p>
 			{/if}
 			<Button variant="ghost" onclick={() => (open = false)}>Close</Button>
-			<Button onclick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Credentials'}</Button>
+			<Button onclick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Provider Keys'}</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

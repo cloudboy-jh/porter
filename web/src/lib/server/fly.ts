@@ -29,6 +29,16 @@ type FlyApp = {
 	organization?: { slug?: string };
 };
 
+type FlyTokenInfo = {
+	apps?: string[];
+	org_slug?: string;
+	organization?: string;
+};
+
+type FlyCurrentTokenResponse = {
+	tokens?: FlyTokenInfo[];
+};
+
 type FlyMachineCreateRequest = {
 	config: {
 		image: string;
@@ -80,6 +90,17 @@ const parseErrorMessage = (body: string) => {
 	}
 };
 
+const normalizeOrgSlug = (value?: string) => {
+	if (!value) return undefined;
+	const trimmed = value.trim().toLowerCase();
+	return trimmed.length ? trimmed : undefined;
+};
+
+const toUniqueSorted = (values: string[]) =>
+	Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((a, b) =>
+		a.localeCompare(b)
+	);
+
 const normalizeSetupMode = (mode?: FlySetupMode): FlySetupMode =>
 	mode === 'deploy' ? 'deploy' : 'org';
 
@@ -123,19 +144,54 @@ export const getFlyApp = async (token: string, appName: string): Promise<FlyApp 
 	}
 };
 
-export const createFlyApp = async (token: string, appName: string): Promise<FlyApp> => {
+const getCurrentTokenInfo = async (token: string): Promise<FlyTokenInfo[]> => {
+	const payload = await flyFetch<FlyCurrentTokenResponse>(token, '/tokens/current');
+	return Array.isArray(payload.tokens) ? payload.tokens : [];
+};
+
+const getScopedApps = (tokenInfo: FlyTokenInfo[]) =>
+	toUniqueSorted(
+		tokenInfo.flatMap((entry) =>
+			(entry.apps ?? [])
+				.map((appName) => normalizeFlyAppName(appName))
+				.filter((appName) => appName.length > 0)
+		)
+	);
+
+const pickOrgSlug = (tokenInfo: FlyTokenInfo[]) => {
+	const slugs = toUniqueSorted(
+		tokenInfo
+			.map((entry) => normalizeOrgSlug(entry.org_slug))
+			.filter((slug): slug is string => Boolean(slug))
+	);
+	if (!slugs.length) return undefined;
+	if (slugs.includes('personal')) return 'personal';
+	return slugs[0];
+};
+
+const formatScopedApps = (apps: string[]) => {
+	if (!apps.length) return '';
+	if (apps.length <= 3) return apps.join(', ');
+	return `${apps.slice(0, 3).join(', ')}, +${apps.length - 3} more`;
+};
+
+export const createFlyApp = async (
+	token: string,
+	appName: string,
+	orgSlug: string
+): Promise<FlyApp> => {
 	return flyFetch<FlyApp>(token, '/apps', {
 		method: 'POST',
-		body: JSON.stringify({ app_name: appName })
+		body: JSON.stringify({ app_name: appName, org_slug: orgSlug })
 	});
 };
 
-export const ensureFlyApp = async (token: string, appName: string) => {
+export const ensureFlyApp = async (token: string, appName: string, orgSlug: string) => {
 	const existing = await getFlyApp(token, appName);
 	if (existing) {
 		return { app: existing, created: false };
 	}
-	const app = await createFlyApp(token, appName);
+	const app = await createFlyApp(token, appName, orgSlug);
 	return { app, created: true };
 };
 
@@ -188,17 +244,113 @@ export const validateFlyCredentialsWithMode = async (
 	}
 
 	if (mode === 'deploy' && !trimmedApp) {
+		try {
+			const tokenInfo = await getCurrentTokenInfo(trimmedToken);
+			const scopedApps = getScopedApps(tokenInfo);
+			if (scopedApps.length === 1) {
+				const scopedApp = scopedApps[0];
+				const app = await getFlyApp(trimmedToken, scopedApp);
+				if (app) {
+					return {
+						ok: true,
+						status: 'ready',
+						message: `Fly app ${app.name} is ready.`,
+						appCreated: false,
+						flyAppName: app.name,
+						mode
+					};
+				}
+			}
+			return {
+				ok: false,
+				status: 'missing_app_name',
+				message:
+					scopedApps.length > 1
+						? `Fly app name is required for this deploy token. Available apps: ${formatScopedApps(scopedApps)}.`
+						: 'Fly app name is required when using an app deploy token.',
+				appCreated: false,
+				mode
+			};
+		} catch (error) {
+			if (error instanceof FlyRequestError && error.status === 401) {
+				return {
+					ok: false,
+					status: 'invalid_token',
+					message: 'Invalid Fly token.',
+					appCreated: false,
+					mode
+				};
+			}
+			if (error instanceof FlyRequestError && error.status === 403) {
+				const details = parseErrorMessage(error.body);
+				return {
+					ok: false,
+					status: 'insufficient_scope',
+					message: details || 'Token cannot access Fly app details for this deploy setup.',
+					appCreated: false,
+					mode
+				};
+			}
+			return {
+				ok: false,
+				status: 'missing_app_name',
+				message: 'Fly app name is required when using an app deploy token.',
+				appCreated: false,
+				mode
+			};
+		}
+	}
+
+	let tokenInfo: FlyTokenInfo[] = [];
+	try {
+		tokenInfo = await getCurrentTokenInfo(trimmedToken);
+	} catch (error) {
+		if (error instanceof FlyRequestError && error.status === 401) {
+			return {
+				ok: false,
+				status: 'invalid_token',
+				message: 'Invalid Fly token.',
+				appCreated: false,
+				mode
+			};
+		}
+		if (error instanceof FlyRequestError && error.status === 403) {
+			const details = parseErrorMessage(error.body);
+			return {
+				ok: false,
+				status: 'insufficient_scope',
+				message:
+					details ||
+					'Token cannot access organization information. Use an org-scoped token from Fly.',
+				appCreated: false,
+				mode
+			};
+		}
+	}
+
+	const scopedApps = getScopedApps(tokenInfo);
+	const orgSlug = pickOrgSlug(tokenInfo);
+
+	if (!trimmedApp && mode === 'org' && !orgSlug && scopedApps.length > 1) {
 		return {
 			ok: false,
 			status: 'missing_app_name',
-			message: 'Fly app name is required when using an app deploy token.',
+			message:
+				`This token is app-scoped. Set Fly app name to one of: ${formatScopedApps(scopedApps)}.`,
 			appCreated: false,
 			mode
 		};
 	}
 
-	let candidateAppName = trimmedApp || generateFlyAppName();
-	const canRetryName = mode === 'org' && !trimmedApp;
+	let candidateAppName = trimmedApp;
+	if (!candidateAppName && mode === 'org' && scopedApps.length === 1) {
+		candidateAppName = scopedApps[0];
+	}
+	if (!candidateAppName) {
+		candidateAppName = generateFlyAppName();
+	}
+
+	const canRetryName = mode === 'org' && !trimmedApp && scopedApps.length === 0;
 	const maxAttempts = canRetryName ? 3 : 1;
 
 	for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -227,7 +379,32 @@ export const validateFlyCredentialsWithMode = async (
 				};
 			}
 
-			const { app, created } = await ensureFlyApp(trimmedToken, candidateAppName);
+			if (!orgSlug) {
+				const app = await getFlyApp(trimmedToken, candidateAppName);
+				if (app) {
+					return {
+						ok: true,
+						status: 'ready',
+						message: `Fly app ${app.name} is ready.`,
+						appCreated: false,
+						flyAppName: app.name,
+						mode
+					};
+				}
+				return {
+					ok: false,
+					status: 'insufficient_scope',
+					message:
+						scopedApps.length > 0
+							? `Token can access existing app(s) only. Set Fly app name to one of: ${formatScopedApps(scopedApps)}.`
+							: 'Token cannot create Fly apps because no organization scope was found. Generate a Fly org token.',
+					appCreated: false,
+					flyAppName: candidateAppName,
+					mode
+				};
+			}
+
+			const { app, created } = await ensureFlyApp(trimmedToken, candidateAppName, orgSlug);
 			return {
 				ok: true,
 				status: 'ready',
@@ -238,6 +415,21 @@ export const validateFlyCredentialsWithMode = async (
 			};
 		} catch (error) {
 			if (error instanceof FlyRequestError) {
+				if (error.status === 400) {
+					const details = parseErrorMessage(error.body);
+					if (details.toLowerCase().includes('org_slug')) {
+						return {
+							ok: false,
+							status: 'insufficient_scope',
+							message:
+								'Unable to determine Fly organization for this token. Generate an org token and reconnect Fly.',
+							appCreated: false,
+							flyAppName: candidateAppName,
+							mode
+						};
+					}
+				}
+
 				if (error.status === 409) {
 					if (canRetryName && attempt < maxAttempts - 1) {
 						candidateAppName = generateFlyAppName();
