@@ -52,6 +52,12 @@ export const GET = async ({ locals }: { locals: App.Locals }) => {
 		ok: action === 'ok',
 		installationStatus: installation.status,
 		installationCount: installation.installations.total_count,
+		webhookDeliveryStatus:
+			installation.status === 'installed'
+				? 'configured'
+				: installation.status === 'not_installed'
+					? 'needs_install'
+					: 'indeterminate',
 		action,
 		reason: installation.reason ?? null
 	});

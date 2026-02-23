@@ -73,6 +73,7 @@
 		ok: boolean;
 		installationStatus: 'installed' | 'not_installed' | 'indeterminate';
 		action: 'ok' | 'install_app' | 'check_runtime';
+		webhookDeliveryStatus?: 'configured' | 'needs_install' | 'indeterminate';
 		reason?: string | null;
 	};
 
@@ -101,7 +102,7 @@
 	let repoStatus = $state('');
 	let githubStatus = $state('');
 	let flySetupMode = $state<FlySetupMode>('org');
-	let setupSection = $state<'quick' | 'terminal'>('quick');
+	let setupExpanded = $state(true);
 	let flyCliCopied = $state(false);
 
 	let credentialSaving = $state(false);
@@ -125,6 +126,7 @@
 	const flyValidationReady = $derived(Boolean(fly.validation?.ok));
 	const reposReady = $derived(selectedRepoIds.length > 0);
 	const webhookReady = $derived(isConnected && flyValidationReady && readyAgents.length > 0);
+	const webhookDeliveryReady = $derived(authDiagnostics?.webhookDeliveryStatus === 'configured');
 	const installedRepoCount = $derived(githubSummary.repositories?.length ?? repositories.length);
 
 	const matchesRepoFilter = (repo: RepoSummary) => {
@@ -168,10 +170,6 @@
 		} catch {
 			flyCliCopied = false;
 		}
-	};
-
-	const toggleSetupSection = (section: 'quick' | 'terminal') => {
-		setupSection = section;
 	};
 
 	const logSettingsError = (
@@ -745,22 +743,25 @@
 								<Button size="sm" onclick={() => (showCredentialsModal = true)}>Manage Credentials</Button>
 							</div>
 
-							<div class="space-y-3">
-								<div class="rounded-xl border border-border/50 bg-card/20">
-									<button
-										type="button"
-										class="flex w-full items-center justify-between px-4 py-3 text-left"
-										onclick={() => toggleSetupSection('quick')}
-									>
-										<div>
+						<div class="rounded-xl border border-border/50 bg-card/20">
+							<button
+								type="button"
+								class="flex w-full items-center justify-between px-4 py-3 text-left"
+								onclick={() => (setupExpanded = !setupExpanded)}
+							>
+								<div>
+									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Setup options</p>
+									<p class="mt-1 text-sm font-medium text-foreground">Quick setup and terminal setup</p>
+								</div>
+								<span class="text-xs text-muted-foreground">{setupExpanded ? 'Open' : 'Expand'}</span>
+							</button>
+							{#if setupExpanded}
+								<div class="border-t border-border/40 p-4">
+									<div class="grid gap-3 sm:grid-cols-2">
+										<div class="rounded-xl border border-primary/35 bg-primary/10 p-3">
 											<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Quick setup</p>
-											<p class="mt-1 text-sm font-medium text-foreground">Create a Fly org token</p>
-										</div>
-										<span class="text-xs text-muted-foreground">{setupSection === 'quick' ? 'Open' : 'Expand'}</span>
-									</button>
-									{#if setupSection === 'quick'}
-										<div class="border-t border-border/40 px-4 pb-4">
-											<p class="pt-3 text-xs text-muted-foreground">Generate an org token in Fly and save it here to enable machine provisioning and task execution.</p>
+											<p class="mt-1 text-sm font-medium text-foreground">Grab an org token</p>
+											<p class="mt-1 text-xs text-muted-foreground">Use one org token. Porter validates it, creates the Fly app when missing, and launches task machines.</p>
 											<a
 												href="https://fly.io/dashboard/personal/tokens"
 												target="_blank"
@@ -770,23 +771,10 @@
 												Open Fly tokens ↗
 											</a>
 										</div>
-									{/if}
-								</div>
-								<div class="rounded-xl border border-border/50 bg-card/20">
-									<button
-										type="button"
-										class="flex w-full items-center justify-between px-4 py-3 text-left"
-										onclick={() => toggleSetupSection('terminal')}
-									>
-										<div>
+										<div class="rounded-xl border border-border/50 bg-card/20 p-3">
 											<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Terminal setup</p>
-											<p class="mt-1 text-sm font-medium text-foreground">Generate token from CLI</p>
-										</div>
-										<span class="text-xs text-muted-foreground">{setupSection === 'terminal' ? 'Open' : 'Expand'}</span>
-									</button>
-									{#if setupSection === 'terminal'}
-										<div class="border-t border-border/40 px-4 pb-4">
-											<p class="pt-3 text-xs text-muted-foreground">Use this command to mint a 30-day org token for Porter.</p>
+											<p class="mt-1 text-sm font-medium text-foreground">Generate token in terminal</p>
+											<p class="mt-1 text-xs text-muted-foreground">Prefer terminal? Run this once to mint the same org token.</p>
 											<div class="mt-2 rounded-md border border-border/40 bg-background/70 p-2">
 												<pre class="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-foreground">{flyCliCommand}</pre>
 											</div>
@@ -806,9 +794,10 @@
 												</button>
 											</div>
 										</div>
-									{/if}
+									</div>
 								</div>
-							</div>
+							{/if}
+						</div>
 
 							<div class="rounded-xl border border-border/50 bg-card/20 p-3 text-xs text-muted-foreground">
 								<p class="font-medium text-foreground">What Porter handles</p>
@@ -974,9 +963,16 @@
 								<div class="flex items-center justify-between text-sm">
 									<span class="flex items-center gap-2">
 										{#if webhookReady}<CheckCircle size={16} weight="fill" class="text-emerald-500" />{:else}<WarningCircle size={16} weight="fill" class="text-amber-500" />{/if}
-										Webhook
+										Webhook Runtime
 									</span>
-									<span class="text-muted-foreground">{webhookReady ? 'Active' : 'Blocked'}</span>
+									<span class="text-muted-foreground">{webhookReady ? 'Active' : 'Not ready'}</span>
+								</div>
+								<div class="flex items-center justify-between text-sm">
+									<span class="flex items-center gap-2">
+										{#if webhookDeliveryReady}<CheckCircle size={16} weight="fill" class="text-emerald-500" />{:else}<WarningCircle size={16} weight="fill" class="text-amber-500" />{/if}
+										Webhook Delivery
+									</span>
+									<span class="text-muted-foreground">{webhookDeliveryReady ? 'Configured' : 'Check app install'}</span>
 								</div>
 							</div>
 						</section>

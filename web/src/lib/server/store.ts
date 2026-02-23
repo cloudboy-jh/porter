@@ -625,6 +625,7 @@ export const updateAgentSettings = async (
 ): Promise<AgentConfig[]> => {
 	const activeConfig = await getConfig(token, identity);
 	const nextAgents = { ...activeConfig.agents };
+	const enabledAgents = agents.filter((agent) => agent.enabled).map((agent) => agent.name);
 	for (const agent of agents) {
 		nextAgents[agent.name] = {
 			enabled: agent.enabled,
@@ -634,7 +635,17 @@ export const updateAgentSettings = async (
 	}
 	await updateConfig(token, {
 		...activeConfig,
-		agents: nextAgents
+		agents: nextAgents,
+		onboarding: {
+			completed: activeConfig.onboarding?.completed ?? false,
+			selectedRepos: activeConfig.onboarding?.selectedRepos ?? [],
+			enabledAgents:
+				enabledAgents.length > 0
+					? enabledAgents
+					: activeConfig.onboarding?.enabledAgents?.length
+						? activeConfig.onboarding.enabledAgents
+						: ['opencode', 'claude-code']
+		}
 	}, identity);
 	return listAgents(token, identity);
 };
