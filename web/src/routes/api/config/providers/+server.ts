@@ -8,5 +8,9 @@ export const GET = async ({ locals }: { locals: App.Locals }) => {
 	}
 
 	const catalog = await getProviderCatalog();
-	return json(catalog);
+	return json(catalog, {
+		headers: {
+			'cache-control': 'no-store, max-age=0'
+		}
+	});
 };

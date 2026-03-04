@@ -21,66 +21,75 @@
     onSignOut
   }: Props = $props();
 
+  const authNotice = $derived.by(() => {
+    if (authErrorCode === 'install_required') {
+      return {
+        title: 'GitHub App installation required',
+        body: 'Install Porter on at least one repository before dispatching tasks.',
+        ctaLabel: 'Install GitHub App',
+        href: githubAppInstallUrl ?? '/api/auth/github?force=1',
+        external: Boolean(githubAppInstallUrl)
+      };
+    }
+    if (authErrorCode === 'install_check_failed') {
+      return {
+        title: 'Cannot verify installation right now',
+        body: 'Reconnect GitHub and retry installation verification.',
+        ctaLabel: 'Reconnect GitHub',
+        href: '/api/auth/github?force=1',
+        external: false
+      };
+    }
+    if (authErrorCode === 'missing_scopes') {
+      return {
+        title: 'Required GitHub scopes are missing',
+        body: 'Reconnect GitHub to grant the permissions Porter needs.',
+        ctaLabel: 'Reconnect GitHub',
+        href: '/api/auth/github?force=1',
+        external: false
+      };
+    }
+    return null;
+  });
+
 </script>
 
-<div class="flex w-full flex-col gap-8 px-6 py-8 sm:px-10 sm:py-10 lg:px-12">
+<div class="flex w-full flex-col gap-6 px-6 py-8 sm:px-9 sm:py-9 lg:px-10">
   <div class="flex flex-col items-center">
-    <div class="flex items-center gap-3">
-      <img src={logo} alt="Porter" class="h-10 w-10 rounded" />
-      <span class="font-mono text-sm font-medium uppercase tracking-[0.42em] text-[#a39c95]">PORTER</span>
+    <div class="rounded-xl border border-white/10 bg-black/20 px-3.5 py-2.5">
+      <div class="flex items-center gap-3">
+        <img src={logo} alt="Porter" class="h-8 w-8 rounded" />
+        <span class="font-mono text-sm font-medium uppercase tracking-[0.42em] text-[#b2aba5]">PORTER</span>
+      </div>
     </div>
   </div>
 
   <div class="flex flex-col items-center text-center">
-    <h1 class="font-mono text-[1.65rem] font-bold tracking-tight text-[#f5f1ed]">Sign in to Porter</h1>
-    <p class="mt-3 max-w-[34ch] text-sm leading-relaxed text-[#a39c95]">Route GitHub issues to AI models with fast @porter triage.</p>
+    <h1 class="font-mono text-[1.85rem] font-bold tracking-tight text-[#f7f3ef] sm:text-[1.95rem]">Sign in to Porter</h1>
+    <p class="mt-2 max-w-[34ch] text-sm leading-relaxed text-[#a9a19a]">Connect GitHub. Dispatch tasks.</p>
   </div>
 
-  {#if authErrorCode === 'install_required'}
-    <div class="rounded-lg border border-[#c95500]/30 bg-[#2a1a12]/70 px-4 py-3 text-sm text-[#f5f1ed]">
-      <p class="font-medium">Install the Porter GitHub App to continue.</p>
-      <p class="mt-1 text-xs text-[#c8b8ad]">You are signed in, but Porter cannot dispatch tasks until the GitHub App is installed on at least one repository.</p>
-      {#if githubAppInstallUrl}
-        <a
-          href={githubAppInstallUrl}
-          target="_blank"
-          rel="noreferrer"
-          class="mt-3 inline-block text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b] hover:text-[#ffc08d]"
-        >
-          Install GitHub App ->
-        </a>
-      {/if}
-    </div>
-  {:else if authErrorCode === 'install_check_failed'}
-    <div class="rounded-lg border border-[#c95500]/30 bg-[#2a1a12]/70 px-4 py-3 text-sm text-[#f5f1ed]">
-      <p class="font-medium">Unable to verify GitHub App installation right now.</p>
-      <p class="mt-1 text-xs text-[#c8b8ad]">Reconnect GitHub and retry install. If this persists, check GitHub App callback/setup URLs and runtime credentials.</p>
+  {#if authNotice}
+    <div class="rounded-lg border border-[#c95500]/35 bg-[#2a1a12]/70 px-4 py-3 text-sm text-[#f5f1ed]">
+      <p class="font-medium">{authNotice.title}</p>
+      <p class="mt-1 text-xs text-[#c8b8ad]">{authNotice.body}</p>
       <a
-        href="/api/auth/github?force=1"
-        class="mt-3 inline-block text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b] hover:text-[#ffc08d]"
+        href={authNotice.href}
+        target={authNotice.external ? '_blank' : undefined}
+        rel={authNotice.external ? 'noreferrer' : undefined}
+        class="mt-2 inline-block text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b] hover:text-[#ffc08d]"
       >
-        Reconnect GitHub ->
-      </a>
-    </div>
-  {:else if authErrorCode === 'missing_scopes'}
-    <div class="rounded-lg border border-[#c95500]/30 bg-[#2a1a12]/70 px-4 py-3 text-sm text-[#f5f1ed]">
-      <p class="font-medium">GitHub authorization is missing required scopes.</p>
-      <p class="mt-1 text-xs text-[#c8b8ad]">Reconnect GitHub to grant repo, org, and gist scopes required for Porter automation.</p>
-      <a
-        href="/api/auth/github?force=1"
-        class="mt-3 inline-block text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b] hover:text-[#ffc08d]"
-      >
-        Reconnect GitHub ->
+        {authNotice.ctaLabel} ->
       </a>
     </div>
   {/if}
 
   <div class="flex w-full flex-col items-center gap-3">
-		<Button
-			size="lg"
-			class="h-11 w-72 gap-2 rounded-lg bg-[#c95500] px-8 text-[#140c07] hover:bg-[#d45f00]"
-			href="/api/auth/github"
-		>
+    <Button
+      size="lg"
+      class="h-12 w-72 gap-2 rounded-lg bg-[#d66000] px-8 text-[#160d08] shadow-[0_10px_30px_-16px_rgba(214,96,0,0.85)] hover:bg-[#e56a00]"
+      href="/api/auth/github"
+    >
       <GithubLogo size={16} weight="regular" />
       {isConnected ? `Continue as @${githubHandle}` : "Continue with GitHub"}
     </Button>
@@ -95,17 +104,4 @@
     {/if}
   </div>
 
-  <div class="space-y-3 rounded-lg border border-white/10 bg-black/20 p-4 text-left">
-    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b]">Get started</p>
-    <p class="text-sm text-[#d7c7bc]">After sign-in, open Settings to choose your default model and add provider API keys.</p>
-    {#if isConnected}
-      <a class="inline-block text-xs font-medium text-[#f3a56b] hover:text-[#ffc08d]" href="/settings">
-        Open settings ->
-      </a>
-    {/if}
-  </div>
-
-  <div class="mt-1 w-full border-t border-white/5 pt-5 text-center text-[0.68rem] uppercase tracking-[0.2em] text-[#5f5852]">
-    Docs · Privacy
-  </div>
 </div>

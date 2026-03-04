@@ -80,7 +80,6 @@
 </script>
 
 <div class="relative min-h-svh bg-[#0a0a0a] text-[#d9d4cf]">
-	<!-- Background canvas animation -->
 	<div class="absolute inset-0">
 		<canvas bind:this={canvasEl} class="absolute inset-0 h-full w-full"></canvas>
 		<div class="pointer-events-none absolute inset-0 opacity-20">
@@ -88,9 +87,8 @@
 		</div>
 	</div>
 
-	<!-- Sign-in card -->
 	<div class="relative z-10 flex min-h-svh items-center justify-center p-4 md:p-8">
-		<div class="w-full max-w-[820px]">
+		<div class="w-full max-w-[680px]">
 			<div class="rounded-xl border border-white/10 bg-[#141210]/95 shadow-[0_30px_70px_-45px_rgba(0,0,0,0.6)] backdrop-blur-[1px]">
 				<SignInForm 
 					{isConnected} 

@@ -77,7 +77,7 @@
 			}
 		} catch (error) {
 			console.error('Failed to load credential catalog:', error);
-			status = 'Failed to load provider catalog.';
+			status = 'Failed to load model registry.';
 		} finally {
 			loading = false;
 		}
@@ -121,10 +121,10 @@
 				Record<string, 'configured' | 'not_configured'>
 			>;
 			providerCredentials = {};
-			status = 'Provider keys saved.';
+			status = 'Model keys saved.';
 			onsaved?.(status);
 		} catch (error) {
-			console.error('Failed to save provider credentials:', error);
+			console.error('Failed to save model credentials:', error);
 			status = 'Failed to save credentials.';
 		} finally {
 			saving = false;
@@ -141,9 +141,9 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="flex max-h-[88vh] flex-col sm:max-w-5xl">
 		<Dialog.Header class="border-b border-border/40 pb-4">
-			<Dialog.Title>Provider Keys</Dialog.Title>
+			<Dialog.Title>Model Keys</Dialog.Title>
 			<Dialog.Description>
-				Add or update API keys for featured providers, or expand to all OpenCode providers.
+				Add or update API keys for featured model providers, or expand to all OpenCode providers.
 			</Dialog.Description>
 		</Dialog.Header>
 
@@ -155,10 +155,10 @@
 		</div>
 
 		<div class="custom-scrollbar flex-1 space-y-3 overflow-y-auto py-4 pr-1">
-			{#if loading}
-				<p class="text-sm text-muted-foreground">Loading providers...</p>
-			{:else if visibleProviders.length === 0}
-				<p class="text-sm text-muted-foreground">No providers match your search.</p>
+				{#if loading}
+					<p class="text-sm text-muted-foreground">Loading model providers...</p>
+				{:else if visibleProviders.length === 0}
+					<p class="text-sm text-muted-foreground">No model providers match your search.</p>
 			{:else}
 				{#each visibleProviders as provider}
 					<div class="rounded-xl border border-border/60 bg-card/60 p-4">
@@ -202,7 +202,7 @@
 				<p class="mr-auto text-xs text-muted-foreground">{status}</p>
 			{/if}
 			<Button variant="ghost" onclick={() => (open = false)}>Close</Button>
-			<Button onclick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Provider Keys'}</Button>
+			<Button onclick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Model Keys'}</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
