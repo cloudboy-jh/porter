@@ -1,9 +1,8 @@
+import { DurableObject } from 'cloudflare:workers';
+
 type DurableObjectNamespace = any;
 type DurableObjectState = any;
 type ExportedHandler<T> = any;
-declare class DurableObject {
-	constructor(ctx: DurableObjectState, env: unknown);
-}
 
 export interface Env {
 	TASK_RUNNER: DurableObjectNamespace;
