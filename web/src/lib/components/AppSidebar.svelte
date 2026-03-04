@@ -99,7 +99,7 @@
 		<Sidebar.Separator />
 		<Sidebar.Group class="group-data-[collapsible=icon]:hidden">
 			<Sidebar.GroupLabel class="text-[0.65rem] font-semibold uppercase tracking-[0.18em]">
-				Agents
+				Models
 			</Sidebar.GroupLabel>
 			<Sidebar.GroupAction
 				onclick={() => (agentsOpen = !agentsOpen)}
@@ -107,11 +107,11 @@
 				class={agentsOpen ? '' : '-rotate-90'}
 			>
 				<CaretDown size={14} weight="bold" />
-				<span class="sr-only">Toggle agents</span>
+				<span class="sr-only">Toggle models</span>
 			</Sidebar.GroupAction>
 			{#if agents.length === 0}
 				<Sidebar.GroupContent>
-					<p class="text-xs text-sidebar-foreground/60">No agent activity yet.</p>
+					<p class="text-xs text-sidebar-foreground/60">No model activity yet.</p>
 				</Sidebar.GroupContent>
 			{:else if agentsOpen}
 				<Sidebar.GroupContent>

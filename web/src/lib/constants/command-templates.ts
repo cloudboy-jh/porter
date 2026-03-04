@@ -1,4 +1,4 @@
-import type { CommandTemplate } from '$lib/types/agent';
+import type { CommandTemplate } from '$lib/types/model';
 
 export const COMMAND_TEMPLATES: CommandTemplate[] = [
 	{

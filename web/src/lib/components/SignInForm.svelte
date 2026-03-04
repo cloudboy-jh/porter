@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, Copy, GithubLogo } from "phosphor-svelte";
+  import { GithubLogo } from "phosphor-svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import logo from "../../logos/porter-logo-main.png";
 
@@ -11,23 +11,6 @@
     githubAppInstallUrl?: string | null;
     onSignOut: () => void;
   }
-
-  const flyCliCommand = `fly auth login
-fly tokens create org --name "porter" --expiry 30d`;
-
-  let copiedFlyCli = $state(false);
-
-  const copyFlyCli = async () => {
-    try {
-      await navigator.clipboard.writeText(flyCliCommand);
-      copiedFlyCli = true;
-      setTimeout(() => {
-        copiedFlyCli = false;
-      }, 1200);
-    } catch {
-      copiedFlyCli = false;
-    }
-  };
 
   let {
     isConnected,
@@ -50,7 +33,7 @@ fly tokens create org --name "porter" --expiry 30d`;
 
   <div class="flex flex-col items-center text-center">
     <h1 class="font-mono text-[1.65rem] font-bold tracking-tight text-[#f5f1ed]">Sign in to Porter</h1>
-    <p class="mt-3 max-w-[34ch] text-sm leading-relaxed text-[#a39c95]">Route GitHub issues to AI agents with fast @porter triage.</p>
+    <p class="mt-3 max-w-[34ch] text-sm leading-relaxed text-[#a39c95]">Route GitHub issues to AI models with fast @porter triage.</p>
   </div>
 
   {#if authErrorCode === 'install_required'}
@@ -112,67 +95,14 @@ fly tokens create org --name "porter" --expiry 30d`;
     {/if}
   </div>
 
-  <div class="space-y-3">
-    <p class="text-center text-[0.68rem] uppercase tracking-[0.2em] text-[#756d67]">Choose setup path</p>
-    <div class="grid gap-3 sm:grid-cols-2">
-      <div class="rounded-lg border border-white/10 bg-black/20 p-3 text-left">
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b]">Quick setup</p>
-        <p class="mt-1 text-sm font-medium text-[#f5f1ed]">Grab an org token</p>
-        <p class="mt-1 text-xs text-[#9f9892]">Use one org token. Porter handles Fly app creation and machine lifecycle.</p>
-        <ol class="mt-2 space-y-1 text-xs text-[#b7b0aa]">
-          <li>1. Open Fly dashboard tokens</li>
-          <li>2. Create an org token</li>
-          <li>3. Paste token in Settings</li>
-          <li>4. Run your first Porter task</li>
-        </ol>
-        <a
-          href="https://fly.io/dashboard/personal/tokens"
-          target="_blank"
-          rel="noreferrer"
-          class="mt-3 inline-block text-xs font-medium text-[#f3a56b] hover:text-[#ffc08d]"
-        >
-          Open Fly tokens ↗
-        </a>
-        {#if isConnected}
-          <a class="mt-3 inline-block text-xs font-medium text-[#f3a56b] hover:text-[#ffc08d]" href="/settings?setup=org">
-            Continue with org token ->
-          </a>
-        {:else}
-          <p class="mt-3 text-xs text-[#8e8781]">Connect GitHub, then continue in Settings.</p>
-        {/if}
-      </div>
-
-      <div class="rounded-lg border border-white/10 bg-black/20 p-3 text-left">
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b]">Terminal setup</p>
-        <p class="mt-1 text-sm font-medium text-[#f5f1ed]">Generate token in terminal</p>
-        <p class="mt-1 text-xs text-[#9f9892]">Prefer terminal? Run this to mint the same org token.</p>
-        <div class="mt-2 rounded-md border border-white/10 bg-black/45 p-2">
-          <pre class="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[#d7c7bc]">{flyCliCommand}</pre>
-        </div>
-        <div class="mt-2 flex justify-end">
-          <button
-            type="button"
-            class="inline-flex h-7 w-7 items-center justify-center rounded border border-white/15 text-[#f3a56b] hover:border-[#f3a56b]/50 hover:text-[#ffc08d]"
-            aria-label="Copy Fly CLI command"
-            title="Copy command"
-            onclick={copyFlyCli}
-          >
-            {#if copiedFlyCli}
-              <Check size={14} weight="bold" />
-            {:else}
-              <Copy size={14} weight="bold" />
-            {/if}
-          </button>
-        </div>
-        {#if isConnected}
-          <a class="mt-3 inline-block text-xs font-medium text-[#f3a56b] hover:text-[#ffc08d]" href="/settings?setup=org">
-            Continue with CLI token ->
-          </a>
-        {:else}
-          <p class="mt-3 text-xs text-[#8e8781]">Connect GitHub, then continue in Settings.</p>
-        {/if}
-      </div>
-    </div>
+  <div class="space-y-3 rounded-lg border border-white/10 bg-black/20 p-4 text-left">
+    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#f3a56b]">Get started</p>
+    <p class="text-sm text-[#d7c7bc]">After sign-in, open Settings to choose your default model and add provider API keys.</p>
+    {#if isConnected}
+      <a class="inline-block text-xs font-medium text-[#f3a56b] hover:text-[#ffc08d]" href="/settings">
+        Open settings ->
+      </a>
+    {/if}
   </div>
 
   <div class="mt-1 w-full border-t border-white/5 pt-5 text-center text-[0.68rem] uppercase tracking-[0.2em] text-[#5f5852]">

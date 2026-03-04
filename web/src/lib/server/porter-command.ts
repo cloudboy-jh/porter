@@ -1,32 +1,31 @@
 export type ParsedPorterCommand = {
-	agent: string;
-	agentExplicit: boolean;
+	model: string;
+	modelExplicit: boolean;
 	priority: 'low' | 'normal' | 'high';
 	extraInstructions: string;
 };
 
 const commandPattern = /@porter\b([\s\S]*)/i;
 const priorityPattern = /--priority=(low|normal|high)/i;
-const knownAgents = new Set(['opencode', 'claude', 'claude-code', 'amp', 'mock']);
+const modelPattern = /--model=([^\s]+)/i;
 
 export const parsePorterCommand = (commentBody: string): ParsedPorterCommand | null => {
 	const match = commandPattern.exec(commentBody ?? '');
 	if (!match) return null;
 
 	const remainder = (match[1] ?? '').trim();
-	const tokens = remainder ? remainder.split(/\s+/) : [];
-	const firstToken = tokens[0]?.toLowerCase();
-	const agentExplicit = Boolean(firstToken && knownAgents.has(firstToken));
-	const requestedAgent = agentExplicit ? firstToken! : 'opencode';
-	const instructionSource = agentExplicit ? tokens.slice(1).join(' ') : remainder;
+	const modelMatch = remainder.match(modelPattern);
+	const requestedModel = modelMatch?.[1]?.trim() || 'anthropic/claude-sonnet-4';
+	const modelExplicit = Boolean(modelMatch?.[1]?.trim());
+	const instructionSource = remainder.replace(modelPattern, '').trim();
 
 	const priorityMatch = instructionSource.match(priorityPattern);
 	const priority = (priorityMatch?.[1]?.toLowerCase() ?? 'normal') as ParsedPorterCommand['priority'];
 	const extraInstructions = instructionSource.replace(priorityPattern, '').trim();
 
 	return {
-		agent: requestedAgent,
-		agentExplicit,
+		model: requestedModel,
+		modelExplicit,
 		priority,
 		extraInstructions
 	};

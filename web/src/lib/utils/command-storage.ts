@@ -1,4 +1,4 @@
-import type { RecentCommand } from '$lib/types/agent';
+import type { RecentCommand } from '$lib/types/model';
 
 const STORAGE_KEY = 'porter-recent-commands';
 const MAX_RECENT_COMMANDS = 10;
@@ -31,7 +31,7 @@ export function addRecentCommand(command: Omit<RecentCommand, 'id' | 'timestamp'
 		...recent.filter(
 			(cmd) =>
 				!(
-					cmd.agent === command.agent &&
+					cmd.model === command.model &&
 					cmd.repository === command.repository &&
 					cmd.issue === command.issue
 				)

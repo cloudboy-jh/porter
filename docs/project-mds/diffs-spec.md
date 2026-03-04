@@ -8,7 +8,7 @@
 
 ## Why This, Why Now
 
-Porter's workflow ends at PR creation. The user gets a comment on their GitHub issue saying "✓ PR #123 created" and then bounces to GitHub to review. That context switch breaks the flow. The review feed should let you see what the agent changed without leaving Porter.
+Porter's workflow ends at PR creation. The user gets a comment on their GitHub issue saying "✓ PR #123 created" and then bounces to GitHub to review. That context switch breaks the flow. The review feed should let you see what the model changed without leaving Porter.
 
 `@pierre/diffs` is a rendering library — it takes diff data and draws it beautifully with Shiki syntax highlighting, split/stacked views, and inline change highlighting. It's the visual layer. `@pierre/precision-diffs` is the diff engine — it computes the actual differences between two strings. Together they give Porter a GitHub-quality (better, actually) diff viewer without building one from scratch.
 
@@ -115,7 +115,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 />
 ```
 
-Each card in the review feed shows `GitDiffBadge` with `+additions` / `-deletions` counts. These come from git stats stored on the task when the callback fires (see Data Enrichment section).
+Each card in the review feed shows `GitDiffBadge` with `+additions` / `-deletions` counts. These come from git stats stored on the task on completion (see Data Enrichment section).
 
 ---
 
@@ -468,14 +468,14 @@ The layout is a single scrollable column using the same `max-w-[680px] mx-auto` 
 
 ---
 
-## Data Enrichment: Git Stats on Task Callback
+## Data Enrichment: Git Stats on Task Completion
 
-When the Fly Machine calls back after task completion, Porter should fetch the PR's file stats and store them on the task. This lets the review feed show `GitDiffBadge` without an extra API call per card.
+When the task Durable Object reaches completion and PR metadata is available, Porter should fetch PR file stats and store them on the task. This lets the review feed show `GitDiffBadge` without an extra API call per card.
 
-**In the callback handler (`/api/callbacks/task-complete/+server.ts`):**
+**In task completion handling (`/api/tasks/:id/status` or DO completion write):**
 
 ```typescript
-// After receiving callback with prUrl...
+// After task completion with prUrl...
 const prMatch = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
 if (prMatch) {
   const [, owner, repo, prNumber] = prMatch;
@@ -544,7 +544,7 @@ If Porter adopts the Pierre theme pack (`@pierre/theme`), the diffs will match p
 ## Edge Cases & Limits
 
 ### Large PRs (10+ files)
-Render all files in sequence. The file list at the top provides jump-to navigation. No pagination — let the browser handle scroll. Agent-generated PRs are typically focused (3-8 files).
+Render all files in sequence. The file list at the top provides jump-to navigation. No pagination — let the browser handle scroll. Model-generated PRs are typically focused (3-8 files).
 
 ### Very Large Files
 GitHub's raw content API has no hard limit, but `@pierre/diffs` handles large files well due to Shadow DOM virtualization. For files >5000 lines, consider showing only the changed hunks with surrounding context (a Pierre config option).
@@ -590,7 +590,7 @@ The review feed gets its own nav item because it represents a distinct workflow:
 8. Add "Review" to main nav
 
 ### Phase 3: Data Enrichment
-9. Update callback handler to fetch and store git stats
+9. Update completion handler to fetch and store git stats
 10. Update `Task` type with `git` field
 11. Wire `GitDiffBadge` into review feed cards
 
@@ -635,7 +635,7 @@ src/lib/config/diffs.ts
 ### Modified Files
 ```
 src/lib/types.ts                              # Add git field to Task type
-src/routes/api/callbacks/task-complete/+server.ts  # Enrich with git stats
+src/routes/api/tasks/[id]/status/+server.ts         # Enrich with git stats
 src/routes/+layout.svelte                     # Add Review nav item
 package.json                                  # @pierre/diffs, @pierre/precision-diffs
 ```

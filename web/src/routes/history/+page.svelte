@@ -31,14 +31,14 @@
 
 	type TaskWithLinks = Task & { issueUrl?: string; prUrl?: string; branch?: string };
 
-	const agentDomains: Record<string, string> = {
+	const modelDomains: Record<string, string> = {
 		opencode: 'opencode.ai',
 		'claude-code': 'claude.ai',
 		amp: 'ampcode.com'
 	};
 
-	const getAgentIcon = (agent: string) =>
-		`https://www.google.com/s2/favicons?domain=${agentDomains[agent] ?? 'github.com'}&sz=64`;
+	const getModelIcon = (model: string) =>
+		`https://www.google.com/s2/favicons?domain=${modelDomains[model] ?? 'github.com'}&sz=64`;
 
 	const statusStyles: Record<string, string> = {
 		queued: 'border border-border/60 bg-muted/70 text-muted-foreground',
@@ -79,7 +79,7 @@
 	const isConnected = $derived(Boolean(data?.session));
 
 	let activeStatus = $state<'all' | 'queued' | 'running' | 'success' | 'failed'>('all');
-	let selectedAgent = $state('all');
+	let selectedModel = $state('all');
 	let selectedRepo = $state('all');
 	let selectedBranch = $state<string | null>(null);
 	let selectedIssue = $state<string | null>(null);
@@ -98,7 +98,7 @@
 		try {
 			const params = new URLSearchParams();
 			if (activeStatus !== 'all') params.set('status', activeStatus);
-			if (selectedAgent !== 'all') params.set('agent', selectedAgent);
+			if (selectedModel !== 'all') params.set('agent', selectedModel);
 			if (selectedRepo && selectedRepo !== 'all') params.set('repo', selectedRepo);
 			if (selectedBranch) params.set('branch', selectedBranch);
 			if (selectedIssue) {
@@ -141,7 +141,7 @@
 
 	const resetFilters = () => {
 		activeStatus = 'all';
-		selectedAgent = 'all';
+		selectedModel = 'all';
 		selectedRepo = 'all';
 		selectedBranch = null;
 		selectedIssue = null;
@@ -220,7 +220,7 @@
 			'ID',
 			'Title',
 			'Repository',
-			'Agent',
+			'Model',
 			'Status',
 			'Issue',
 			'PR',
@@ -304,7 +304,7 @@
 			}
 		}
 		if (params.get('agent')) {
-			selectedAgent = params.get('agent') ?? 'all';
+			selectedModel = params.get('agent') ?? 'all';
 		}
 		if (params.get('repo')) {
 			selectedRepo = params.get('repo') ?? 'all';
@@ -376,7 +376,7 @@
 		})()
 	);
 
-	const availableAgents: string[] = $derived([
+	const availableModels: string[] = $derived([
 		'all',
 		...Array.from(new Set(historyTasks.map((task) => task.agent)))
 	]);
@@ -397,7 +397,7 @@
 	const issueOptions = $derived(availableIssues);
 
 	const statusLabel = $derived(activeStatus === 'all' ? 'Status' : activeStatus);
-	const agentLabel = $derived(selectedAgent === 'all' ? 'Agent' : selectedAgent);
+	const modelLabel = $derived(selectedModel === 'all' ? 'Model' : selectedModel);
 	const dateLabel = $derived(selectedDate === 'any' ? 'Date' : selectedDate === 'custom' ? 'Custom' : selectedDate);
 	const repoLabel = $derived(selectedRepo === 'all' ? 'Repository' : selectedRepo ?? 'Repository');
 	const branchLabel = $derived(selectedBranch ?? 'Branch');
@@ -425,7 +425,7 @@
 		return 'text-muted-foreground';
 	};
 
-	const getAgentTone = (value: string) => {
+	const getModelTone = (value: string) => {
 		if (value === 'all') return 'text-muted-foreground';
 		return 'text-primary';
 	};
@@ -479,14 +479,14 @@
 					/>
 					<GitFilterButton
 						icon={Robot}
-						label="Agent"
-						options={availableAgents}
-						bind:selected={selectedAgent}
-						displayValue={agentLabel}
+						label="Model"
+						options={availableModels}
+						bind:selected={selectedModel}
+						displayValue={modelLabel}
 						toneClass={filterTone}
 						itemIconType="image"
-						getItemIcon={(value) => (value === 'all' ? null : getAgentIcon(value))}
-						getItemTone={getAgentTone}
+						getItemIcon={(value) => (value === 'all' ? null : getModelIcon(value))}
+						getItemTone={getModelTone}
 					/>
 					<DateFilterButton
 						label="Date"
@@ -567,7 +567,7 @@
 				<span>Status</span>
 				<span>Task</span>
 				<span>Repository</span>
-				<span>Agent</span>
+				<span>Model</span>
 				<span>Completed</span>
 				<span class="text-right">Actions</span>
 			</div>
@@ -632,7 +632,7 @@
 									{task.repoOwner}/{task.repoName}
 								</div>
 								<Badge variant="outline" class="text-xs capitalize font-mono gap-2">
-									<img class="h-3.5 w-3.5" src={getAgentIcon(task.agent)} alt={task.agent} />
+									<img class="h-3.5 w-3.5" src={getModelIcon(task.agent)} alt={task.agent} />
 									{task.agent}
 								</Badge>
 								<span class="text-xs text-muted-foreground font-mono">

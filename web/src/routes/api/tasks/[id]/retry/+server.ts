@@ -6,7 +6,7 @@ import {
 	getPorterPriority
 } from '$lib/server/github';
 import { githubCache } from '$lib/server/cache';
-import { dispatchTaskToFly } from '$lib/server/task-dispatch';
+import { dispatchTaskToDo } from '$lib/server/task-dispatch';
 
 const parseTaskId = (id: string) => {
 	const match = id.match(/^([^/]+)\/([^#]+)#(\d+)$/);
@@ -27,22 +27,22 @@ export const PUT = async ({ params, locals }: { params: { id: string }; locals: 
 	}
 
 	const issue = await fetchIssue(session.token, parsed.owner, parsed.repo, parsed.issueNumber);
-	const agent = getPorterAgent(issue.labels);
+	const model = getPorterAgent(issue.labels);
 	const priority = getPorterPriority(issue.labels);
 
-	const result = await dispatchTaskToFly({
+	const result = await dispatchTaskToDo({
 		githubToken: session.token,
 		repoOwner: parsed.owner,
 		repoName: parsed.repo,
 		issueNumber: parsed.issueNumber,
-		agent,
+		model,
 		priority,
 		issueBody: issue.body ?? '',
 		issueTitle: issue.title
 	});
 
 	if (!result.ok) {
-		const status = result.summary.includes('missing callback') ? 500 : 400;
+		const status = result.summary.includes('missing dispatch') ? 500 : 400;
 		return json({ error: result.error ?? result.summary }, { status });
 	}
 

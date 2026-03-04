@@ -1,8 +1,6 @@
 import { randomUUID } from 'crypto';
 import { loadConfigFromGist, saveConfigToGist } from './gist';
 import type { PorterConfig, Task, TaskLog, TaskStatus } from './types';
-import type { AgentConfig } from '$lib/types/agent';
-import { AGENT_REGISTRY } from '$lib/constants/agent-registry';
 import { ensureD1Schema, getD1Database } from './d1';
 import { decryptSecretValue, deriveUserKey, encryptSecretValue } from './secret-crypto';
 
@@ -11,21 +9,7 @@ let tasks: Task[] = [];
 const baseConfig: PorterConfig = {
 	version: '1.0.0',
 	executionMode: 'cloud',
-	flyToken: '',
-	agents: {
-		opencode: {
-			enabled: true,
-			priority: 'normal'
-		},
-		'claude-code': {
-			enabled: true,
-			priority: 'normal'
-		},
-		amp: {
-			enabled: false,
-			priority: 'normal'
-		}
-	},
+	selectedModel: 'anthropic/claude-sonnet-4',
 	credentials: {},
 	providerCredentials: {},
 	settings: {
@@ -35,8 +19,7 @@ const baseConfig: PorterConfig = {
 	},
 	onboarding: {
 		completed: false,
-		selectedRepos: [],
-		enabledAgents: ['opencode', 'claude-code']
+		selectedRepos: []
 	}
 };
 
@@ -113,22 +96,6 @@ const mapProvidersToLegacyCredentials = (
 	return legacy;
 };
 
-const normalizeFlyToken = (token?: string) => normalizeCredential(token) ?? '';
-const normalizeFlyAppName = (appName?: string) => normalizeCredential(appName) ?? '';
-
-const normalizeAgentConfig = (agents: PorterConfig['agents']) => {
-	const next = { ...agents };
-	if (next.claude && !next['claude-code']) {
-		next['claude-code'] = next.claude;
-		delete next.claude;
-	}
-	for (const entry of AGENT_REGISTRY) {
-		if (!next[entry.id]) {
-			next[entry.id] = { enabled: false, priority: 'normal' };
-		}
-	}
-	return next;
-};
 
 const setConfigWarning = (token: string, message?: string) => {
 	if (!message) {
@@ -405,9 +372,7 @@ export const getConfigSecretStatus = async (token: string, identity?: ConfigIden
 
 	return {
 		providerCredentials: statusByProvider,
-		legacy: legacyStatus,
-		flyToken: normalizeCredential(activeConfig.flyToken) ? 'configured' : 'not_configured',
-		flyAppName: normalizeCredential(activeConfig.flyAppName) ? 'configured' : 'not_configured'
+		legacy: legacyStatus
 	};
 };
 
@@ -463,59 +428,6 @@ export const appendTaskLog = (id: string, log: TaskLog): Task | null => {
 	return updated;
 };
 
-const buildAgentConfig = (entry: (typeof AGENT_REGISTRY)[number], activeConfig: PorterConfig) => {
-	const configEntry = activeConfig.agents?.[entry.id] ?? { enabled: false, priority: 'normal' };
-	const enabled = Boolean(configEntry.enabled);
-	const credentials = activeConfig.credentials ?? {};
-	const hasCredentials = entry.requiredKeys.every((key) =>
-		Boolean(credentials?.[key as keyof NonNullable<PorterConfig['credentials']>])
-	);
-	const ready = enabled && hasCredentials;
-	let status: AgentConfig['status'] = 'disabled';
-	if (!enabled) status = 'disabled';
-	if (enabled && !hasCredentials) status = 'error';
-	if (ready) status = 'idle';
-
-	return {
-		name: entry.id,
-		displayName: entry.displayName,
-		provider: entry.provider,
-		requiredKeys: entry.requiredKeys,
-		description: entry.description,
-		docsUrl: entry.docsUrl,
-		enabled,
-		priority: configEntry.priority ?? 'normal',
-		customPrompt: configEntry.customPrompt,
-		status,
-		installed: ready,
-		readyState: !enabled ? 'disabled' : hasCredentials ? 'ready' : 'missing_credentials',
-		domain: entry.docsUrl
-			? new URL(entry.docsUrl).hostname.replace('www.', '')
-			: undefined,
-		version: undefined,
-		lastUsed: undefined,
-		taskCount: undefined,
-		successRate: undefined
-	} satisfies AgentConfig;
-};
-
-export const listAgents = async (token: string, identity?: ConfigIdentity): Promise<AgentConfig[]> => {
-	const activeConfig = await getConfig(token, identity);
-	return AGENT_REGISTRY.map((entry) => buildAgentConfig(entry, activeConfig));
-};
-
-export const scanAgentsNow = async (token: string, identity?: ConfigIdentity): Promise<AgentConfig[]> =>
-	listAgents(token, identity);
-
-export const getAgentStatus = async (
-	token: string,
-	name: string,
-	identity?: ConfigIdentity
-): Promise<AgentConfig | null> => {
-	const agents = await listAgents(token, identity);
-	return agents.find((agent) => agent.name === name) ?? null;
-};
-
 export const getConfig = async (token: string, identity?: ConfigIdentity): Promise<PorterConfig> => {
 	const { cacheKey } = resolvePersistenceIdentity(token, identity);
 	if (!configLoaded.has(cacheKey)) {
@@ -534,14 +446,11 @@ export const getConfig = async (token: string, identity?: ConfigIdentity): Promi
 			const mergedForMigration = {
 				...baseConfig,
 				...(gistConfig as PorterConfig),
-				agents: normalizeAgentConfig((gistConfig as PorterConfig).agents ?? baseConfig.agents),
 				providerCredentials: normalizeProviderCredentials(
 					Object.keys((gistConfig as PorterConfig).providerCredentials ?? {}).length
 						? (gistConfig as PorterConfig).providerCredentials
 						: mapLegacyCredentialsToProviders((gistConfig as PorterConfig).credentials)
-				),
-				flyToken: normalizeFlyToken((gistConfig as PorterConfig).flyToken),
-				flyAppName: normalizeFlyAppName((gistConfig as PorterConfig).flyAppName)
+				)
 			};
 			mergedForMigration.credentials = mapProvidersToLegacyCredentials(
 				mergedForMigration.providerCredentials,
@@ -557,14 +466,11 @@ export const getConfig = async (token: string, identity?: ConfigIdentity): Promi
 		const merged = {
 			...baseConfig,
 			...(loadedConfig as PorterConfig),
-			agents: normalizeAgentConfig((loadedConfig as PorterConfig).agents ?? baseConfig.agents),
 			providerCredentials: normalizeProviderCredentials(
 				Object.keys((loadedConfig as PorterConfig).providerCredentials ?? {}).length
 					? (loadedConfig as PorterConfig).providerCredentials
 					: mapLegacyCredentialsToProviders((loadedConfig as PorterConfig).credentials)
-			),
-			flyToken: normalizeFlyToken((loadedConfig as PorterConfig).flyToken),
-			flyAppName: normalizeFlyAppName((loadedConfig as PorterConfig).flyAppName)
+			)
 		};
 		merged.credentials = mapProvidersToLegacyCredentials(
 			merged.providerCredentials,
@@ -592,10 +498,7 @@ export const updateConfig = async (
 	setConfigWarning(cacheKey);
 	const normalized = {
 		...next,
-		agents: normalizeAgentConfig(next.agents ?? {}),
-		providerCredentials: normalizeProviderCredentials(next.providerCredentials),
-		flyToken: normalizeFlyToken(next.flyToken),
-		flyAppName: normalizeFlyAppName(next.flyAppName)
+		providerCredentials: normalizeProviderCredentials(next.providerCredentials)
 	};
 	normalized.credentials = mapProvidersToLegacyCredentials(
 		normalized.providerCredentials,
@@ -616,38 +519,6 @@ export const updateConfig = async (
 	configCache.set(cacheKey, normalized);
 	configLoaded.add(cacheKey);
 	return normalized;
-};
-
-export const updateAgentSettings = async (
-	token: string,
-	agents: AgentConfig[],
-	identity?: ConfigIdentity
-): Promise<AgentConfig[]> => {
-	const activeConfig = await getConfig(token, identity);
-	const nextAgents = { ...activeConfig.agents };
-	const enabledAgents = agents.filter((agent) => agent.enabled).map((agent) => agent.name);
-	for (const agent of agents) {
-		nextAgents[agent.name] = {
-			enabled: agent.enabled,
-			priority: agent.priority,
-			customPrompt: agent.customPrompt
-		};
-	}
-	await updateConfig(token, {
-		...activeConfig,
-		agents: nextAgents,
-		onboarding: {
-			completed: activeConfig.onboarding?.completed ?? false,
-			selectedRepos: activeConfig.onboarding?.selectedRepos ?? [],
-			enabledAgents:
-				enabledAgents.length > 0
-					? enabledAgents
-					: activeConfig.onboarding?.enabledAgents?.length
-						? activeConfig.onboarding.enabledAgents
-						: ['opencode', 'claude-code']
-		}
-	}, identity);
-	return listAgents(token, identity);
 };
 
 export const updateCredentials = async (
@@ -697,18 +568,3 @@ export const updateProviderCredentials = async (
 	return getConfig(token, identity);
 };
 
-export const updateFlyConfig = async (
-	token: string,
-	input: { flyToken?: string; flyAppName?: string },
-	identity?: ConfigIdentity
-): Promise<PorterConfig> => {
-	const activeConfig = await getConfig(token, identity);
-	const nextToken = normalizeFlyToken(input.flyToken);
-	const nextApp = normalizeFlyAppName(input.flyAppName);
-	await updateConfig(token, {
-		...activeConfig,
-		flyToken: nextToken,
-		flyAppName: nextApp
-	}, identity);
-	return getConfig(token, identity);
-};

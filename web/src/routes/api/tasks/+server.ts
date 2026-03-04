@@ -13,7 +13,7 @@ import {
 	listIssuesWithLabel
 } from '$lib/server/github';
 import type { TaskStatus } from '$lib/server/types';
-import { dispatchTaskToFly } from '$lib/server/task-dispatch';
+import { dispatchTaskToDo } from '$lib/server/task-dispatch';
 import { clearSession } from '$lib/server/auth';
 import { githubCache } from '$lib/server/cache';
 import { getConfig } from '$lib/server/store';
@@ -141,7 +141,7 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 	const repoOwner = payload.repoOwner as string | undefined;
 	const repoName = payload.repoName as string | undefined;
 	const issueNumber = payload.issueNumber ? Number(payload.issueNumber) : null;
-	const agent = (payload.agent as string | undefined) ?? 'opencode';
+	const requestedModel = (payload.model as string | undefined)?.trim();
 	const priority = (payload.priority as string | number | undefined) ?? 'normal';
 	const prompt = (payload.prompt as string | undefined) ?? '';
 	const issueBody = (payload.issueBody as string | undefined) ?? prompt;
@@ -159,6 +159,7 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 			githubUserId: session.user.id,
 			githubLogin: session.user.login
 		});
+		const model = requestedModel || config.selectedModel || 'anthropic/claude-sonnet-4';
 		if (!isRepoSelectedByConfig(config, { owner: repoOwner, name: repoName })) {
 			return json(
 				{
@@ -178,19 +179,19 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 						? 'high'
 						: 'normal';
 
-		const dispatchResult = await dispatchTaskToFly({
+		const dispatchResult = await dispatchTaskToDo({
 			githubToken: session.token,
 			repoOwner,
 			repoName,
 			issueNumber: issueNumber ?? undefined,
-			agent,
+			model,
 			priority: normalizedPriority,
 			prompt,
 			issueBody
 		});
 
 		if (!dispatchResult.ok) {
-			const status = dispatchResult.summary.includes('missing callback') ? 500 : 400;
+			const status = dispatchResult.summary.includes('missing dispatch') ? 500 : 400;
 			return json({ error: dispatchResult.error ?? dispatchResult.summary }, { status });
 		}
 

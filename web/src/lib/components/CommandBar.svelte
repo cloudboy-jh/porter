@@ -17,27 +17,27 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
-	import type { AgentConfig, ParsedCommand, GitHubIssue } from '$lib/types/agent';
+	import type { ParsedCommand, GitHubIssue } from '$lib/types/model';
 	import { COMMAND_TEMPLATES } from '$lib/constants/command-templates';
 	import { getRecentCommands, addRecentCommand, formatTimeAgo } from '$lib/utils/command-storage';
 
-	type AgentDisplay = AgentConfig & {
-		readyState?: 'ready' | 'missing_credentials' | 'disabled';
-		displayName?: string;
+	type ModelOption = {
+		id: string;
+		label: string;
 	};
 
 	let {
 		open = $bindable(false),
-		agents = [] as AgentDisplay[],
+		models = [] as ModelOption[],
 		onsubmit
 	}: {
 		open?: boolean;
-		agents?: AgentDisplay[];
+		models?: ModelOption[];
 		onsubmit?: (payload: ParsedCommand) => void;
 	} = $props();
 
 	// State
-	let selectedAgent = $state<string>('');
+	let selectedModel = $state<string>('');
 	let repository = $state('');
 	let issueNumber = $state('');
 	let priority = $state('normal');
@@ -52,43 +52,15 @@
 	let repoError = $state('');
 
 	// Derived
-	const readyAgents = $derived(
-		agents.filter((agent) => (agent.readyState ? agent.readyState === 'ready' : agent.enabled))
-	);
-	const hasReadyAgents = $derived(readyAgents.length > 0);
+	const hasModels = $derived(models.length > 0);
 	const recentCommands = $derived(getRecentCommands());
 	const repositoryLabel = $derived(repository || 'Select repository');
 	
-	const agentDomains: Record<string, string> = {
-		opencode: 'opencode.ai',
-		'claude-code': 'claude.ai',
-		amp: 'ampcode.com'
-	};
-
-	const getAgentIcon = (name: string, domain?: string) => {
-		const iconDomain = agentDomains[name] ?? domain;
-		return iconDomain ? `https://www.google.com/s2/favicons?domain=${iconDomain}&sz=64` : '';
-	};
-
-	const getStatusTone = (status?: string) => {
-		switch (status) {
-			case 'active':
-				return 'bg-emerald-500';
-			case 'idle':
-				return 'bg-amber-500';
-			case 'error':
-				return 'bg-destructive';
-			case 'disabled':
-				return 'bg-muted-foreground/50';
-			default:
-				return 'bg-muted-foreground/40';
-		}
-	};
 
 	const hasIssueNumber = $derived(/^\d+$/.test(issueNumber));
 	const hasPrompt = $derived(customPrompt.trim().length > 0);
 	const isValid = $derived(
-		selectedAgent &&
+		selectedModel &&
 		repository &&
 		/^[\w.-]+\/[\w.-]+$/.test(repository) &&
 		(hasIssueNumber || hasPrompt)
@@ -96,7 +68,7 @@
 
 	// Reset form
 	const reset = () => {
-		selectedAgent = '';
+		selectedModel = '';
 		repository = '';
 		issueNumber = '';
 		priority = 'normal';
@@ -190,7 +162,7 @@
 
 		const [owner, repo] = repository.split('/');
 		const payload: ParsedCommand = {
-			agent: selectedAgent,
+			model: selectedModel,
 			repoOwner: owner,
 			repoName: repo,
 			issueNumber: hasIssueNumber ? parseInt(issueNumber) : 0,
@@ -201,7 +173,7 @@
 		// Save to recent commands
 		if (hasIssueNumber) {
 			addRecentCommand({
-				agent: selectedAgent,
+				model: selectedModel,
 				repository,
 				issue: parseInt(issueNumber),
 				issueTitle: issuePreview?.title,
@@ -216,7 +188,7 @@
 
 	// Use recent command
 	const useRecentCommand = (cmd: typeof recentCommands[0]) => {
-		selectedAgent = cmd.agent;
+		selectedModel = cmd.model;
 		repository = cmd.repository;
 		issueNumber = cmd.issue.toString();
 		priority = cmd.priority;
@@ -257,7 +229,7 @@
 					icon={PaperPlaneTilt}
 					label="Dispatch"
 					title="Run a Porter Task"
-					description="Select an agent, repository, and issue to dispatch a new task."
+					description="Select a model, repository, and issue to dispatch a new task."
 				/>
 				<Badge variant="secondary" class="text-[0.65rem] uppercase tracking-[0.22em]">
 					New task
@@ -274,64 +246,34 @@
 						<p class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
 							Step 1
 						</p>
-						<p class="text-sm font-semibold text-foreground">Choose an agent</p>
+						<p class="text-sm font-semibold text-foreground">Choose a model</p>
 					</div>
 				<Badge variant="outline" class="text-[0.65rem] uppercase tracking-[0.18em]">
-					{readyAgents.length} ready
+					{models.length} available
 				</Badge>
 			</div>
 			<div class="grid gap-2 sm:grid-cols-2">
-				{#each readyAgents as agent}
+				{#each models as model}
 					<button
 							type="button"
-							onclick={() => selectedAgent = agent.name}
-							class="flex items-center gap-3 rounded-lg border border-border/70 bg-background/60 p-3 text-left transition hover:border-primary/40 hover:bg-muted/40 {selectedAgent === agent.name ? 'border-primary/60 bg-primary/10 shadow-[0_6px_18px_rgba(15,23,42,0.08)]' : ''}"
+							onclick={() => selectedModel = model.id}
+							class="flex items-center gap-3 rounded-lg border border-border/70 bg-background/60 p-3 text-left transition hover:border-primary/40 hover:bg-muted/40 {selectedModel === model.id ? 'border-primary/60 bg-primary/10 shadow-[0_6px_18px_rgba(15,23,42,0.08)]' : ''}"
 						>
-							{#if agent.domain}
-								<img
-									class="h-9 w-9 rounded-md border border-border/60"
-											src={getAgentIcon(agent.name, agent.domain)}
-									alt={agent.name}
-								/>
-							{/if}
 							<div class="flex-1">
 								<div class="flex items-center justify-between gap-2">
-							<p class="text-sm font-semibold capitalize">
-								{agent.displayName ?? agent.name}
-							</p>
-									{#if agent.status}
-										<span class="flex items-center gap-1 text-[0.55rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-											<span class={`h-1.5 w-1.5 rounded-full ${getStatusTone(agent.status)}`}></span>
-											{agent.status}
-										</span>
-									{/if}
+							<p class="text-sm font-semibold">{model.label}</p>
 								</div>
-								<p class="text-xs text-muted-foreground">
-									{agent.taskCount || 0} tasks • {agent.successRate || 0}% success
-								</p>
-								<div class="mt-2 flex flex-wrap items-center gap-2 text-[0.6rem]">
-									<Badge variant="outline" class="text-[0.55rem] uppercase tracking-[0.2em]">
-										Priority {agent.priority}
-									</Badge>
-									{#if agent.version}
-										<Badge variant="outline" class="text-[0.55rem] uppercase tracking-[0.2em]">
-											v{agent.version}
-										</Badge>
-									{/if}
-									<span class="text-[0.65rem] text-muted-foreground">
-										{agent.lastUsed ?? 'No recent runs'}
-									</span>
-								</div>
+								<p class="text-xs text-muted-foreground">{model.id}</p>
 							</div>
-							{#if selectedAgent === agent.name}
+							{#if selectedModel === model.id}
 								<Check size={16} weight="bold" class="text-primary" />
 							{/if}
 						</button>
 					{/each}
 				</div>
-			{#if !hasReadyAgents}
+			{#if !hasModels}
 				<p class="text-xs text-muted-foreground">
-					No agents are ready to run. Add credentials and enable agents in
+					No models are available yet. Add provider keys in
 					<a href="/settings" class="ml-1 font-semibold underline">Settings</a>.
 				</p>
 			{/if}
@@ -555,7 +497,7 @@
 										>
 											<div class="flex-1">
 												<div class="flex items-center gap-2">
-													<Badge variant="secondary" class="text-xs capitalize">{cmd.agent}</Badge>
+													<Badge variant="secondary" class="text-xs capitalize">{cmd.model}</Badge>
 													<span class="text-sm font-medium">{cmd.repository}#{cmd.issue}</span>
 												</div>
 												{#if cmd.issueTitle}

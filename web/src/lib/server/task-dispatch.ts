@@ -10,8 +10,7 @@ import {
 	updateIssueLabels,
 	type PorterTaskMetadata
 } from '$lib/server/github';
-import { getConfig, listAgents } from '$lib/server/store';
-import { createExecutionContext, launchExecutionMachine } from '$lib/server/execution';
+import { getConfig } from '$lib/server/store';
 import { githubCache } from '$lib/server/cache';
 
 type DispatchPriority = 'low' | 'normal' | 'high';
@@ -22,7 +21,7 @@ type DispatchInput = {
 	repoOwner: string;
 	repoName: string;
 	issueNumber?: number;
-	agent: string;
+	model: string;
 	priority: DispatchPriority;
 	prompt?: string;
 	enrichedPrompt?: string;
@@ -32,15 +31,12 @@ type DispatchInput = {
 	repoCloneUrl?: string;
 	baseBranch?: string;
 	runtimeConfig?: {
-		flyToken?: string;
-		flyAppName?: string;
 		credentials?: {
 			anthropic?: string;
 			openai?: string;
 			amp?: string;
 		};
 	};
-	requireReadyAgent?: boolean;
 };
 
 type DispatchResult = {
@@ -96,7 +92,7 @@ const updateLabelsAndComment = async (
 	await addIssueComment(token, owner, repo, number, comment);
 };
 
-export const dispatchTaskToFly = async (input: DispatchInput): Promise<DispatchResult> => {
+export const dispatchTaskToDo = async (input: DispatchInput): Promise<DispatchResult> => {
 	const prompt = input.prompt ?? '';
 	if (!input.repoOwner || !input.repoName) {
 		return {
@@ -136,7 +132,7 @@ export const dispatchTaskToFly = async (input: DispatchInput): Promise<DispatchR
 
 	const metadata: PorterTaskMetadata = {
 		taskId: `${input.repoOwner}/${input.repoName}#${issue.number}`,
-		agent: input.agent,
+		agent: input.model,
 		priority: input.priority,
 		status: 'queued',
 		progress: 0,
@@ -146,60 +142,13 @@ export const dispatchTaskToFly = async (input: DispatchInput): Promise<DispatchR
 
 	await updateLabelsAndComment(input.githubToken, input.repoOwner, input.repoName, issue.number, metadata);
 
-	if (input.requireReadyAgent) {
-		const configLookupToken = input.configToken ?? input.githubToken;
-		const agents = await listAgents(configLookupToken);
-		const agentInfo = agents.find((entry) => entry.name === input.agent);
-		const isReady = agentInfo?.readyState === 'ready';
-		if (!agentInfo || !isReady) {
-			const blockedSummary = agentInfo
-				? `Task blocked: missing ${agentInfo.provider ?? 'provider'} credentials.`
-				: 'Task blocked: unknown agent.';
-			await updateLabelsAndComment(input.githubToken, input.repoOwner, input.repoName, issue.number, {
-				...metadata,
-				status: 'failed',
-				summary: blockedSummary,
-				updatedAt: new Date().toISOString()
-			});
-			return {
-				ok: false,
-				status: 'failed',
-				taskId: metadata.taskId,
-				issueNumber: issue.number,
-				summary: blockedSummary,
-				error: blockedSummary
-			};
-		}
-	}
-
 	const configLookupToken = input.configToken ?? input.githubToken;
 	const activeConfig = input.runtimeConfig ? null : await getConfig(configLookupToken);
-	const flyToken = (input.runtimeConfig?.flyToken ?? activeConfig?.flyToken)?.trim();
-	const flyAppName = (input.runtimeConfig?.flyAppName ?? activeConfig?.flyAppName)?.trim();
-	const anthropicKey =
-		(input.runtimeConfig?.credentials?.anthropic ?? activeConfig?.credentials?.anthropic)?.trim();
-	const callbackBaseUrl = env.PUBLIC_APP_URL ?? env.APP_URL;
+	const model = (input.model || activeConfig?.selectedModel || 'anthropic/claude-sonnet-4').trim();
+	const hasCredentials = Object.keys(activeConfig?.providerCredentials ?? {}).length > 0;
 
-	if (!flyToken || !flyAppName || !anthropicKey) {
-		const blockedSummary = 'Task blocked: missing Fly setup or Anthropic API key.';
-		await updateLabelsAndComment(input.githubToken, input.repoOwner, input.repoName, issue.number, {
-			...metadata,
-			status: 'failed',
-			summary: blockedSummary,
-			updatedAt: new Date().toISOString()
-		});
-		return {
-			ok: false,
-			status: 'failed',
-			taskId: metadata.taskId,
-			issueNumber: issue.number,
-			summary: blockedSummary,
-			error: blockedSummary
-		};
-	}
-
-	if (!callbackBaseUrl) {
-		const blockedSummary = 'Task blocked: missing callback base URL configuration.';
+	if (!hasCredentials) {
+		const blockedSummary = 'Task blocked: missing provider API keys.';
 		await updateLabelsAndComment(input.githubToken, input.repoOwner, input.repoName, issue.number, {
 			...metadata,
 			status: 'failed',
@@ -226,38 +175,36 @@ export const dispatchTaskToFly = async (input: DispatchInput): Promise<DispatchR
 				issue.number,
 				extraInstructions
 			);
-		const execution = createExecutionContext({
-			owner: input.repoOwner,
-			repo: input.repoName,
-			issueNumber: issue.number,
-			agent: input.agent,
-			priority: input.priority,
-			prompt: resolvedPrompt,
-			githubToken: input.githubToken,
-			repoCloneUrl: input.repoCloneUrl,
-			baseBranch: input.baseBranch,
-			installationId: input.installationId,
-			flyToken,
-			flyAppName
-		});
+		const dispatchUrl = env.PORTER_DO_DISPATCH_URL?.trim();
+		if (dispatchUrl) {
+			await fetch(dispatchUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${env.PORTER_DO_DISPATCH_TOKEN ?? ''}`
+				},
+				body: JSON.stringify({
+					taskId: metadata.taskId,
+					repoOwner: input.repoOwner,
+					repoName: input.repoName,
+					issueNumber: issue.number,
+					priority: input.priority,
+					model,
+					prompt: resolvedPrompt,
+					baseBranch: input.baseBranch ?? 'main',
+					installationId: input.installationId
+				})
+			});
+		}
 
-		const machine = await launchExecutionMachine(execution, {
-			flyToken,
-			flyAppName,
-			callbackBaseUrl,
-			anthropicKey,
-			ampKey: input.runtimeConfig?.credentials?.amp ?? activeConfig?.credentials?.amp,
-			openaiKey: input.runtimeConfig?.credentials?.openai ?? activeConfig?.credentials?.openai
-		});
-
-		const runningSummary = `Task running on Fly Machine ${machine.id}.`;
+		const runningSummary = `Task running in Durable Object with model ${model}.`;
 		await updateLabelsAndComment(input.githubToken, input.repoOwner, input.repoName, issue.number, {
 			...metadata,
+			agent: model,
 			status: 'running',
 			progress: 10,
 			updatedAt: new Date().toISOString(),
-			summary: runningSummary,
-			branchName: execution.branchName
+			summary: runningSummary
 		});
 
 		githubCache.clearPattern(`issues:${input.repoOwner}/${input.repoName}`);
@@ -270,7 +217,7 @@ export const dispatchTaskToFly = async (input: DispatchInput): Promise<DispatchR
 			summary: runningSummary
 		};
 	} catch (error) {
-		const failedSummary = 'Task failed to start on Fly Machines.';
+		const failedSummary = 'Task failed to start in Durable Object runtime.';
 		await updateLabelsAndComment(input.githubToken, input.repoOwner, input.repoName, issue.number, {
 			...metadata,
 			status: 'failed',
@@ -279,7 +226,7 @@ export const dispatchTaskToFly = async (input: DispatchInput): Promise<DispatchR
 			summary: failedSummary,
 			failureStage: 'dispatch'
 		});
-		console.error('Failed to launch Fly Machine:', error);
+		console.error('Failed to dispatch task:', error);
 		return {
 			ok: false,
 			status: 'failed',

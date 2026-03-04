@@ -33,27 +33,10 @@ export interface Task {
 	logs: TaskLog[];
 }
 
-export interface AgentStatus {
-	name: string;
-	enabled: boolean;
-	path: string;
-	status: 'active' | 'idle' | 'error';
-	currentTaskId?: string;
-}
-
 export interface PorterConfig {
 	version: string;
 	executionMode: 'cloud' | 'priority';
-	flyToken?: string;
-	flyAppName?: string;
-	agents: Record<
-		string,
-		{
-			enabled: boolean;
-			priority?: 'low' | 'normal' | 'high';
-			customPrompt?: string;
-		}
-	>;
+	selectedModel?: string;
 	credentials?: {
 		anthropic?: string;
 		openai?: string;
@@ -65,7 +48,7 @@ export interface PorterConfig {
 		taskTimeout: number;
 		pollInterval: number;
 	};
-	onboarding?: {
+		onboarding?: {
 		completed: boolean;
 		selectedRepos: Array<{
 			id: number;
@@ -74,6 +57,5 @@ export interface PorterConfig {
 			name: string;
 			private: boolean;
 		}>;
-		enabledAgents: string[];
 	};
 }

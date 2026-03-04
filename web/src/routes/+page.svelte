@@ -1,43 +1,38 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import AgentSettingsDialog from '$lib/components/AgentSettingsDialog.svelte';
 	import CommandBar from '$lib/components/CommandBar.svelte';
 	import TaskFeed from '$lib/components/TaskFeed.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import { GithubLogo } from 'phosphor-svelte';
-	import { ArrowRight, GitBranch, Key, ListChecks, Plus, RocketLaunch, Sliders, Sparkle } from 'phosphor-svelte';
+	import { GitBranch, ListChecks, Plus, RocketLaunch, Sparkle } from 'phosphor-svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import type { PageData } from './$types';
-	import type { AgentConfig, ParsedCommand } from '$lib/types/agent';
+	import type { ParsedCommand } from '$lib/types/model';
 	import type { Task } from '$lib/types/task';
 
-	type AgentDisplay = AgentConfig & { readyState?: 'ready' | 'missing_credentials' | 'disabled' };
+	type ModelOption = { id: string; label: string };
 
-	let showAgentSettings = $state(false);
 	let { data } = $props<{ data: PageData }>();
 	let showDispatch = $state(false);
-	let agentConfig = $state<AgentDisplay[]>([]);
+	let models = $state<ModelOption[]>([]);
 	let tasks = $state<Task[]>([]);
 	let isLoadingTasks = $state(false);
 	let tasksError = $state('');
 	const isConnected = $derived(Boolean(data?.session));
-	const readyAgents = $derived(
-		agentConfig.filter((agent) => (agent.readyState ? agent.readyState === 'ready' : agent.enabled))
-	);
-	const hasReadyAgents = $derived(readyAgents.length > 0);
-	const loadAgents = async (force = false) => {
+	const hasModels = $derived(models.length > 0);
+	const loadModels = async () => {
 		try {
-			const response = await fetch(force ? '/api/agents/scan' : '/api/agents', {
-				method: force ? 'POST' : 'GET'
-			});
+			const response = await fetch('/api/config/providers');
 			if (response.status === 401) {
 				window.location.href = '/auth';
 				return;
 			}
 			if (!response.ok) return;
-			const data = await response.json();
-			agentConfig = data as AgentConfig[];
+			const data = (await response.json()) as {
+				featured?: Array<{ id: string; name: string }>;
+			};
+			models = (data.featured ?? []).map((entry) => ({ id: entry.id, label: entry.name }));
 		} catch {
 			// ignore
 		}
@@ -151,7 +146,7 @@
 					repoName: payload.repoName,
 					issueNumber: payload.issueNumber,
 					prompt: payload.prompt,
-					agent: payload.agent,
+					model: payload.model,
 					priority: payload.priority
 				})
 			});
@@ -205,7 +200,7 @@
 	};
 
 	onMount(() => {
-		loadAgents(true);
+		loadModels();
 		loadTasks();
 
 		window.addEventListener('task-update', handleTaskUpdate as EventListener);
@@ -307,11 +302,11 @@
 					variant="hero"
 				/>
 			{:else}
-				{#if !hasReadyAgents}
+				{#if !hasModels}
 					<div class="mx-auto w-full max-w-[720px] rounded-xl border border-border/60 bg-card/60 px-5 py-3 text-center">
 						<p class="text-sm text-muted-foreground">
 							Task dispatch is currently unavailable.
-							<a href="/settings" class="ml-1 font-semibold text-primary hover:underline">Configure provider keys and enable at least one agent in Settings.</a>
+							<a href="/settings" class="ml-1 font-semibold text-primary hover:underline">Configure provider keys and set a model in Settings.</a>
 						</p>
 					</div>
 				{/if}
@@ -354,10 +349,10 @@
 									<span class="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-muted/60 text-primary">
 										<RocketLaunch size={16} weight="bold" />
 									</span>
-									<div>
-										<p class="text-sm font-semibold text-foreground">Agent executes in cloud</p>
-										<p class="text-xs text-muted-foreground">Live logs stream into the timeline.</p>
-									</div>
+								<div>
+									<p class="text-sm font-semibold text-foreground">Model executes in cloud</p>
+									<p class="text-xs text-muted-foreground">Live logs stream into the timeline.</p>
+								</div>
 								</div>
 								<div class="flex items-start gap-3 rounded-xl border border-border/60 bg-background/80 p-4 shadow-[0_6px_18px_-16px_rgba(15,15,15,0.6)]">
 									<span class="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-muted/60 text-primary">
@@ -414,9 +409,6 @@
 									<span>{pill.label}</span>
 								</Button>
 							{/each}
-							<Button variant="secondary" type="button" onclick={() => (showAgentSettings = true)}>
-								Agents
-							</Button>
 							<Button type="button" onclick={() => (showDispatch = true)}>
 								<Plus size={16} weight="bold" />
 								Dispatch
@@ -428,5 +420,4 @@
 	</div>
 	</main>
 
-<CommandBar bind:open={showDispatch} agents={agentConfig} onsubmit={handleCommandSubmit} />
-<AgentSettingsDialog bind:open={showAgentSettings} agents={agentConfig} />
+<CommandBar bind:open={showDispatch} models={models} onsubmit={handleCommandSubmit} />

@@ -7,18 +7,19 @@
 <p align="center">
 <img src="https://img.shields.io/badge/Svelte-FF3E00?style=flat-square&logo=svelte&logoColor=white" alt="Svelte"/>
 <img src="https://img.shields.io/badge/Bun-000?style=flat-square&logo=bun&logoColor=white" alt="Bun"/>
-<img src="https://img.shields.io/badge/Fly.io-8B5CF6?logo=fly.io&logoColor=white" alt="Fly.io" />
+<img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
 </p>
 
 
-Universal agent orchestrator for GitHub Issues. Porter brings the @mention workflow to any coding agent by running tasks in Fly Machines containers and returning PRs automatically.
+Porter is a cloud-native GitHub task runner. It handles `@porter` comments and dashboard dispatches through a Cloudflare Worker + Durable Object runtime, then opens PRs with atomic GitHub commits.
 
 ## What it does
 
 - Dispatch tasks from GitHub issue comments (`@porter ...`) or the dashboard.
-- Run agents in Fly Machines containers with launch-contract validation and callback reconciliation.
+- Execute each task in a Durable Object lifecycle (`queued -> reading -> running -> committing -> pr_opened -> done`).
+- Select model as a product feature; swap providers by API call.
 - Store settings/secrets in Cloudflare D1 (encrypted secret values); optional GitHub Gist mirror is non-blocking.
-- Track task status, callback attempts, and PR output in one UI.
+- Track task status, logs, and PR output in one UI.
 
 ## Local development
 
@@ -42,30 +43,15 @@ cd web
 bun run test
 ```
 
-## Worker image (Phase 1)
+## Runtime
 
-Porter launches Fly Machines using `PORTER_WORKER_IMAGE` (default: `registry.fly.io/porter-worker:latest`).
+Porter runtime is Worker + Durable Objects.
 
-Build locally:
+- Worker validates webhook/dispatch input and hands off to a task DO.
+- Each DO owns one task end-to-end and writes progress to D1.
+- Git changes are committed atomically with GitHub Git Trees API.
 
-```bash
-docker build -f worker/Dockerfile -t porter-worker:local .
-```
-
-Build for Fly registry:
-
-```bash
-docker build -f worker/Dockerfile -t registry.fly.io/porter-worker:latest .
-```
-
-Entrypoint contract (`worker/entrypoint.sh`) expects:
-
-- `TASK_ID`, `REPO_FULL_NAME`, `AGENT`, `PROMPT`
-- `CALLBACK_URL`, `CALLBACK_TOKEN`
-- `GITHUB_TOKEN` unless `REPO_CLONE_URL` is provided
-- Optional: `BRANCH_NAME`, `BASE_BRANCH`, `REPO_CLONE_URL`
-
-For local smoke tests, see `worker/README.md`.
+Runtime service code lives in `runtime/`.
 
 ## Docs
 

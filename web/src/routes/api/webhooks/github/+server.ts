@@ -13,7 +13,7 @@ import {
 } from '$lib/server/github';
 import { githubCache } from '$lib/server/cache';
 import { parsePorterCommand } from '$lib/server/porter-command';
-import { dispatchTaskToFly } from '$lib/server/task-dispatch';
+import { dispatchTaskToDo } from '$lib/server/task-dispatch';
 import { getConfig } from '$lib/server/store';
 import { isRepoSelectedByConfig } from '$lib/server/repo-selection';
 import { getUserOAuthTokenByWebhookUser } from '$lib/server/oauth-tokens';
@@ -98,11 +98,9 @@ export const POST = async ({ request }: { request: Request }) => {
 			return json({ status: 'repo_not_selected' }, { status: 200 });
 		}
 		const issueNumber = issue.number ?? 0;
-		const defaultAgent =
-			activeConfig.onboarding?.enabledAgents?.[0] ??
-			Object.entries(activeConfig.agents ?? {}).find(([, config]) => Boolean(config?.enabled))?.[0] ??
-			'opencode';
-		const agent = command.agentExplicit ? command.agent : defaultAgent;
+		const model = command.modelExplicit
+			? command.model
+			: (activeConfig.selectedModel ?? 'anthropic/claude-sonnet-4');
 
 		await addIssueCommentReaction(
 			installationToken,
@@ -117,40 +115,37 @@ export const POST = async ({ request }: { request: Request }) => {
 			issueTitle: issue.title ?? 'Untitled issue',
 			issueBody: issue.body ?? '',
 			issueNumber,
-			agent,
+			agent: model,
 			extraInstructions: command.extraInstructions,
 			agentsMd
 		});
 
 		const repoUrl = `https://x-access-token:${installationToken}@github.com/${repoOwner}/${repoName}.git`;
 
-		const dispatchResult = await dispatchTaskToFly({
+		const dispatchResult = await dispatchTaskToDo({
 			githubToken: installationToken,
 			configToken: oauthToken,
 			repoOwner,
 			repoName,
 			issueNumber,
-			agent,
+			model,
 			priority: command.priority,
 			prompt: command.extraInstructions,
 			enrichedPrompt,
 			issueBody: issue.body ?? '',
 			issueTitle: issue.title,
 			runtimeConfig: {
-				flyToken: activeConfig.flyToken,
-				flyAppName: activeConfig.flyAppName,
 				credentials: activeConfig.credentials
 			},
 			installationId,
 			repoCloneUrl: repoUrl,
-			baseBranch: repo.default_branch ?? 'main',
-			requireReadyAgent: true
+			baseBranch: repo.default_branch ?? 'main'
 		});
 
 		if (!dispatchResult.ok) {
 			const metadata: PorterTaskMetadata = {
 				taskId: dispatchResult.taskId,
-				agent,
+				agent: model,
 				priority: command.priority,
 				status: 'failed',
 				progress: 100,

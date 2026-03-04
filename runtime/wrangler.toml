@@ -1,0 +1,11 @@
+name = "porter-runtime"
+main = "src/index.ts"
+compatibility_date = "2026-03-03"
+
+[[durable_objects.bindings]]
+name = "TASK_RUNNER"
+class_name = "TaskRunnerDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TaskRunnerDO"]

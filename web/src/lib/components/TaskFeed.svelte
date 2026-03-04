@@ -41,14 +41,14 @@
 	export let emptyTitle = 'No active tasks yet';
 	export let emptyDescription = 'Start by dispatching a task from the command bar.';
 
-	const agentDomains: Record<string, string> = {
+	const modelDomains: Record<string, string> = {
 		opencode: 'opencode.ai',
 		'claude-code': 'claude.ai',
 		amp: 'ampcode.com'
 	};
 
-	const getAgentIcon = (agent: string) =>
-		`https://www.google.com/s2/favicons?domain=${agentDomains[agent] ?? 'github.com'}&sz=64`;
+	const getModelIcon = (model: string) =>
+		`https://www.google.com/s2/favicons?domain=${modelDomains[model] ?? 'github.com'}&sz=64`;
 
 	const getIssueNumber = (issue: string) => (issue.startsWith('#') ? issue.slice(1) : issue);
 	const getIssueUrl = (task: TaskWithLinks) =>
@@ -201,7 +201,7 @@
 												</span>
 												<span class="text-muted-foreground/60">&bull;</span>
 												<span class="flex items-center gap-1.5 capitalize">
-													<img class="h-3.5 w-3.5 rounded-sm" src={getAgentIcon(task.agent)} alt="" />
+													<img class="h-3.5 w-3.5 rounded-sm" src={getModelIcon(task.agent)} alt="" />
 													{task.agent}
 												</span>
 												<span class="text-muted-foreground/60">&bull;</span>
@@ -305,9 +305,9 @@
 												</p>
 											</div>
 											<div>
-												<p class="text-xs uppercase text-muted-foreground">Agent</p>
+											<p class="text-xs uppercase text-muted-foreground">Model</p>
 												<p class="flex items-center gap-2 text-sm font-medium">
-													<img class="h-4 w-4 rounded-sm" src={getAgentIcon(task.agent)} alt="" />
+													<img class="h-4 w-4 rounded-sm" src={getModelIcon(task.agent)} alt="" />
 													{task.agent}
 												</p>
 											</div>

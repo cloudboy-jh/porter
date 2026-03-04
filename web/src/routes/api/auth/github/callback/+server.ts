@@ -208,10 +208,7 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
 						...config,
 						onboarding: {
 							completed: true,
-							selectedRepos,
-							enabledAgents: config.onboarding?.enabledAgents?.length
-								? config.onboarding.enabledAgents
-								: ['opencode', 'claude-code']
+							selectedRepos
 						}
 					}, {
 						githubUserId: user.id,

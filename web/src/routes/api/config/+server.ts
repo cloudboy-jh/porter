@@ -28,7 +28,6 @@ export const GET = async ({ locals }: { locals: App.Locals }) => {
 		});
 		return json({
 			...config,
-			flyToken: '',
 			credentials: {},
 			providerCredentials: {},
 			secretStatus,
