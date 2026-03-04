@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { GithubLogo } from "phosphor-svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import logo from "../../logos/porter-logo-main.png";
@@ -27,7 +28,7 @@
         title: 'GitHub App installation required',
         body: 'Install Porter on at least one repository before dispatching tasks.',
         ctaLabel: 'Install GitHub App',
-        href: githubAppInstallUrl ?? '/api/auth/github?force=1',
+		href: githubAppInstallUrl ?? `${base}/api/auth/github?force=1`,
         external: Boolean(githubAppInstallUrl)
       };
     }
@@ -36,7 +37,7 @@
         title: 'Cannot verify installation right now',
         body: 'Reconnect GitHub and retry installation verification.',
         ctaLabel: 'Reconnect GitHub',
-        href: '/api/auth/github?force=1',
+		href: `${base}/api/auth/github?force=1`,
         external: false
       };
     }
@@ -45,7 +46,7 @@
         title: 'Required GitHub scopes are missing',
         body: 'Reconnect GitHub to grant the permissions Porter needs.',
         ctaLabel: 'Reconnect GitHub',
-        href: '/api/auth/github?force=1',
+		href: `${base}/api/auth/github?force=1`,
         external: false
       };
     }
@@ -88,7 +89,7 @@
     <Button
       size="lg"
       class="h-12 w-72 gap-2 rounded-lg bg-[#d66000] px-8 text-[#160d08] shadow-[0_10px_30px_-16px_rgba(214,96,0,0.85)] hover:bg-[#e56a00]"
-      href="/api/auth/github"
+      href={`${base}/api/auth/github`}
     >
       <GithubLogo size={16} weight="regular" />
       {isConnected ? `Continue as @${githubHandle}` : "Continue with GitHub"}

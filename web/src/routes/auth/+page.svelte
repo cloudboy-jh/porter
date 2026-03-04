@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import SignInForm from '$lib/components/SignInForm.svelte';
@@ -16,10 +17,10 @@
 		if (isSigningOut) return;
 		isSigningOut = true;
 		try {
-			await fetch('/api/auth/logout', { method: 'POST' });
-			window.location.href = '/auth';
+			await fetch(`${base}/api/auth/logout`, { method: 'POST' });
+			window.location.href = `${base}/auth`;
 		} catch {
-			window.location.href = '/auth';
+			window.location.href = `${base}/auth`;
 		} finally {
 			isSigningOut = false;
 		}
