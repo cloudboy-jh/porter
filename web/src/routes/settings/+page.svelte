@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { Brain, GithubLogo, Lightning } from 'phosphor-svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
@@ -52,8 +53,8 @@
 		loading = true;
 		try {
 			const [providersRes, modelRes] = await Promise.all([
-				fetch(`/api/config/providers?ts=${Date.now()}`, { cache: 'no-store' }),
-				fetch('/api/config/model', { cache: 'no-store' })
+				fetch(`${base}/api/config/providers?ts=${Date.now()}`, { cache: 'no-store' }),
+				fetch(`${base}/api/config/model`, { cache: 'no-store' })
 			]);
 			if (providersRes.ok) {
 				const providers = (await providersRes.json()) as ProviderCatalogResponse;
@@ -74,7 +75,7 @@
 		savingModel = true;
 		modelStatus = '';
 		try {
-			const response = await fetch('/api/config/model', {
+			const response = await fetch(`${base}/api/config/model`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ selectedModel: modelDraft.trim() })
@@ -96,6 +97,7 @@
 
 	const chooseModel = (model: string) => {
 		modelDraft = model;
+		modelStatus = `Selected model: ${model}`;
 	};
 
 	const handleCredentialsSaved = async (message = 'Model keys saved.') => {
@@ -104,8 +106,8 @@
 	};
 
 	const disconnect = async () => {
-		await fetch('/api/auth/logout', { method: 'POST' });
-		window.location.href = '/auth';
+		await fetch(`${base}/api/auth/logout`, { method: 'POST' });
+		window.location.href = `${base}/auth`;
 	};
 
 	onMount(() => {
@@ -201,13 +203,13 @@
 					<p class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">GitHub</p>
 					<p class="text-sm text-foreground">Signed in as {githubHandle}</p>
 					<div class="flex flex-wrap gap-2">
-						<Button variant="secondary" href="/api/auth/github?force=1">Reconnect</Button>
+						<Button variant="secondary" href={`${base}/api/auth/github?force=1`}>Reconnect</Button>
 						<Button variant="outline" class="text-destructive hover:text-destructive" onclick={disconnect}>Disconnect</Button>
 					</div>
 				</section>
 			</div>
 
-			<CredentialsModal bind:open={showCredentialsModal} onsaved={handleCredentialsSaved} />
+			<CredentialsModal bind:open={showCredentialsModal} onsaved={handleCredentialsSaved} onselectmodel={chooseModel} />
 		{/if}
 	</div>
 </main>

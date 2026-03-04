@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -15,14 +16,23 @@
 		featured: ProviderCatalogEntry[];
 		all: ProviderCatalogEntry[];
 		featuredIds: string[];
+		modelSamplesByProvider?: Record<
+			string,
+			Array<{
+				id: string;
+				name: string;
+			}>
+		>;
 	};
 
 	let {
 		open = $bindable(false),
-		onsaved
+		onsaved,
+		onselectmodel
 	}: {
 		open?: boolean;
 		onsaved?: (message?: string) => void;
+		onselectmodel?: (modelId: string) => void;
 	} = $props();
 
 	let catalog = $state<ProviderCatalogResponse>({ featured: [], all: [], featuredIds: [] });
@@ -46,6 +56,14 @@
 		});
 	});
 
+	const providerModels = (providerId: string) =>
+		catalog.modelSamplesByProvider?.[providerId.toLowerCase()] ?? [];
+
+	const selectModel = (modelId: string) => {
+		onselectmodel?.(modelId);
+		status = `Selected model: ${modelId}`;
+	};
+
 	const getIconUrl = (provider: ProviderCatalogEntry) =>
 		`https://www.google.com/s2/favicons?domain=${provider.domain}&sz=64`;
 
@@ -62,8 +80,8 @@
 		status = '';
 		try {
 			const [catalogResponse, credentialsResponse] = await Promise.all([
-				fetch('/api/config/providers'),
-				fetch('/api/config/provider-credentials')
+				fetch(`${base}/api/config/providers`),
+				fetch(`${base}/api/config/provider-credentials`)
 			]);
 			if (catalogResponse.ok) {
 				catalog = (await catalogResponse.json()) as ProviderCatalogResponse;
@@ -107,7 +125,7 @@
 				}
 			}
 
-			const response = await fetch('/api/config/provider-credentials', {
+			const response = await fetch(`${base}/api/config/provider-credentials`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(cleaned)
@@ -176,6 +194,24 @@
 						</div>
 
 						<div class="space-y-2">
+							{#if providerModels(provider.id).length > 0}
+								<div class="rounded-md border border-border/50 bg-background/50 p-2">
+									<p class="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Model options</p>
+									<div class="flex flex-wrap gap-1.5">
+										{#each providerModels(provider.id) as model}
+											<button
+												type="button"
+												onclick={() => selectModel(model.id)}
+												class="rounded bg-muted px-2 py-0.5 text-[11px] text-foreground/90 transition hover:bg-primary/20 hover:text-foreground"
+												title="Use this model as default"
+											>
+												{model.id}
+											</button>
+										{/each}
+									</div>
+								</div>
+							{/if}
+
 							{#each provider.env as envKey}
 								<div class="grid gap-2 sm:grid-cols-[minmax(220px,0.8fr)_minmax(0,1fr)] sm:items-center">
 									<div>
