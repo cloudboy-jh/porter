@@ -48,6 +48,35 @@ type DispatchResult = {
 	error?: string;
 };
 
+const LEGACY_MODEL_ALIASES: Record<string, string> = {
+	opencode: 'anthropic/claude-sonnet-4',
+	claude: 'anthropic/claude-sonnet-4',
+	'claude-code': 'anthropic/claude-sonnet-4',
+	amp: 'amp'
+};
+
+const normalizeProviderId = (providerId: string) => {
+	const normalized = providerId.toLowerCase().replace(/[^a-z0-9-]/g, '');
+	if (normalized === 'x-ai') return 'xai';
+	return normalized;
+};
+
+const resolveDispatchModel = (requestedModel: string, selectedModel?: string) => {
+	const normalized = requestedModel.trim();
+	const legacy = LEGACY_MODEL_ALIASES[normalized.toLowerCase()];
+	if (!legacy) return normalized;
+	if ((normalized.toLowerCase() === 'opencode' || normalized.toLowerCase() === 'claude' || normalized.toLowerCase() === 'claude-code') && selectedModel?.trim()) {
+		return selectedModel.trim();
+	}
+	return legacy;
+};
+
+const providerFromModel = (model: string) => {
+	if (model === 'amp') return 'amp';
+	const provider = model.includes('/') ? model.split('/')[0] : model;
+	return normalizeProviderId(provider);
+};
+
 const buildEnrichedPrompt = (title: string, body: string, issueNumber: number, extraInstructions = '') => `## Task
 ${title}
 
@@ -144,13 +173,53 @@ export const dispatchTaskToDo = async (input: DispatchInput): Promise<DispatchRe
 
 	const configLookupToken = input.configToken ?? input.githubToken;
 	const activeConfig = input.runtimeConfig ? null : await getConfig(configLookupToken);
-	const model = (input.model || activeConfig?.selectedModel || 'anthropic/claude-sonnet-4').trim();
-	const hasCredentials = Object.keys(activeConfig?.providerCredentials ?? {}).length > 0;
+	const model = resolveDispatchModel(
+		input.model || activeConfig?.selectedModel || 'anthropic/claude-sonnet-4',
+		activeConfig?.selectedModel
+	);
+	const providerCredentials = activeConfig?.providerCredentials ?? {};
+	const configuredProviders = Object.entries(providerCredentials).filter(([, values]) =>
+		Object.values(values ?? {}).some((value) => Boolean(value?.trim()))
+	);
+	const hasAnyCredentials = configuredProviders.length > 0;
+	const modelProviderId = providerFromModel(model);
+	const hasModelCredentials = configuredProviders.some(
+		([providerId]) => normalizeProviderId(providerId) === modelProviderId
+	);
 
-	if (!hasCredentials) {
+	console.info('[task-dispatch] credential readiness', {
+		taskId: metadata.taskId,
+		requestedModel: input.model,
+		resolvedModel: model,
+		resolvedProvider: modelProviderId,
+		configuredProviders: configuredProviders.map(([providerId]) => normalizeProviderId(providerId)),
+		hasAnyCredentials,
+		hasModelCredentials
+	});
+
+	if (!hasAnyCredentials) {
 		const blockedSummary = 'Task blocked: missing provider API keys.';
 		await updateLabelsAndComment(input.githubToken, input.repoOwner, input.repoName, issue.number, {
 			...metadata,
+			status: 'failed',
+			summary: blockedSummary,
+			updatedAt: new Date().toISOString()
+		});
+		return {
+			ok: false,
+			status: 'failed',
+			taskId: metadata.taskId,
+			issueNumber: issue.number,
+			summary: blockedSummary,
+			error: blockedSummary
+		};
+	}
+
+	if (!hasModelCredentials) {
+		const blockedSummary = `Task blocked: missing API key for model provider \`${modelProviderId}\`.`;
+		await updateLabelsAndComment(input.githubToken, input.repoOwner, input.repoName, issue.number, {
+			...metadata,
+			agent: model,
 			status: 'failed',
 			summary: blockedSummary,
 			updatedAt: new Date().toISOString()
@@ -176,25 +245,46 @@ export const dispatchTaskToDo = async (input: DispatchInput): Promise<DispatchRe
 				extraInstructions
 			);
 		const dispatchUrl = env.PORTER_DO_DISPATCH_URL?.trim();
-		if (dispatchUrl) {
-			await fetch(dispatchUrl, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${env.PORTER_DO_DISPATCH_TOKEN ?? ''}`
-				},
-				body: JSON.stringify({
-					taskId: metadata.taskId,
-					repoOwner: input.repoOwner,
-					repoName: input.repoName,
-					issueNumber: issue.number,
-					priority: input.priority,
-					model,
-					prompt: resolvedPrompt,
-					baseBranch: input.baseBranch ?? 'main',
-					installationId: input.installationId
-				})
+		if (!dispatchUrl) {
+			const blockedSummary = 'Task blocked: missing dispatch URL configuration.';
+			await updateLabelsAndComment(input.githubToken, input.repoOwner, input.repoName, issue.number, {
+				...metadata,
+				agent: model,
+				status: 'failed',
+				summary: blockedSummary,
+				updatedAt: new Date().toISOString(),
+				failureStage: 'dispatch'
 			});
+			return {
+				ok: false,
+				status: 'failed',
+				taskId: metadata.taskId,
+				issueNumber: issue.number,
+				summary: blockedSummary,
+				error: blockedSummary
+			};
+		}
+
+		const dispatchResponse = await fetch(dispatchUrl, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${env.PORTER_DO_DISPATCH_TOKEN ?? ''}`
+			},
+			body: JSON.stringify({
+				taskId: metadata.taskId,
+				repoOwner: input.repoOwner,
+				repoName: input.repoName,
+				issueNumber: issue.number,
+				priority: input.priority,
+				model,
+				prompt: resolvedPrompt,
+				baseBranch: input.baseBranch ?? 'main',
+				installationId: input.installationId
+			})
+		});
+		if (!dispatchResponse.ok) {
+			throw new Error(`dispatch rejected with ${dispatchResponse.status}`);
 		}
 
 		const runningSummary = `Task running in Durable Object with model ${model}.`;

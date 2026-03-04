@@ -6,12 +6,24 @@ import {
 	getPorterPriority
 } from '$lib/server/github';
 import { githubCache } from '$lib/server/cache';
+import { getConfig } from '$lib/server/store';
 import { dispatchTaskToDo } from '$lib/server/task-dispatch';
 
 const parseTaskId = (id: string) => {
 	const match = id.match(/^([^/]+)\/([^#]+)#(\d+)$/);
 	if (!match) return null;
 	return { owner: match[1], repo: match[2], issueNumber: Number(match[3]) };
+};
+
+const resolveRetryModel = (labelModel: string, selectedModel?: string) => {
+	const normalized = labelModel.trim().toLowerCase();
+	if (normalized === 'opencode' || normalized === 'claude' || normalized === 'claude-code') {
+		return selectedModel?.trim() || 'anthropic/claude-sonnet-4';
+	}
+	if (normalized === 'amp') {
+		return 'amp';
+	}
+	return labelModel;
 };
 
 export const PUT = async ({ params, locals }: { params: { id: string }; locals: App.Locals }) => {
@@ -27,7 +39,11 @@ export const PUT = async ({ params, locals }: { params: { id: string }; locals: 
 	}
 
 	const issue = await fetchIssue(session.token, parsed.owner, parsed.repo, parsed.issueNumber);
-	const model = getPorterAgent(issue.labels);
+	const config = await getConfig(session.token, {
+		githubUserId: session.user.id,
+		githubLogin: session.user.login
+	});
+	const model = resolveRetryModel(getPorterAgent(issue.labels), config.selectedModel);
 	const priority = getPorterPriority(issue.labels);
 
 	const result = await dispatchTaskToDo({
@@ -46,7 +62,6 @@ export const PUT = async ({ params, locals }: { params: { id: string }; locals: 
 		return json({ error: result.error ?? result.summary }, { status });
 	}
 
-	// Clear cache for this repo's issues to reflect the status change
 	githubCache.clearPattern(`issues:${parsed.owner}/${parsed.repo}`);
 
 	return json({ ok: true });
