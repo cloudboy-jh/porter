@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import CommandBar from '$lib/components/CommandBar.svelte';
 	import TaskFeed from '$lib/components/TaskFeed.svelte';
@@ -298,7 +299,7 @@
 					title="Connect GitHub to see live tasks"
 					description="Authorize Porter to start dispatching tasks and opening PRs."
 					actionLabel="Connect GitHub"
-					actionHref="/api/auth/github"
+					actionHref={`${base}/api/auth/github`}
 					variant="hero"
 				/>
 			{:else}

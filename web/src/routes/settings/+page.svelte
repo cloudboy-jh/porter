@@ -121,7 +121,7 @@
 				title="Connect GitHub to manage settings"
 				description="Authorize Porter to configure model defaults and model keys."
 				actionLabel="Connect GitHub"
-				actionHref="/api/auth/github"
+				actionHref={`${base}/api/auth/github`}
 				variant="hero"
 			/>
 		{:else}

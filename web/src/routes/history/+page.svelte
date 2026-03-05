@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import {
 		ArrowCounterClockwise,
 		ArrowUpRight,
@@ -412,7 +413,7 @@
 			title="Connect GitHub to view history"
 			description="Authorize Porter to record your completed tasks and PRs."
 			actionLabel="Connect GitHub"
-			actionHref="/api/auth/github"
+			actionHref={`${base}/api/auth/github`}
 			variant="hero"
 		/>
 	{:else}
