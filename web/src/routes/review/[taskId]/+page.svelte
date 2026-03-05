@@ -19,7 +19,6 @@
 	let mergeSuccess = $state(false);
 	let rejectSuccess = $state(false);
 	let diffLayout = $state<'split' | 'stacked'>('split');
-	let showFullDiff = $state(false);
 
 	const handleMerge = async () => {
 		if (isMerging) return;
@@ -130,8 +129,6 @@
 				</div>
 			</div>
 			<div class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-				<span class="capitalize">{data.task.agent}</span>
-				<span class="text-muted-foreground/60">&bull;</span>
 				<a class="text-primary hover:text-primary/80" href={data.pr.htmlUrl} target="_blank" rel="noreferrer">
 					PR #{data.pr.number}
 				</a>
@@ -159,7 +156,7 @@
 
 		<div class="mt-4 mb-4 flex items-center gap-3 rounded-lg border border-border/20 bg-muted/30 px-4 py-3">
 			<p class="min-w-0 flex-1 line-clamp-2 text-sm text-muted-foreground">
-				{data.task.summary || 'No summary provided by the agent.'}
+				{data.task.summary || 'No summary provided for this task.'}
 			</p>
 			{#if issueHref && data.task.issueNumber}
 				<a
@@ -180,15 +177,7 @@
 		<Card.Root class="border border-border/60 bg-card/70">
 		<Card.Header class="pb-2">
 			<div class="flex items-center justify-between gap-2">
-				<Button
-					variant="ghost"
-					size="sm"
-					class="h-8 px-0 text-xs text-muted-foreground transition-colors duration-150 hover:text-foreground"
-					onclick={() => (showFullDiff = !showFullDiff)}
-				>
-					{showFullDiff ? 'Hide full diff' : 'Show full diff'}
-				</Button>
-				{#if showFullDiff}
+				<div></div>
 				<div class="flex items-center gap-2">
 				<Button
 						variant={diffLayout === 'split' ? 'secondary' : 'ghost'}
@@ -205,13 +194,10 @@
 						Stacked
 					</Button>
 				</div>
-				{/if}
 			</div>
 		</Card.Header>
 		<Card.Content class="space-y-4 pt-0">
-			{#if !showFullDiff}
-				<p class="text-sm text-muted-foreground">Use "Show full diff" to inspect file-level changes.</p>
-			{:else if data.files.length === 0}
+			{#if data.files.length === 0}
 				<p class="text-sm text-muted-foreground">No file changes found for this pull request.</p>
 			{:else}
 				<div class="rounded-lg border border-border/60 bg-background/70 p-3">

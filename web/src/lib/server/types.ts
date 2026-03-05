@@ -43,6 +43,7 @@ export interface PorterConfig {
 		amp?: string;
 	};
 	providerCredentials?: Record<string, Record<string, string>>;
+	modelCredentials?: Record<string, string>;
 	settings: {
 		maxRetries: number;
 		taskTimeout: number;

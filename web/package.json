@@ -39,7 +39,7 @@
 		"vitest": "^3.2.1"
 	},
 	"dependencies": {
-		"@pierre/diffs": "^1.0.10",
+		"@pierre/diffs": "^1.0.11",
 		"@pierre/precision-diffs": "^0.6.1",
 		"clsx": "^2.1.1",
 		"phosphor-svelte": "^3.0.1",

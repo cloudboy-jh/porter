@@ -12,7 +12,6 @@
 		GitPullRequest,
 		MagnifyingGlass,
 		Percent,
-		Robot,
 		WarningCircle,
 		X,
 		ClockCounterClockwise,
@@ -30,15 +29,6 @@
 	import type { Task } from '$lib/server/types';
 
 	type TaskWithLinks = Task & { issueUrl?: string; prUrl?: string; branch?: string };
-
-	const modelDomains: Record<string, string> = {
-		opencode: 'opencode.ai',
-		'claude-code': 'claude.ai',
-		amp: 'ampcode.com'
-	};
-
-	const getModelIcon = (model: string) =>
-		`https://www.google.com/s2/favicons?domain=${modelDomains[model] ?? 'github.com'}&sz=64`;
 
 	const statusStyles: Record<string, string> = {
 		queued: 'border border-border/60 bg-muted/70 text-muted-foreground',
@@ -79,7 +69,6 @@
 	const isConnected = $derived(Boolean(data?.session));
 
 	let activeStatus = $state<'all' | 'queued' | 'running' | 'success' | 'failed'>('all');
-	let selectedModel = $state('all');
 	let selectedRepo = $state('all');
 	let selectedBranch = $state<string | null>(null);
 	let selectedIssue = $state<string | null>(null);
@@ -98,7 +87,6 @@
 		try {
 			const params = new URLSearchParams();
 			if (activeStatus !== 'all') params.set('status', activeStatus);
-			if (selectedModel !== 'all') params.set('agent', selectedModel);
 			if (selectedRepo && selectedRepo !== 'all') params.set('repo', selectedRepo);
 			if (selectedBranch) params.set('branch', selectedBranch);
 			if (selectedIssue) {
@@ -141,7 +129,6 @@
 
 	const resetFilters = () => {
 		activeStatus = 'all';
-		selectedModel = 'all';
 		selectedRepo = 'all';
 		selectedBranch = null;
 		selectedIssue = null;
@@ -220,7 +207,6 @@
 			'ID',
 			'Title',
 			'Repository',
-			'Model',
 			'Status',
 			'Issue',
 			'PR',
@@ -231,7 +217,6 @@
 			task.id,
 			task.issueTitle,
 			`${task.repoOwner}/${task.repoName}`,
-			task.agent,
 			task.status,
 			task.issueNumber,
 			task.prNumber ?? '',
@@ -303,9 +288,6 @@
 				activeStatus = status;
 			}
 		}
-		if (params.get('agent')) {
-			selectedModel = params.get('agent') ?? 'all';
-		}
 		if (params.get('repo')) {
 			selectedRepo = params.get('repo') ?? 'all';
 		}
@@ -376,11 +358,6 @@
 		})()
 	);
 
-	const availableModels: string[] = $derived([
-		'all',
-		...Array.from(new Set(historyTasks.map((task) => task.agent)))
-	]);
-
 	const availableRepos: string[] = $derived([
 		'all',
 		...Array.from(new Set(historyTasks.map((task) => `${task.repoOwner}/${task.repoName}`)))
@@ -397,7 +374,6 @@
 	const issueOptions = $derived(availableIssues);
 
 	const statusLabel = $derived(activeStatus === 'all' ? 'Status' : activeStatus);
-	const modelLabel = $derived(selectedModel === 'all' ? 'Model' : selectedModel);
 	const dateLabel = $derived(selectedDate === 'any' ? 'Date' : selectedDate === 'custom' ? 'Custom' : selectedDate);
 	const repoLabel = $derived(selectedRepo === 'all' ? 'Repository' : selectedRepo ?? 'Repository');
 	const branchLabel = $derived(selectedBranch ?? 'Branch');
@@ -406,7 +382,7 @@
 		activeStatus === 'failed'
 			? WarningCircle
 			: activeStatus === 'running'
-				? Robot
+				? Clock
 				: activeStatus === 'queued'
 					? Clock
 					: CheckCircle
@@ -423,11 +399,6 @@
 		if (value === 'running') return 'text-primary';
 		if (value === 'queued') return 'text-muted-foreground';
 		return 'text-muted-foreground';
-	};
-
-	const getModelTone = (value: string) => {
-		if (value === 'all') return 'text-muted-foreground';
-		return 'text-primary';
 	};
 
 	const showingCount = $derived(historyTasks.length);
@@ -476,17 +447,6 @@
 						toneClass={filterTone}
 						itemIconType="dot"
 						getItemTone={getStatusTone}
-					/>
-					<GitFilterButton
-						icon={Robot}
-						label="Model"
-						options={availableModels}
-						bind:selected={selectedModel}
-						displayValue={modelLabel}
-						toneClass={filterTone}
-						itemIconType="image"
-						getItemIcon={(value) => (value === 'all' ? null : getModelIcon(value))}
-						getItemTone={getModelTone}
 					/>
 					<DateFilterButton
 						label="Date"
@@ -563,11 +523,10 @@
 					{actionStatus}
 				</div>
 			{/if}
-			<div class="mt-3 grid grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 rounded-xl bg-muted/40 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
+			<div class="mt-3 grid grid-cols-[120px_2fr_1fr_1fr_auto] items-center gap-4 rounded-xl bg-muted/40 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
 				<span>Status</span>
 				<span>Task</span>
 				<span>Repository</span>
-				<span>Model</span>
 				<span>Completed</span>
 				<span class="text-right">Actions</span>
 			</div>
@@ -576,14 +535,13 @@
 				<div class="mt-4 space-y-3">
 					{#each Array(4) as _}
 						<Card.Root class="border border-border/60 bg-background/80 animate-pulse">
-							<Card.Content class="grid min-h-[72px] grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 py-3">
+							<Card.Content class="grid min-h-[72px] grid-cols-[120px_2fr_1fr_1fr_auto] items-center gap-4 py-3">
 								<div class="h-6 w-16 rounded bg-muted"></div>
 								<div class="space-y-2">
 									<div class="h-4 w-2/3 rounded bg-muted"></div>
 									<div class="h-3 w-1/2 rounded bg-muted"></div>
 								</div>
 								<div class="h-4 w-20 rounded bg-muted"></div>
-								<div class="h-6 w-24 rounded bg-muted"></div>
 								<div class="h-4 w-16 rounded bg-muted"></div>
 								<div class="h-8 w-16 rounded bg-muted"></div>
 							</Card.Content>
@@ -608,7 +566,7 @@
 							onclick={() => toggleExpanded(task.id)}
 							onkeydown={(event: KeyboardEvent) => handleRowKey(event, task.id)}
 						>
-							<Card.Content class="grid min-h-[72px] grid-cols-[120px_2fr_1fr_1fr_1fr_auto] items-center gap-4 px-2 py-3">
+							<Card.Content class="grid min-h-[72px] grid-cols-[120px_2fr_1fr_1fr_auto] items-center gap-4 px-2 py-3">
 								<Badge class={`text-[0.6rem] font-semibold uppercase tracking-[0.2em] ${statusStyles[task.status]}`}>
 									{task.status === 'success'
 										? 'DONE'
@@ -631,10 +589,6 @@
 								<div class="text-xs text-muted-foreground font-mono">
 									{task.repoOwner}/{task.repoName}
 								</div>
-								<Badge variant="outline" class="text-xs capitalize font-mono gap-2">
-									<img class="h-3.5 w-3.5" src={getModelIcon(task.agent)} alt={task.agent} />
-									{task.agent}
-								</Badge>
 								<span class="text-xs text-muted-foreground font-mono">
 									{formatRelativeTime(task.completedAt)}
 								</span>

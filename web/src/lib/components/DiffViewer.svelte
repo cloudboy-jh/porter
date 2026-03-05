@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { FileDiff, type SupportedLanguages } from '@pierre/diffs';
+	import { parseDiffFromFile } from '@pierre/precision-diffs';
 
 	interface Props {
 		filename: string;
@@ -23,105 +24,33 @@
 	let mount: HTMLDivElement | null = null;
 	let diff: FileDiff | null = null;
 	let renderError = $state('');
- 	let themeType = $state<'light' | 'dark'>('light');
+	let themeType = $state<'light' | 'dark'>('light');
 
-const porterDiffUnsafeCSS = `
-:host {
-	--diffs-header-font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-	--diffs-font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-	--diffs-font-size: 13px;
-	--diffs-line-height: 20px;
-	--diffs-font-features: 'calt' 1, 'liga' 1;
-	--diffs-gap-style: solid;
-}
+	const porterSurfaceUnsafeCSS = `
+		[data-diffs-header][data-theme-type='light'],
+		[data-diffs][data-theme-type='light'],
+		[data-error-wrapper][data-theme-type='light'] {
+			--diffs-bg: color-mix(in srgb, var(--card) 96%, var(--background));
+			--diffs-bg-context-override: color-mix(in srgb, var(--card) 92%, var(--background));
+			--diffs-bg-hover-override: color-mix(in srgb, var(--muted) 18%, var(--card));
+			--diffs-bg-buffer-override: color-mix(in srgb, var(--muted) 28%, var(--card));
+			--diffs-bg-separator-override: color-mix(in srgb, var(--muted) 30%, var(--card));
+		}
 
-[data-diffs-header],
-[data-diffs],
-[data-error-wrapper] {
-	--diffs-token-light-bg: transparent !important;
-	--diffs-token-dark-bg: transparent !important;
-	--diffs-fg: var(--foreground);
-	--diffs-fg-number-override: color-mix(in srgb, var(--muted-foreground) 70%, var(--foreground));
-	--diffs-fg-number-addition-override: color-mix(in srgb, #16a34a 70%, var(--foreground));
-	--diffs-fg-number-deletion-override: color-mix(in srgb, var(--destructive) 70%, var(--foreground));
-	--diffs-addition-color-override: color-mix(in srgb, #22c55e 80%, var(--foreground));
-	--diffs-deletion-color-override: color-mix(in srgb, var(--destructive) 82%, var(--foreground));
-	--diffs-modified-color-override: color-mix(in srgb, var(--muted-foreground) 75%, var(--foreground));
-	--diffs-gap-style: solid;
-}
+		[data-diffs-header][data-theme-type='dark'],
+		[data-diffs][data-theme-type='dark'],
+		[data-error-wrapper][data-theme-type='dark'] {
+			--diffs-bg: color-mix(in srgb, var(--card) 90%, var(--background));
+			--diffs-bg-context-override: color-mix(in srgb, var(--card) 86%, var(--background));
+			--diffs-bg-hover-override: color-mix(in srgb, var(--muted) 16%, var(--card));
+			--diffs-bg-buffer-override: color-mix(in srgb, var(--muted) 22%, var(--card));
+			--diffs-bg-separator-override: color-mix(in srgb, var(--muted) 24%, var(--card));
+		}
 
-[data-diffs-header][data-theme-type='light'],
-[data-diffs][data-theme-type='light'],
-[data-error-wrapper][data-theme-type='light'] {
-	--diffs-bg: color-mix(in srgb, var(--card) 96%, var(--background));
-	--diffs-light-bg: color-mix(in srgb, var(--card) 96%, var(--background));
-	--diffs-dark-bg: color-mix(in srgb, var(--card) 96%, var(--background));
-	--diffs-bg-context-override: color-mix(in srgb, var(--card) 93%, var(--background));
-	--diffs-bg-hover-override: color-mix(in srgb, var(--muted) 22%, var(--card));
-	--diffs-bg-buffer-override: color-mix(in srgb, var(--muted) 30%, var(--card));
-	--diffs-bg-separator-override: color-mix(in srgb, var(--muted) 34%, var(--card));
-	--diffs-bg-addition-override: color-mix(in srgb, #16a34a 8%, var(--card));
-	--diffs-bg-addition-number-override: color-mix(in srgb, #16a34a 12%, var(--card));
-	--diffs-bg-addition-hover-override: color-mix(in srgb, #16a34a 14%, var(--card));
-	--diffs-bg-addition-emphasis-override: color-mix(in srgb, #16a34a 16%, var(--card));
-	--diffs-bg-deletion-override: color-mix(in srgb, var(--destructive) 8%, var(--card));
-	--diffs-bg-deletion-number-override: color-mix(in srgb, var(--destructive) 12%, var(--card));
-	--diffs-bg-deletion-hover-override: color-mix(in srgb, var(--destructive) 14%, var(--card));
-	--diffs-bg-deletion-emphasis-override: color-mix(in srgb, var(--destructive) 16%, var(--card));
-}
-
-[data-diffs-header][data-theme-type='dark'],
-[data-diffs][data-theme-type='dark'],
-[data-error-wrapper][data-theme-type='dark'] {
-	--diffs-bg: color-mix(in srgb, var(--card) 90%, var(--background));
-	--diffs-light-bg: color-mix(in srgb, var(--card) 90%, var(--background));
-	--diffs-dark-bg: color-mix(in srgb, var(--card) 90%, var(--background));
-	--diffs-bg-context-override: color-mix(in srgb, var(--card) 87%, var(--background));
-	--diffs-bg-hover-override: color-mix(in srgb, var(--muted) 18%, var(--card));
-	--diffs-bg-buffer-override: color-mix(in srgb, var(--muted) 24%, var(--card));
-	--diffs-bg-separator-override: color-mix(in srgb, var(--muted) 28%, var(--card));
-	--diffs-bg-addition-override: color-mix(in srgb, #16a34a 10%, var(--card));
-	--diffs-bg-addition-number-override: color-mix(in srgb, #16a34a 14%, var(--card));
-	--diffs-bg-addition-hover-override: color-mix(in srgb, #16a34a 17%, var(--card));
-	--diffs-bg-addition-emphasis-override: color-mix(in srgb, #16a34a 19%, var(--card));
-	--diffs-bg-deletion-override: color-mix(in srgb, var(--destructive) 10%, var(--card));
-	--diffs-bg-deletion-number-override: color-mix(in srgb, var(--destructive) 14%, var(--card));
-	--diffs-bg-deletion-hover-override: color-mix(in srgb, var(--destructive) 17%, var(--card));
-	--diffs-bg-deletion-emphasis-override: color-mix(in srgb, var(--destructive) 19%, var(--card));
-}
-
-div[data-diffs-header] {
-	background: color-mix(in srgb, var(--muted) 60%, var(--card)) !important;
-	border-bottom: 1px solid var(--border) !important;
-	color: var(--foreground) !important;
-}
-
-[data-buffer],
-[data-separator],
-[data-separator-wrapper],
-[data-separator-content],
-[data-no-newline] {
-	background-image: none !important;
-}
-
-[data-buffer] {
-	background: color-mix(in srgb, var(--muted) 42%, var(--card)) !important;
-}
-
-[data-column-content],
-[data-column-number],
-[data-line] {
-	color: var(--foreground) !important;
-}
-
-[data-column-content] span:not([data-diff-span]) {
-	background-color: transparent !important;
-}
-
-pre {
-	border-color: var(--border) !important;
-}
-`;
+		div[data-diffs-header] {
+			border-bottom: 1px solid var(--border) !important;
+		}
+	`;
 
 	const syncThemeType = () => {
 		if (typeof document === 'undefined') return;
@@ -142,32 +71,36 @@ pre {
 				themeType,
 				diffStyle: layout === 'split' ? 'split' : 'unified',
 				diffIndicators: 'bars',
-				lineDiffType: 'none',
-				disableBackground: true,
+				lineDiffType: 'word',
+				disableBackground: false,
 				disableLineNumbers: false,
 				overflow: 'scroll',
 				disableFileHeader: false,
-				unsafeCSS: porterDiffUnsafeCSS
+				expandUnchanged: false,
+				expansionLineCount: 8,
+				hunkSeparators: 'metadata',
+				unsafeCSS: porterSurfaceUnsafeCSS
 			});
+
+			const oldFile: { name: string; contents: string; lang?: SupportedLanguages } | undefined = status === 'added' ? undefined : {
+				name: filename,
+				contents: before ?? '',
+				lang: toSupportedLanguage(language)
+			};
+			const newFile: { name: string; contents: string; lang?: SupportedLanguages } | undefined = status === 'removed' ? undefined : {
+				name: filename,
+				contents: after ?? '',
+				lang: toSupportedLanguage(language)
+			};
+
+			// Compute diff metadata with proper hunks for collapsible sections
+			const fileDiff = oldFile && newFile ? parseDiffFromFile(oldFile as any, newFile as any) : undefined;
 
 			diff.render({
 				containerWrapper: mount,
-				oldFile:
-					status === 'added'
-						? undefined
-						: {
-							name: filename,
-							contents: before ?? '',
-							lang: toSupportedLanguage(language)
-						},
-				newFile:
-					status === 'removed'
-						? undefined
-						: {
-							name: filename,
-							contents: after ?? '',
-							lang: toSupportedLanguage(language)
-						}
+				oldFile,
+				newFile,
+				fileDiff
 			});
 		} catch (error) {
 			renderError = error instanceof Error ? error.message : 'Unable to render diff.';
@@ -189,9 +122,12 @@ pre {
 			themeType,
 			diffStyle: 'split',
 			diffIndicators: 'bars',
-			lineDiffType: 'none',
-			disableBackground: true,
-			unsafeCSS: porterDiffUnsafeCSS
+			lineDiffType: 'word',
+			disableBackground: false,
+			expandUnchanged: false,
+			expansionLineCount: 8,
+			hunkSeparators: 'metadata',
+			unsafeCSS: porterSurfaceUnsafeCSS
 		});
 
 		renderDiff();

@@ -12,6 +12,7 @@ const baseConfig: PorterConfig = {
 	selectedModel: 'anthropic/claude-sonnet-4',
 	credentials: {},
 	providerCredentials: {},
+	modelCredentials: {},
 	settings: {
 		maxRetries: 3,
 		taskTimeout: 90,
@@ -57,6 +58,18 @@ const normalizeProviderCredentials = (providerCredentials?: PorterConfig['provid
 		}
 		if (Object.keys(nextValues).length > 0) {
 			normalized[providerId] = nextValues;
+		}
+	}
+	return normalized;
+};
+
+const normalizeModelCredentials = (modelCredentials?: PorterConfig['modelCredentials']) => {
+	const normalized: Record<string, string> = {};
+	for (const [modelId, rawValue] of Object.entries(modelCredentials ?? {})) {
+		const key = modelId.trim();
+		const value = normalizeCredential(rawValue);
+		if (key && value) {
+			normalized[key] = value;
 		}
 	}
 	return normalized;
@@ -147,7 +160,8 @@ const resolvePersistenceIdentity = (token: string, identity?: ConfigIdentity) =>
 const sanitizeConfigForSettingsTable = (config: PorterConfig): PorterConfig => ({
 	...config,
 	credentials: {},
-	providerCredentials: {}
+	providerCredentials: {},
+	modelCredentials: {}
 });
 
 const ensureUserRow = async (token: string, identity?: ConfigIdentity) => {
@@ -267,6 +281,7 @@ const loadConfigFromD1 = async (token: string, identity?: ConfigIdentity): Promi
 		.all<D1SecretRow>();
 
 	const providerCredentials: PorterConfig['providerCredentials'] = {};
+	const modelCredentials: PorterConfig['modelCredentials'] = {};
 	for (const row of secretsRows.results ?? []) {
 		try {
 			const decrypted = await decryptSecretValue({
@@ -274,6 +289,10 @@ const loadConfigFromD1 = async (token: string, identity?: ConfigIdentity): Promi
 				iv: row.iv,
 				tag: row.tag
 			});
+			if (row.provider_id === '__model__') {
+				modelCredentials[row.env_key] = decrypted;
+				continue;
+			}
 			if (!providerCredentials[row.provider_id]) {
 				providerCredentials[row.provider_id] = {};
 			}
@@ -285,7 +304,8 @@ const loadConfigFromD1 = async (token: string, identity?: ConfigIdentity): Promi
 
 	const merged = {
 		...parsed,
-		providerCredentials
+		providerCredentials,
+		modelCredentials
 	};
 	merged.credentials = mapProvidersToLegacyCredentials(providerCredentials, parsed.credentials);
 	return merged;
@@ -339,6 +359,29 @@ const saveConfigToD1 = async (
 				.run();
 		}
 	}
+	for (const [modelId, rawValue] of Object.entries(config.modelCredentials ?? {})) {
+		const value = normalizeCredential(rawValue);
+		if (!value) continue;
+		const encrypted = await encryptSecretValue(value);
+		await db
+			.prepare(
+				`INSERT INTO user_secrets
+				 (user_key, provider_id, env_key, encrypted_value, iv, tag, alg, key_version, updated_at)
+				 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
+			)
+			.bind(
+				userKey,
+				'__model__',
+				modelId,
+				encrypted.encryptedValue,
+				encrypted.iv,
+				encrypted.tag,
+				encrypted.alg,
+				encrypted.keyVersion,
+				now
+			)
+			.run();
+	}
 
 	return true;
 };
@@ -360,6 +403,11 @@ export const getConfigSecretStatus = async (token: string, identity?: ConfigIden
 		}
 	}
 
+	const statusByModel: Record<string, 'configured' | 'not_configured'> = {};
+	for (const [modelId, value] of Object.entries(activeConfig.modelCredentials ?? {})) {
+		statusByModel[modelId] = normalizeCredential(value) ? 'configured' : 'not_configured';
+	}
+
 	const legacyStatus: Record<'anthropic' | 'openai' | 'amp', 'configured' | 'not_configured'> = {
 		anthropic: normalizeCredential(activeConfig.credentials?.anthropic)
 			? 'configured'
@@ -372,6 +420,7 @@ export const getConfigSecretStatus = async (token: string, identity?: ConfigIden
 
 	return {
 		providerCredentials: statusByProvider,
+		modelCredentials: statusByModel,
 		legacy: legacyStatus
 	};
 };
@@ -450,7 +499,8 @@ export const getConfig = async (token: string, identity?: ConfigIdentity): Promi
 					Object.keys((gistConfig as PorterConfig).providerCredentials ?? {}).length
 						? (gistConfig as PorterConfig).providerCredentials
 						: mapLegacyCredentialsToProviders((gistConfig as PorterConfig).credentials)
-				)
+				),
+				modelCredentials: normalizeModelCredentials((gistConfig as PorterConfig).modelCredentials)
 			};
 			mergedForMigration.credentials = mapProvidersToLegacyCredentials(
 				mergedForMigration.providerCredentials,
@@ -470,7 +520,8 @@ export const getConfig = async (token: string, identity?: ConfigIdentity): Promi
 				Object.keys((loadedConfig as PorterConfig).providerCredentials ?? {}).length
 					? (loadedConfig as PorterConfig).providerCredentials
 					: mapLegacyCredentialsToProviders((loadedConfig as PorterConfig).credentials)
-			)
+			),
+			modelCredentials: normalizeModelCredentials((loadedConfig as PorterConfig).modelCredentials)
 		};
 		merged.credentials = mapProvidersToLegacyCredentials(
 			merged.providerCredentials,
@@ -498,7 +549,8 @@ export const updateConfig = async (
 	setConfigWarning(cacheKey);
 	const normalized = {
 		...next,
-		providerCredentials: normalizeProviderCredentials(next.providerCredentials)
+		providerCredentials: normalizeProviderCredentials(next.providerCredentials),
+		modelCredentials: normalizeModelCredentials(next.modelCredentials)
 	};
 	normalized.credentials = mapProvidersToLegacyCredentials(
 		normalized.providerCredentials,
@@ -565,6 +617,33 @@ export const updateProviderCredentials = async (
 		...activeConfig,
 		providerCredentials: merged
 	}, identity);
+	return getConfig(token, identity);
+};
+
+export const updateModelCredentials = async (
+	token: string,
+	modelCredentials: PorterConfig['modelCredentials'],
+	identity?: ConfigIdentity
+) => {
+	const activeConfig = await getConfig(token, identity);
+	const merged: PorterConfig['modelCredentials'] = {
+		...(activeConfig.modelCredentials ?? {})
+	};
+	for (const [modelId, rawValue] of Object.entries(modelCredentials ?? {})) {
+		const key = modelId.trim();
+		if (!key) continue;
+		const value = normalizeCredential(rawValue);
+		if (value) merged[key] = value;
+		else delete merged[key];
+	}
+	await updateConfig(
+		token,
+		{
+			...activeConfig,
+			modelCredentials: merged
+		},
+		identity
+	);
 	return getConfig(token, identity);
 };
 

@@ -1,8 +1,35 @@
 # Diffs Implementation — Porter Review Flow
 
 **Date:** February 8, 2026
-**Status:** Ready for implementation
+**Status:** Implemented (March 2026)
 **Dependency:** `@pierre/diffs` v1.0.10 + `@pierre/precision-diffs` v0.6.1
+
+---
+
+## Implementation Summary (March 2026)
+
+This spec has now been implemented in Porter with a production review flow and native Pierre Diffs rendering.
+
+- Review detail page supports split/stacked layout toggles using Pierre `FileDiff`.
+- Diff rendering uses full-file before/after content and parsed hunk metadata (`parseDiffFromFile`) for proper separators and context expansion behavior.
+- Full-line additions/deletions and inline word highlights are enabled (site-style behavior).
+- Lightweight/full mode buttons were removed to simplify the review surface; review always renders full diffs.
+- Porter-specific diff styling was reduced to neutral surface/background harmonization only; addition/deletion line highlighting remains native Pierre.
+- Mock review view (`/review/mock`) is aligned with real review behavior and controls.
+
+## Architecture Update: Review + History Metadata
+
+To align with the current runtime architecture, review/history surfaces no longer present agent/model labels as primary UI metadata.
+
+- Review feed hides agent/model metadata in task cards.
+- Review detail task summary copy is neutral (no agent wording).
+- History page removed model filter and model column from table/export UI.
+
+## Current State Notes
+
+- `web/src/lib/components/DiffViewer.svelte` is the canonical renderer wrapper for Pierre Diffs in Porter.
+- `web/src/routes/review/[taskId]/+page.svelte` is the canonical full-diff review page.
+- `web/src/lib/components/mock/ReviewDiffMockComponent.svelte` mirrors live behavior for rapid visual iteration.
 
 ---
 

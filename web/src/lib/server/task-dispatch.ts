@@ -178,14 +178,18 @@ export const dispatchTaskToDo = async (input: DispatchInput): Promise<DispatchRe
 		activeConfig?.selectedModel
 	);
 	const providerCredentials = activeConfig?.providerCredentials ?? {};
+	const modelCredentials = activeConfig?.modelCredentials ?? {};
 	const configuredProviders = Object.entries(providerCredentials).filter(([, values]) =>
 		Object.values(values ?? {}).some((value) => Boolean(value?.trim()))
 	);
-	const hasAnyCredentials = configuredProviders.length > 0;
+	const hasAnyModelCredentials = Object.values(modelCredentials).some((value) => Boolean(value?.trim()));
+	const hasAnyCredentials = configuredProviders.length > 0 || hasAnyModelCredentials;
 	const modelProviderId = providerFromModel(model);
-	const hasModelCredentials = configuredProviders.some(
+	const hasProviderCredentials = configuredProviders.some(
 		([providerId]) => normalizeProviderId(providerId) === modelProviderId
 	);
+	const hasModelOverrideCredentials = Boolean(modelCredentials[model]?.trim());
+	const hasModelCredentials = hasProviderCredentials || hasModelOverrideCredentials;
 
 	console.info('[task-dispatch] credential readiness', {
 		taskId: metadata.taskId,
@@ -193,7 +197,10 @@ export const dispatchTaskToDo = async (input: DispatchInput): Promise<DispatchRe
 		resolvedModel: model,
 		resolvedProvider: modelProviderId,
 		configuredProviders: configuredProviders.map(([providerId]) => normalizeProviderId(providerId)),
+		configuredModelOverrides: Object.keys(modelCredentials),
 		hasAnyCredentials,
+		hasProviderCredentials,
+		hasModelOverrideCredentials,
 		hasModelCredentials
 	});
 

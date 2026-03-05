@@ -40,6 +40,7 @@
 	export let headerLabel: string | null = null;
 	export let emptyTitle = 'No active tasks yet';
 	export let emptyDescription = 'Start by dispatching a task from the command bar.';
+	export let showAgentMeta = true;
 
 	const modelDomains: Record<string, string> = {
 		opencode: 'opencode.ai',
@@ -199,11 +200,13 @@
 												<span class="font-medium text-foreground/80">
 													{task.repoOwner ? `${task.repoOwner}/${task.repo}` : task.repo}
 												</span>
-												<span class="text-muted-foreground/60">&bull;</span>
-												<span class="flex items-center gap-1.5 capitalize">
-													<img class="h-3.5 w-3.5 rounded-sm" src={getModelIcon(task.agent)} alt="" />
-													{task.agent}
-												</span>
+												{#if showAgentMeta}
+													<span class="text-muted-foreground/60">&bull;</span>
+													<span class="flex items-center gap-1.5 capitalize">
+														<img class="h-3.5 w-3.5 rounded-sm" src={getModelIcon(task.agent)} alt="" />
+														{task.agent}
+													</span>
+												{/if}
 												<span class="text-muted-foreground/60">&bull;</span>
 												<a
 													class="text-primary hover:text-primary/80"
@@ -285,7 +288,7 @@
 							{#if task.expanded}
 								<Card.Root class="w-full border border-border/60 bg-background/70">
 									<Card.Content class="space-y-4 p-4">
-										<div class="grid gap-4 md:grid-cols-6">
+										<div class={showAgentMeta ? 'grid gap-4 md:grid-cols-6' : 'grid gap-4 md:grid-cols-5'}>
 											<div>
 												<p class="text-xs uppercase text-muted-foreground">Issue</p>
 												<p class="text-sm font-medium">{task.issue}</p>
@@ -304,13 +307,15 @@
 													{task.branch ?? 'main'}
 												</p>
 											</div>
-											<div>
-											<p class="text-xs uppercase text-muted-foreground">Model</p>
-												<p class="flex items-center gap-2 text-sm font-medium">
-													<img class="h-4 w-4 rounded-sm" src={getModelIcon(task.agent)} alt="" />
-													{task.agent}
-												</p>
-											</div>
+											{#if showAgentMeta}
+												<div>
+													<p class="text-xs uppercase text-muted-foreground">Model</p>
+													<p class="flex items-center gap-2 text-sm font-medium">
+														<img class="h-4 w-4 rounded-sm" src={getModelIcon(task.agent)} alt="" />
+														{task.agent}
+													</p>
+												</div>
+											{/if}
 											<div>
 												<p class="text-xs uppercase text-muted-foreground">Git</p>
 												<div class="flex flex-wrap items-center gap-2">

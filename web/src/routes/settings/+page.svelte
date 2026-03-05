@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
-	import { Brain, GithubLogo, Lightning } from 'phosphor-svelte';
+	import { Brain, GithubLogo } from 'phosphor-svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import CredentialsModal from '$lib/components/CredentialsModal.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
 	import type { PageData } from './$types';
 
 	type ProviderCatalogEntry = {
@@ -33,6 +32,7 @@
 		all: ProviderCatalogEntry[];
 		featuredIds: string[];
 		topModels: ModelCatalogEntry[];
+		modelSamplesByProvider?: Record<string, Array<{ id: string; name: string }>>;
 	};
 
 	let { data } = $props<{ data: PageData }>();
@@ -40,14 +40,12 @@
 	const githubHandle = $derived(data?.session?.user?.login ? `@${data.session.user.login}` : '');
 
 	let showCredentialsModal = $state(false);
-	let topModels = $state<ModelCatalogEntry[]>([]);
 	let selectedModel = $state('anthropic/claude-sonnet-4');
-	let modelDraft = $state('anthropic/claude-sonnet-4');
 	let modelStatus = $state('');
+	let modelMeta = $state<ModelCatalogEntry | null>(null);
 	let loading = $state(false);
-	let savingModel = $state(false);
 
-	const iconFor = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+	const providerIconUrl = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
 	const load = async () => {
 		loading = true;
@@ -56,53 +54,51 @@
 				fetch(`${base}/api/config/providers?ts=${Date.now()}`, { cache: 'no-store' }),
 				fetch(`${base}/api/config/model`, { cache: 'no-store' })
 			]);
+
+			let providers: ProviderCatalogResponse | null = null;
 			if (providersRes.ok) {
-				const providers = (await providersRes.json()) as ProviderCatalogResponse;
-				topModels = providers.topModels ?? [];
+				providers = (await providersRes.json()) as ProviderCatalogResponse;
 			}
 			if (modelRes.ok) {
 				const modelPayload = (await modelRes.json()) as { selectedModel?: string };
 				selectedModel = modelPayload.selectedModel ?? selectedModel;
-				modelDraft = selectedModel;
+			}
+
+			const sampleModels = providers?.modelSamplesByProvider
+				? Object.values(providers.modelSamplesByProvider).flat()
+				: [];
+			const topModels = providers?.topModels ?? [];
+			const modelFromCatalog =
+				topModels.find((model) => model.id === selectedModel) ??
+				sampleModels.find((model) => model.id === selectedModel);
+			if (modelFromCatalog && 'providerName' in modelFromCatalog) {
+				modelMeta = modelFromCatalog as ModelCatalogEntry;
+			} else {
+				const providerId = selectedModel.includes('/') ? selectedModel.split('/')[0] : 'custom';
+				modelMeta = {
+					id: selectedModel,
+					name: selectedModel,
+					providerId,
+					providerName: providerId.toUpperCase(),
+					domain: 'github.com',
+					reasoning: false,
+					toolCall: false,
+					contextWindow: 0
+				};
 			}
 		} finally {
 			loading = false;
 		}
 	};
 
-	const saveModel = async () => {
-		if (!modelDraft.trim()) return;
-		savingModel = true;
-		modelStatus = '';
-		try {
-			const response = await fetch(`${base}/api/config/model`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ selectedModel: modelDraft.trim() })
-			});
-			if (!response.ok) {
-				modelStatus = 'Failed to save model.';
-				return;
-			}
-			const payload = (await response.json()) as { selectedModel: string };
-			selectedModel = payload.selectedModel;
-			modelDraft = payload.selectedModel;
-			modelStatus = 'Default model saved.';
-		} catch {
-			modelStatus = 'Failed to save model.';
-		} finally {
-			savingModel = false;
-		}
-	};
-
-	const chooseModel = (model: string) => {
-		modelDraft = model;
-		modelStatus = `Selected model: ${model}`;
-	};
-
 	const handleCredentialsSaved = async (message = 'Model keys saved.') => {
 		modelStatus = message;
 		await load();
+	};
+
+	const handleModelSelected = (model: string) => {
+		selectedModel = model;
+		modelStatus = `Selected model: ${model}`;
 	};
 
 	const disconnect = async () => {
@@ -130,86 +126,74 @@
 			/>
 		{:else}
 			<div class="space-y-8">
-				<div class="rounded-2xl border border-orange-300/30 bg-gradient-to-br from-orange-100/60 via-amber-100/40 to-transparent p-6 dark:from-orange-500/10 dark:via-amber-500/5">
-					<div class="flex flex-wrap items-start justify-between gap-4">
-						<div>
-							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600/80 dark:text-orange-300/80">Settings</p>
-							<h1 class="mt-2 text-3xl font-semibold tracking-tight text-foreground">Model Control Center</h1>
-							<p class="mt-2 max-w-[650px] text-sm text-muted-foreground">Top 5 model picks refresh from the registry on every load. Pick your default, then manage model keys in one place.</p>
-						</div>
-						<Button size="sm" class="gap-2" onclick={() => (showCredentialsModal = true)}>
-							<Brain size={14} weight="duotone" />
-							Manage Model Keys
-						</Button>
+				<div class="flex flex-wrap items-center justify-between gap-4">
+					<div>
+						<p class="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700/80 dark:text-orange-300/80">Workspace</p>
+						<h1 class="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Model Settings</h1>
 					</div>
+					<Button size="sm" class="gap-2 shadow-[0_10px_28px_rgba(251,146,60,0.22)]" onclick={() => (showCredentialsModal = true)}>
+						<Brain size={14} weight="duotone" />
+						Manage Model Keys
+					</Button>
 				</div>
 
-				<section class="space-y-4 rounded-2xl border border-border/50 bg-card/40 p-5">
-					<div class="flex items-center gap-2">
-						<Lightning size={16} weight="duotone" class="text-orange-500" />
-						<h2 class="text-base font-semibold text-foreground">Top 5 Models (Current Registry)</h2>
-					</div>
-					<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-						{#if loading && topModels.length === 0}
-							<p class="text-sm text-muted-foreground">Loading model registry...</p>
-						{:else}
-							{#each topModels as model}
-								<button
-									type="button"
-									onclick={() => chooseModel(model.id)}
-									class={`group rounded-xl border p-3 text-left transition ${modelDraft === model.id ? 'border-orange-400/70 bg-orange-500/10 shadow-[0_8px_24px_rgba(251,146,60,0.16)]' : 'border-border/60 bg-background/60 hover:border-orange-300/50 hover:bg-orange-500/5'}`}
-								>
-									<div class="mb-2 flex items-center gap-2">
-										<img src={iconFor(model.domain)} alt={model.providerName} class="h-4 w-4 rounded-sm" />
-										<span class="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">{model.providerName}</span>
-									</div>
-									<p class="line-clamp-2 text-sm font-semibold text-foreground">{model.name}</p>
-									<p class="mt-1 truncate text-xs text-muted-foreground">{model.id}</p>
-								</button>
-							{/each}
-						{/if}
-					</div>
-				</section>
-
-				<section class="space-y-4 rounded-2xl border border-border/50 bg-card/40 p-5">
-					<div class="flex items-start justify-between gap-3">
-						<div>
-							<h2 class="text-lg font-semibold text-foreground">Default model</h2>
-							<p class="mt-1 text-sm text-muted-foreground">Use a top pick above or type any registry model id directly.</p>
+				<section class="relative overflow-hidden rounded-2xl border border-orange-300/35 bg-gradient-to-br from-orange-100/70 via-amber-100/50 to-transparent min-h-[360px] p-7 shadow-[0_24px_60px_rgba(251,146,60,0.12)] dark:from-orange-500/12 dark:via-amber-500/8">
+						<div class="pointer-events-none absolute -top-16 -left-10 h-40 w-40 rounded-full bg-orange-400/20 blur-3xl dark:bg-orange-500/20"></div>
+						<div class="pointer-events-none absolute -right-10 -bottom-14 h-40 w-40 rounded-full bg-amber-300/25 blur-3xl dark:bg-amber-400/15"></div>
+						<div class="relative flex h-full flex-col items-center justify-center text-center">
+							<p class="text-xs font-semibold uppercase tracking-[0.16em] text-orange-700/80 dark:text-orange-300/80">Active model</p>
+							{#if modelMeta}
+								<img src={providerIconUrl(modelMeta.domain)} alt={modelMeta.providerName} class="mt-4 h-7 w-7 rounded-sm" />
+							{/if}
+							<p class="mt-4 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">{loading ? 'Loading model...' : selectedModel}</p>
+							<p class="mt-2 max-w-[520px] text-sm text-muted-foreground">This is the default execution model Porter uses for new tasks unless overridden in dispatch settings.</p>
+							{#if modelMeta}
+								<div class="mt-4 flex flex-wrap justify-center gap-2 text-xs">
+									<span class="rounded-full border border-border/60 bg-background/60 px-2 py-0.5 text-muted-foreground">Provider: {modelMeta.providerName}</span>
+									<span class="rounded-full border border-border/60 bg-background/60 px-2 py-0.5 text-muted-foreground">Role: default execution</span>
+								</div>
+							{/if}
+							<div class="mt-7 flex justify-center">
+								<Button class="h-11 px-8 text-base font-semibold shadow-[0_12px_30px_rgba(251,146,60,0.28)]" onclick={() => (showCredentialsModal = true)}>
+									Change model
+								</Button>
+							</div>
+							{#if modelStatus}
+								<p class="mt-4 text-xs text-muted-foreground">{modelStatus}</p>
+							{/if}
 						</div>
-						<Button variant="secondary" size="sm" onclick={() => (showCredentialsModal = true)}>Model Keys</Button>
-					</div>
+					</section>
 
-					<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-						<div class="space-y-2">
-							<Input
-								value={modelDraft}
-								placeholder="anthropic/claude-sonnet-4"
-								oninput={(event) => (modelDraft = (event.target as HTMLInputElement).value)}
-							/>
-							<div class="text-xs text-muted-foreground">
-								Current: <span class="font-medium text-foreground">{selectedModel}</span>
+				<div class="flex justify-center">
+					<section class="w-full max-w-[680px] space-y-4 rounded-2xl border border-border/50 bg-card/30 p-5 text-center">
+						<p class="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">GitHub</p>
+						<div class="flex items-center justify-center gap-3">
+							{#if data?.session?.user?.avatarUrl}
+								<img src={data.session.user.avatarUrl} alt={githubHandle} class="h-11 w-11 rounded-full border border-border/70 object-cover" />
+							{:else}
+								<div class="flex h-11 w-11 items-center justify-center rounded-full border border-border/70 bg-muted text-xs font-semibold text-muted-foreground">
+									GH
+								</div>
+							{/if}
+							<div>
+								<p class="text-sm font-medium text-foreground">{githubHandle}</p>
+								<p class="text-xs text-muted-foreground">Connected for repository and settings access.</p>
 							</div>
 						</div>
-						<Button onclick={saveModel} disabled={savingModel || loading}>{savingModel ? 'Saving...' : 'Save model'}</Button>
-					</div>
-
-					{#if modelStatus}
-						<p class="text-xs text-muted-foreground">{modelStatus}</p>
-					{/if}
-				</section>
-
-				<section class="space-y-3 rounded-2xl border border-border/50 bg-card/30 p-5">
-					<p class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">GitHub</p>
-					<p class="text-sm text-foreground">Signed in as {githubHandle}</p>
-					<div class="flex flex-wrap gap-2">
-						<Button variant="secondary" href={`${base}/api/auth/github?force=1`}>Reconnect</Button>
-						<Button variant="outline" class="text-destructive hover:text-destructive" onclick={disconnect}>Disconnect</Button>
-					</div>
-				</section>
+						<div class="flex flex-wrap justify-center gap-2">
+							<Button variant="secondary" href={`${base}/api/auth/github?force=1`}>Reconnect</Button>
+							<Button variant="outline" class="text-destructive hover:text-destructive" onclick={disconnect}>Disconnect</Button>
+						</div>
+					</section>
+				</div>
 			</div>
 
-			<CredentialsModal bind:open={showCredentialsModal} onsaved={handleCredentialsSaved} onselectmodel={chooseModel} />
+			<CredentialsModal
+				bind:open={showCredentialsModal}
+				onsaved={handleCredentialsSaved}
+				onselectmodel={handleModelSelected}
+				currentSelectedModel={selectedModel}
+			/>
 		{/if}
 	</div>
 </main>

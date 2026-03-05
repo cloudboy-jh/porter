@@ -81,6 +81,7 @@
 			highlightStatus="success"
 			primaryActionLabel="Review"
 			showStatusActions={false}
+			showAgentMeta={false}
 		>
 			<div slot="header" class="flex items-center gap-2">
 				<Button

@@ -7,7 +7,6 @@
 	import GitDiffBadge from '$lib/components/GitDiffBadge.svelte';
 
 	let layout = $state<'split' | 'stacked'>('split');
-	let showFullDiff = $state(false);
 	let reviewState = $state<'idle' | 'merged' | 'rejected'>('idle');
 
 	const before = `export const summarize = (text: string) => {
@@ -71,38 +70,27 @@
 			</div>
 		</div>
 		<div class="flex items-center justify-between gap-3">
-			<Button
-				variant="ghost"
-				size="sm"
-				class="h-8 px-0 text-xs text-muted-foreground transition-colors duration-150 hover:text-foreground"
-				onclick={() => (showFullDiff = !showFullDiff)}
-			>
-				{showFullDiff ? 'Hide full diff' : 'Show full diff'}
-			</Button>
-			{#if showFullDiff}
-				<div class="flex items-center gap-2">
-					<Button variant={layout === 'split' ? 'secondary' : 'ghost'} size="sm" onclick={() => (layout = 'split')}>
-						Split
-					</Button>
-					<Button
-						variant={layout === 'stacked' ? 'secondary' : 'ghost'}
-						size="sm"
-						onclick={() => (layout = 'stacked')}
-					>
-						Stacked
-					</Button>
-				</div>
-			{/if}
+			<div></div>
+			<div class="flex items-center gap-2">
+				<Button variant={layout === 'split' ? 'secondary' : 'ghost'} size="sm" onclick={() => (layout = 'split')}>
+					Split
+				</Button>
+				<Button
+					variant={layout === 'stacked' ? 'secondary' : 'ghost'}
+					size="sm"
+					onclick={() => (layout = 'stacked')}
+				>
+					Stacked
+				</Button>
+			</div>
 		</div>
-		{#if showFullDiff}
-			<DiffViewer
-				filename="src/lib/server/summarize.ts"
-				before={before}
-				after={after}
-				language="typescript"
-				layout={layout}
-				status="modified"
-			/>
-		{/if}
+		<DiffViewer
+			filename="src/lib/server/summarize.ts"
+			before={before}
+			after={after}
+			language="typescript"
+			layout={layout}
+			status="modified"
+		/>
 	</Card.Content>
 </Card.Root>
