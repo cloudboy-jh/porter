@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
-	import CommandBar from '$lib/components/CommandBar.svelte';
+	import DispatchModal from '$lib/components/DispatchModal.svelte';
 	import TaskFeed from '$lib/components/TaskFeed.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import { GithubLogo } from 'phosphor-svelte';
@@ -421,4 +421,4 @@
 	</div>
 	</main>
 
-<CommandBar bind:open={showDispatch} models={models} onsubmit={handleCommandSubmit} />
+<DispatchModal bind:open={showDispatch} models={models} onsubmit={handleCommandSubmit} />
