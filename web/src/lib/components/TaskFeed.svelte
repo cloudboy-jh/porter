@@ -140,6 +140,21 @@
 	const showCancel = (task: TaskWithLinks) =>
 		showStatusActions && (task.status === 'running' || task.status === 'queued');
 	const resolveTaskActions = (task: TaskWithLinks) => (getTaskActions ? getTaskActions(task) : []);
+	const isFailedTask = (task: TaskWithLinks) => task.status === 'failed';
+	const getGitStats = (task: TaskWithLinks) => ({
+		add: task.git?.add ?? 0,
+		remove: task.git?.remove ?? 0
+	});
+	const shouldShowDiffBadges = (task: TaskWithLinks) => {
+		if (isFailedTask(task)) return false;
+		const git = getGitStats(task);
+		return git.add > 0 || git.remove > 0;
+	};
+	const getSummaryText = (task: TaskWithLinks) => {
+		if (task.technicalSummary?.trim()) return task.technicalSummary;
+		if (isFailedTask(task)) return 'No summary generated.';
+		return 'Summary pending.';
+	};
 </script>
 
 <div class="w-full rounded-2xl border border-border/60 bg-card/70">
@@ -182,7 +197,7 @@
 								onclick={() => onToggleExpanded(task.id)}
 								onkeydown={(event: KeyboardEvent) => handleRowKey(event, task.id)}
 							>
-								<Card.Content class="space-y-2 p-3.5 sm:p-4">
+								<Card.Content class="space-y-1.5 p-3 sm:p-3.5">
 									<div class="flex flex-wrap items-start justify-between gap-2">
 										<div class="min-w-0 flex-1">
 											<div class="flex flex-wrap items-center gap-2">
@@ -196,7 +211,7 @@
 													{statusBadge[task.status].label}
 												</Badge>
 											</div>
-											<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground sm:text-xs">
+											<div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground sm:text-xs">
 												<span class="font-medium text-foreground/80">
 													{task.repoOwner ? `${task.repoOwner}/${task.repo}` : task.repo}
 												</span>
@@ -216,6 +231,28 @@
 												>
 													{task.issue}
 												</a>
+												<span class="text-muted-foreground/60">&bull;</span>
+												<span>{task.started}</span>
+												{#if shouldShowDiffBadges(task)}
+													<span class="text-muted-foreground/60">&bull;</span>
+													<GitDiffBadge variant="add" value={getGitStats(task).add} />
+													<GitDiffBadge variant="remove" value={getGitStats(task).remove} />
+												{/if}
+												<span class="text-muted-foreground/60">&bull;</span>
+												{#if task.prUrl}
+													<a
+														class="text-primary hover:text-primary/80"
+														href={task.prUrl}
+														target="_blank"
+														rel="noreferrer"
+													>
+														PR #{task.prNumber ?? '-'}
+													</a>
+												{:else}
+													<span>PR -</span>
+												{/if}
+												<span class="text-muted-foreground/60">&bull;</span>
+												<span>{task.commitHash ?? 'commit -'}</span>
 											</div>
 										</div>
 										<div class="flex items-center gap-1.5">
@@ -230,15 +267,25 @@
 													{action.label}
 												</Button>
 											{/each}
+											{#if showRetry(task) && isFailedTask(task)}
+												<Button
+													variant="default"
+													size="sm"
+													class="h-8 px-3 py-1.5 text-xs"
+													onclick={(event: MouseEvent) => handleRestartClick(event, task.id)}
+												>
+													Retry
+												</Button>
+											{/if}
 											<Button
 												variant="ghost"
 												size="sm"
-												class="h-8 px-3 py-1.5 text-xs text-foreground/90 transition-colors duration-150 hover:text-foreground"
+												class={`h-8 px-3 py-1.5 text-xs transition-colors duration-150 ${isFailedTask(task) ? 'text-muted-foreground hover:text-foreground' : 'text-foreground/90 hover:text-foreground'}`}
 												onclick={(event: MouseEvent) => handleViewClick(event, task.id)}
 											>
 												{primaryActionLabel}
 											</Button>
-											{#if showRetry(task)}
+											{#if showRetry(task) && !isFailedTask(task)}
 												<Button
 													variant="ghost"
 													size="sm"
@@ -258,29 +305,8 @@
 											{/if}
 										</div>
 									</div>
-									<div class="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground sm:text-xs">
-										<GitDiffBadge variant="add" value={task.git?.add ?? 0} />
-										<GitDiffBadge variant="remove" value={task.git?.remove ?? 0} />
-										<span class="text-muted-foreground/60">&bull;</span>
-										{#if task.prUrl}
-											<a
-												class="text-primary hover:text-primary/80"
-												href={task.prUrl}
-												target="_blank"
-												rel="noreferrer"
-											>
-												PR #{task.prNumber ?? '-'}
-											</a>
-										{:else}
-											<span>PR -</span>
-										{/if}
-										<span class="text-muted-foreground/60">&bull;</span>
-										<span>{task.commitHash ?? 'commit -'}</span>
-										<span class="text-muted-foreground/60">&bull;</span>
-										<span>{task.started}</span>
-									</div>
 									<div class="line-clamp-2 text-xs text-muted-foreground sm:text-sm">
-										{task.technicalSummary ?? 'Summary pending.'}
+										{getSummaryText(task)}
 									</div>
 								</Card.Content>
 							</Card.Root>
@@ -318,10 +344,14 @@
 											{/if}
 											<div>
 												<p class="text-xs uppercase text-muted-foreground">Git</p>
-												<div class="flex flex-wrap items-center gap-2">
-													<GitDiffBadge variant="add" value={task.git?.add ?? 0} />
-													<GitDiffBadge variant="remove" value={task.git?.remove ?? 0} />
-												</div>
+												{#if shouldShowDiffBadges(task)}
+													<div class="flex flex-wrap items-center gap-2">
+														<GitDiffBadge variant="add" value={getGitStats(task).add} />
+														<GitDiffBadge variant="remove" value={getGitStats(task).remove} />
+													</div>
+												{:else}
+													<p class="text-sm font-medium text-muted-foreground">-</p>
+												{/if}
 											</div>
 											<div>
 												<p class="text-xs uppercase text-muted-foreground">Started</p>

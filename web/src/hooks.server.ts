@@ -11,18 +11,24 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.requestId = requestId;
 	const session = getSession(event.cookies);
 	event.locals.session = session;
+	const pathname = event.url.pathname;
 
-	const isProtected =
-		protectedRoutes.has(event.url.pathname) || event.url.pathname.startsWith('/review/');
+	const isProtected = protectedRoutes.has(pathname) || pathname.startsWith('/review/');
 	if (!session && isProtected) {
 		logEvent('info', 'auth.hook', 'redirect_unauthenticated', {
 			requestId,
-			path: event.url.pathname
+			path: pathname
 		});
 		throw redirect(302, '/auth');
 	}
 
 	const response = await resolve(event);
+	if (pathname === '/auth' || pathname.startsWith('/api/auth')) {
+		response.headers.set('cache-control', 'no-store, max-age=0');
+		response.headers.set('pragma', 'no-cache');
+		response.headers.set('expires', '0');
+		response.headers.set('vary', 'Cookie');
+	}
 	response.headers.set('x-request-id', requestId);
 	return response;
 };

@@ -94,20 +94,19 @@
 </script>
 
 <main class="flex-1 overflow-y-auto">
-	<div class="mx-auto w-full max-w-[1600px] space-y-6 px-6 pt-8 pb-16">
+	<div class="mx-auto w-full max-w-[1200px] space-y-4 px-4 pt-6 pb-12 sm:px-6">
 		<Card.Root class="border border-border/60 bg-card/70">
-		<Card.Content class="space-y-4 p-6">
+		<Card.Content class="space-y-3 p-4 sm:p-5">
 			<div class="flex flex-wrap items-start justify-between gap-4">
 				<PageHeader
 					icon={GitDiff}
-					label="Review"
 					title="Code Changes"
 					description={`${data.task.issueTitle} · ${data.task.repoOwner}/${data.task.repoName} · #${data.task.issueNumber}`}
 				/>
 				<div class="flex flex-wrap items-center justify-end gap-2">
 					<Button
-						variant="outline"
-						class="rounded-lg border border-border/40 px-4 py-2 text-sm text-muted-foreground transition-colors duration-150 hover:border-red-500/40 hover:text-red-400"
+						variant="ghost"
+						class="rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground"
 						onclick={() => (rejectConfirmOpen = true)}
 						disabled={mergeSuccess || rejectSuccess || isMerging || isRejecting}
 					>
@@ -129,7 +128,7 @@
 				</div>
 			</div>
 			<div class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-				<a class="text-primary hover:text-primary/80" href={data.pr.htmlUrl} target="_blank" rel="noreferrer">
+				<a class="text-muted-foreground hover:text-foreground" href={data.pr.htmlUrl} target="_blank" rel="noreferrer">
 					PR #{data.pr.number}
 				</a>
 				{#if data.pr.mergeableState}
@@ -154,49 +153,29 @@
 		</Card.Content>
 		</Card.Root>
 
-		<div class="mt-4 mb-4 flex items-center gap-3 rounded-lg border border-border/20 bg-muted/30 px-4 py-3">
-			<p class="min-w-0 flex-1 line-clamp-2 text-sm text-muted-foreground">
-				{data.task.summary || 'No summary provided for this task.'}
-			</p>
-			{#if issueHref && data.task.issueNumber}
-				<a
-					class="shrink-0 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground hover:underline"
-					href={issueHref}
-					target="_blank"
-					rel="noreferrer"
-				>
-					#{data.task.issueNumber}
-				</a>
-			{/if}
-			<div class="flex shrink-0 items-center gap-2">
-				<GitDiffBadge variant="remove" value={data.pr.deletions} />
-				<GitDiffBadge variant="add" value={data.pr.additions} />
+		<div class="mb-3 rounded-lg border border-border/30 bg-muted/35 px-4 py-3">
+			<div class="flex items-center justify-between gap-4">
+				<div class="min-w-0 flex-1">
+					<p class="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Summary</p>
+					<p class="mt-1 text-[0.98rem] font-semibold tracking-tight leading-6 text-foreground">
+						{data.task.summary || 'No summary provided for this task.'}
+					</p>
+				</div>
+				{#if issueHref && data.task.issueNumber}
+					<a
+						class="shrink-0 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+						href={issueHref}
+						target="_blank"
+						rel="noreferrer"
+					>
+						Issue #{data.task.issueNumber}
+					</a>
+				{/if}
 			</div>
 		</div>
 
 		<Card.Root class="border border-border/60 bg-card/70">
-		<Card.Header class="pb-2">
-			<div class="flex items-center justify-between gap-2">
-				<div></div>
-				<div class="flex items-center gap-2">
-				<Button
-						variant={diffLayout === 'split' ? 'secondary' : 'ghost'}
-						size="sm"
-						onclick={() => (diffLayout = 'split')}
-					>
-						Split
-					</Button>
-				<Button
-						variant={diffLayout === 'stacked' ? 'secondary' : 'ghost'}
-						size="sm"
-						onclick={() => (diffLayout = 'stacked')}
-					>
-						Stacked
-					</Button>
-				</div>
-			</div>
-		</Card.Header>
-		<Card.Content class="space-y-4 pt-0">
+		<Card.Content class="space-y-4 pt-3">
 			{#if data.files.length === 0}
 				<p class="text-sm text-muted-foreground">No file changes found for this pull request.</p>
 			{:else}
@@ -219,16 +198,50 @@
 					</div>
 				</div>
 
-				{#each data.files as file}
+				{#each data.files as file, index}
 					<div id={getAnchorId(file.filename)} class="scroll-mt-24">
-						<DiffViewer
-							filename={file.filename}
-							before={file.beforeContent}
-							after={file.afterContent}
-							language={file.language}
-							status={file.status}
-							layout={diffLayout}
-						/>
+						{#if index === 0}
+							<div class="relative overflow-hidden rounded-lg border border-border/60 bg-card/75">
+								<div class="pointer-events-none absolute right-3 top-2 z-10 flex items-center gap-2 whitespace-nowrap">
+									<Button
+										variant={diffLayout === 'split' ? 'secondary' : 'ghost'}
+										size="sm"
+										class="pointer-events-auto"
+										onclick={() => (diffLayout = 'split')}
+									>
+										Split
+									</Button>
+									<Button
+										variant={diffLayout === 'stacked' ? 'secondary' : 'ghost'}
+										size="sm"
+										class="pointer-events-auto"
+										onclick={() => (diffLayout = 'stacked')}
+									>
+										Stacked
+									</Button>
+									<GitDiffBadge variant="remove" value={data.pr.deletions} />
+									<GitDiffBadge variant="add" value={data.pr.additions} />
+								</div>
+								<DiffViewer
+									filename={file.filename}
+									before={file.beforeContent}
+									after={file.afterContent}
+									language={file.language}
+									status={file.status}
+									layout={diffLayout}
+									embedded={true}
+								/>
+							</div>
+						{:else}
+							<DiffViewer
+								filename={file.filename}
+								before={file.beforeContent}
+								after={file.afterContent}
+								language={file.language}
+								status={file.status}
+								layout={diffLayout}
+							/>
+						{/if}
 					</div>
 				{/each}
 			{/if}

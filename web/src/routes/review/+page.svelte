@@ -69,7 +69,7 @@
 </script>
 
 <main class="flex-1 overflow-y-auto">
-	<div class="mx-auto w-full max-w-[1600px] px-6 pt-8 pb-16">
+	<div class="mx-auto w-full max-w-[980px] px-4 pt-6 pb-12 sm:px-6">
 		<TaskFeed
 			title="Review"
 			headerIcon={CheckSquareOffset}

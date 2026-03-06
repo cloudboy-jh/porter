@@ -184,8 +184,11 @@ body {
 
 .task-card--failed {
 	--status-color: #ef4444;
-	--status-color-muted: rgba(239, 68, 68, 0.3);
-	border-color: rgba(239, 68, 68, 0.28);
+	--status-color-muted: rgba(107, 114, 128, 0.35);
+}
+
+.task-card--failed::before {
+	opacity: 0;
 }
 
 .task-card--queued {

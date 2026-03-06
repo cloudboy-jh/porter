@@ -10,6 +10,7 @@
 		language?: string;
 		layout?: 'split' | 'stacked';
 		status?: string;
+		embedded?: boolean;
 	}
 
 	let {
@@ -18,7 +19,8 @@
 		after,
 		language = 'text',
 		layout = 'split',
-		status = 'modified'
+		status = 'modified',
+		embedded = false
 	}: Props = $props();
 
 	let mount: HTMLDivElement | null = null;
@@ -49,6 +51,17 @@
 
 		div[data-diffs-header] {
 			border-bottom: 1px solid var(--border) !important;
+		}
+
+		div[data-diffs-header] [data-metadata] {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.5rem;
+		}
+
+		div[data-diffs-header] [data-additions-count],
+		div[data-diffs-header] [data-deletions-count] {
+			display: none !important;
 		}
 	`;
 
@@ -151,10 +164,10 @@
 	});
 </script>
 
-<div class="overflow-hidden rounded-lg border border-border/60 bg-card/75">
+<div class={embedded ? '' : 'overflow-hidden rounded-lg border border-border/60 bg-card/75'}>
 	<div bind:this={mount} class="min-h-[220px]"></div>
 	{#if renderError}
-		<div class="border-t border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive">
+		<div class={embedded ? 'mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive' : 'border-t border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive'}>
 			{renderError}
 		</div>
 	{/if}

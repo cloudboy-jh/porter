@@ -23,18 +23,19 @@
   return sentence.slice(0, 220);
 };
 `;
- 	const mockIssueUrl = 'https://github.com/example/repo/issues/42';
+	const mockIssueUrl = 'https://github.com/example/repo/issues/42';
+	const mockPrUrl = 'https://github.com/example/repo/pull/42';
 
 </script>
 
 <Card.Root class="border border-border/60 bg-card/70">
-	<Card.Header class="pb-2">
+	<Card.Header class="pb-1 pt-3">
 		<div class="flex items-center justify-between gap-3">
-			<PageHeader icon={GitDiff} label="Review" title="Code Changes" description="Mock review diff" />
+			<PageHeader icon={GitDiff} title="Code Changes" description="Mock review diff" />
 			<div class="flex items-center gap-2">
 				<Button
-					variant="outline"
-					class="rounded-lg border border-border/40 px-4 py-2 text-sm text-muted-foreground transition-colors duration-150 hover:border-red-500/40 hover:text-red-400"
+					variant="ghost"
+					class="rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground"
 					disabled={reviewState !== 'idle'}
 					onclick={() => (reviewState = 'rejected')}
 				>
@@ -50,47 +51,60 @@
 				</Button>
 			</div>
 		</div>
-	</Card.Header>
-	<Card.Content class="space-y-4 pt-0">
-		<div class="mt-4 mb-4 flex items-center gap-3 rounded-lg border border-border/20 bg-muted/30 px-4 py-3">
-			<p class="min-w-0 flex-1 line-clamp-2 text-sm text-muted-foreground">
-				Tightened summarization logic to prefer the first complete sentence and avoid empty fallback copy.
-			</p>
-			<a
-				class="shrink-0 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground hover:underline"
-				href={mockIssueUrl}
-				target="_blank"
-				rel="noreferrer"
-			>
-				#42
+		<div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+			<a class="text-muted-foreground hover:text-foreground" href={mockPrUrl} target="_blank" rel="noreferrer">
+				PR #42
 			</a>
-			<div class="flex shrink-0 items-center gap-2">
-				<GitDiffBadge variant="remove" value={2} />
-				<GitDiffBadge variant="add" value={5} />
+			<span class="text-muted-foreground/60">&bull;</span>
+			<Button variant="ghost" size="sm" class="h-auto px-0 text-xs text-primary hover:text-primary/80" href={mockPrUrl} target="_blank" rel="noreferrer">
+				View PR in GitHub
+			</Button>
+		</div>
+	</Card.Header>
+	<Card.Content class="space-y-3 pt-0">
+		<div class="mb-3 rounded-lg border border-border/30 bg-muted/35 px-4 py-3">
+			<div class="flex items-center justify-between gap-4">
+				<div class="min-w-0 flex-1">
+					<p class="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Summary</p>
+					<p class="mt-1 text-[0.98rem] font-semibold tracking-tight leading-6 text-foreground">
+						Tightened summarization logic to prefer the first complete sentence and avoid empty fallback copy.
+					</p>
+				</div>
+				<a
+					class="shrink-0 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+					href={mockIssueUrl}
+					target="_blank"
+					rel="noreferrer"
+				>
+					Issue #42
+				</a>
 			</div>
 		</div>
-		<div class="flex items-center justify-between gap-3">
-			<div></div>
-			<div class="flex items-center gap-2">
-				<Button variant={layout === 'split' ? 'secondary' : 'ghost'} size="sm" onclick={() => (layout = 'split')}>
+		<div class="relative overflow-hidden rounded-lg border border-border/60 bg-card/75">
+			<div class="pointer-events-none absolute right-3 top-2 z-10 flex items-center gap-2 whitespace-nowrap">
+				<Button variant={layout === 'split' ? 'secondary' : 'ghost'} size="sm" class="pointer-events-auto" onclick={() => (layout = 'split')}>
 					Split
 				</Button>
 				<Button
 					variant={layout === 'stacked' ? 'secondary' : 'ghost'}
 					size="sm"
+					class="pointer-events-auto"
 					onclick={() => (layout = 'stacked')}
 				>
 					Stacked
 				</Button>
+				<GitDiffBadge variant="remove" value={2} />
+				<GitDiffBadge variant="add" value={5} />
 			</div>
+			<DiffViewer
+				filename="src/lib/server/summarize.ts"
+				before={before}
+				after={after}
+				language="typescript"
+				layout={layout}
+				status="modified"
+				embedded={true}
+			/>
 		</div>
-		<DiffViewer
-			filename="src/lib/server/summarize.ts"
-			before={before}
-			after={after}
-			language="typescript"
-			layout={layout}
-			status="modified"
-		/>
 	</Card.Content>
 </Card.Root>

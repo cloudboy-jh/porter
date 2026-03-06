@@ -59,6 +59,14 @@ Runtime service code lives in `runtime/`.
 - Roadmap / next work: `docs/project-mds/next-steps.md`
 - Docs handoff spec: `docs/project-mds/astro-docs.md`
 
+## Recent updates (Mar 2026)
+
+- Auth responses for `/auth` and `/api/auth*` now send `no-store` cache headers to prevent stale redirect/session behavior after logout.
+- Task feed cards are denser and failed-state visuals are cleaner (no red card border/left stripe; status is carried by the failed badge).
+- Failed tasks hide `+0/-0` diff badges, show `No summary generated.` when empty, and prioritize `Retry` over `View`.
+- Review feed/detail UI was tightened: redundant header label removed, reject action de-emphasized, and metadata hierarchy improved.
+- Review diff controls and aggregate diff chips now appear inline with the file header area; mock and real review views are kept in sync.
+
 
 <p align="center">
   <img src="./porter-visual.png" alt="Porter visual" />
